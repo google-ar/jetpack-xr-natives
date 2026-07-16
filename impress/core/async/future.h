@@ -618,9 +618,8 @@ template <typename T>
 void Future<T>::Cancel() {
   AssertIntegrity();
   if (!impl_wrapper_->GetImpl()->Ready()) {
-    internal::FutureImpl::InvokeResultProducer(
-        impl_wrapper_->GetImpl(),
-        absl::CancelledError("from Future::Cancel()"));
+    internal::FutureImpl::InvokeResultProducer(impl_wrapper_->GetImpl(),
+                                               absl::CancelledError());
   }
 }
 
@@ -672,21 +671,17 @@ Future<absl::Status> Future<T>::CombineWaitForAll(
 
   // Add one to include this future in addition to the parameters.
   constexpr std::size_t kNumFutures = sizeof...(FutureTypes) + 1;
-  auto remaining_futures_counter =
-      std::make_unique<absl::BlockingCounter>(kNumFutures);
-  auto combined_status = std::make_unique<absl::Status>(absl::OkStatus());
+  auto state = std::make_unique<internal::CombineState>(kNumFutures);
 
   internal::AddFutureToCombineResult(result.impl_wrapper_, impl_wrapper_,
-                                     remaining_futures_counter.get(),
-                                     combined_status.get());
+                                     &state->counter, &state->status);
 
-  (internal::AddFutureToCombineResult(
-       result.impl_wrapper_, futures.impl_wrapper_,
-       remaining_futures_counter.get(), combined_status.get()),
+  (internal::AddFutureToCombineResult(result.impl_wrapper_,
+                                      futures.impl_wrapper_, &state->counter,
+                                      &state->status),
    ...);
 
-  result.DependsOn(std::move(remaining_futures_counter));
-  result.DependsOn(std::move(combined_status));
+  result.DependsOn(std::move(state));
 
   return result;
 }
@@ -867,18 +862,16 @@ Future<absl::Status> Future<T>::CombineListWaitForAll(const ListT& futures) {
   Future<absl::Status> result;
 
   const std::size_t kNumFutures = futures.size();
-  auto remaining_futures_counter =
-      std::make_unique<absl::BlockingCounter>(kNumFutures);
-  auto combined_status = std::make_unique<absl::Status>(absl::OkStatus());
+
+  auto state = std::make_unique<internal::CombineState>(kNumFutures);
 
   for (auto future : futures) {
-    internal::AddFutureToCombineResult(
-        result.impl_wrapper_, future.impl_wrapper_,
-        remaining_futures_counter.get(), combined_status.get());
+    internal::AddFutureToCombineResult(result.impl_wrapper_,
+                                       future.impl_wrapper_, &state->counter,
+                                       &state->status);
   }
 
-  result.DependsOn(std::move(remaining_futures_counter));
-  result.DependsOn(std::move(combined_status));
+  result.DependsOn(std::move(state));
 
   return result;
 }

@@ -32,13 +32,16 @@ struct TextureGenerationOptions {
   using Format = ::filament::Texture::InternalFormat;
 
   // Optionally specify the number of mipmap levels to generate at runtime.
-  // If no value is given, mipmaps are not generated.
+  // If using the TextureAsset API and mipmap levels are wanted when the image
+  // dimensions are unknown, instead set .generate_mipmaps to true to have
+  // impress calculate the right mipmaps levels via GetMipmapLevelCount().
   std::optional<uint8_t> generated_mipmap_levels = {};
 
   // Optional override to the default format in the ImageAsset object.
   std::optional<Format> texture_format_override = {};
 
-  // If true, generates full mipmaps.
+  // If true and generated_mipmap_levels is not set, calculate the right mipmap
+  // levels via GetMipmapLevelCount() and generate mipmaps.
   bool generate_mipmaps = false;
 
   template <typename Sink>

@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_XR_EDITOR_UI_H_
 
 #include "core/editor/components/world_space_editor_ui.h"
+#include "core/editor/editor_constants.h"
 #include "core/editor/layout/editor_panel_ids.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
@@ -55,11 +56,11 @@ class XrEditorUi : public imp::Component {
                  .editor_resolution = {2000, 800},
                  .editor_panel_settings = {
                      {PanelIdToString(PanelId::kSceneWindow),
-                      float3{3.0f, -55.0f, 0.0f}},
+                      kScenePanelSphericalLocation},
                      {PanelIdToString(PanelId::kDetailsWindow),
-                      float3{3.0f, -30.0f, -10.0f}},
+                      kDetailsPanelSphericalLocation},
                      {PanelIdToString(PanelId::kTabBar),
-                      float3{3.0f, -55.0f, 20.0f}}}});
+                      kTabBarSphericalLocation}}});
 
  private:
   imp::NodeHandle editor_node_;

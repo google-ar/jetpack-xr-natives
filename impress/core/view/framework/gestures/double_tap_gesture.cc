@@ -100,7 +100,7 @@ bool DoubleTapGesture::TryStart(const PointerHitEvent& pointer_hit) {
     GetDispatcher().Send(
         GetTargetNode(),
         DoubleTapGesture::TapEvent(GetId(), event_type, GetTargetNode(),
-                                   start_position_));
+                                   {start_position_, new_position}));
     if (event_type == PointerEventType::kUp) {
       Finish(pointer_hit);
     }

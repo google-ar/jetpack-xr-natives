@@ -110,6 +110,7 @@ table MorphTargetAttributeInfo (requires_api: 1) {
 table MorphTargetBufferInfo (requires_api: 1) {
   targets : [MorphTargetAttributeInfo] (required, id: 0, requires_api: 1);
   vertex_count : ulong (id: 1, requires_api: 1);
+  enable_custom_morphing: bool (id: 2);
 }
 
 enum VertexAccessFlags : ubyte (bit_flags, requires_api: 1) {

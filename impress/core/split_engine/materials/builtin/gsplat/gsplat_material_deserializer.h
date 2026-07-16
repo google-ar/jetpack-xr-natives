@@ -24,10 +24,11 @@
 #include "core/common/rememberer.h"
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
-#include "core/math/mat.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/update_system.h"
 #include "core/render/texture.h"
+#include "core/render_passes/group_to_projection_quad_texture_renderer/group_to_projection_quad_texture_renderer.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/gsplat/precompute_texture_pipeline.h"
@@ -93,18 +94,23 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
       NodeHandle gsplat_node, BridgeId bridge_id,
       android_xr::schemas::GsplatMode material_mode,
       AssetPtr<MaterialAsset> material_asset,
-      ComponentHandle<PrecomputeTexturePipeline> pipeline);
+      std::optional<imp::uint2> offscreen_texture_resolution,
+      ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline,
+      ComponentHandle<GroupToProjectionQuadTextureRenderer>
+          group_to_projection_quad_texture_renderer);
 
   GsplatMaterialDeserializer(
       NodeHandle gsplat_node, BridgeId bridge_id,
       android_xr::schemas::GsplatMode material_mode, OwnedMaterialPtr material,
-      ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline);
+      std::optional<imp::uint2> offscreen_texture_resolution,
+      ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline,
+      ComponentHandle<GroupToProjectionQuadTextureRenderer>
+          group_to_projection_quad_texture_renderer);
 
   // Update precompute specific parameters.
   absl::Status UpdatePrecomputeTexturePipeline(
       const TextureBorrower& texture_borrower,
-      const android_xr::schemas::BuiltInMaterialGsplatParameters&
-          serialized_parameters);
+      const android_xr::schemas::GsplatParameters& serialized_parameters);
 
   // The material used to precompute texture pipeline, using splat positions,
   // colors, etc.
@@ -118,27 +124,27 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
   // Updates parameters on the render material.
   absl::Status SetRenderMaterialParameters(
       const TextureBorrower& texture_borrower,
-      const android_xr::schemas::BuiltInMaterialGsplatParameters&
-          serialized_parameters);
+      const android_xr::schemas::GsplatParameters& serialized_parameters);
 
   // Updates the raw gsplat data parameters (e.g., splat positions, colors) on
   // the given material.
   absl::Status SetRawGsplatDataParameters(
       const TextureBorrower& texture_borrower,
-      const android_xr::schemas::BuiltInMaterialGsplatParameters&
-          serialized_parameters,
+      const android_xr::schemas::GsplatParameters& serialized_parameters,
       BorrowedMaterialPtr material);
 
   // Updates parameters for the magic window mode (mode 2).
   absl::Status SetMagicWindowMaterialParameters(
       const TextureBorrower& texture_borrower,
-      const android_xr::schemas::BuiltInMaterialGsplatParameters&
-          serialized_parameters);
+      const android_xr::schemas::MagicWindowParameters& serialized_parameters);
 
   BaseView& view_;
   NodeHandle gsplat_node_;
   android_xr::schemas::GsplatMode material_mode_;
   ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline_;
+  ComponentHandle<GroupToProjectionQuadTextureRenderer>
+      group_to_projection_quad_texture_renderer_;
+  std::optional<imp::uint2> offscreen_texture_resolution_;
 };
 
 }  // namespace imp::split_engine

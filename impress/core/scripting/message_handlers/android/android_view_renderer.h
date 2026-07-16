@@ -25,12 +25,14 @@
 #include <variant>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/types/optional.h"
 #include "core/actions/controller_events.h"
 #include "core/async/future.h"
 #include "core/common/jni_helpers.h"
 #include "core/geometry/shapes/box.h"
+#include "core/input/pointer_event.h"
 #include "core/input/pointer_event_processor.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
@@ -122,6 +124,9 @@ class AndroidViewRenderer : public Component {
   // Returns the jobject Android View associated with this component.
   jobject GetAndroidView();
 
+  // Returns the scale of renderer_node_.
+  imp::float2 GetQuadNodeLocalScale();
+
  private:
   // A variant of the default unlit material or a custom material.
   using TextureMaterialVariant =
@@ -140,6 +145,9 @@ class AndroidViewRenderer : public Component {
   std::unique_ptr<AndroidExternalTextureSurface> surface_;
   bool was_hovering_ = false;
   absl::flat_hash_map<ControllerHitEvent::Hand, bool> controller_was_hovering_;
+  absl::flat_hash_set<ControllerHitEvent::Hand> dragging_controllers_;
+  absl::flat_hash_set<Pointer::Id> dragging_pointers_;
+
   std::unique_ptr<RenderViewToSurfaceTextureWrapper> renderer_wrapper_;
   TextureMaterialVariant material_;
   float2 scroll_factor_ = kOne2;

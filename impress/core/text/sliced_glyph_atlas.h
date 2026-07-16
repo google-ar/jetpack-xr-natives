@@ -277,7 +277,7 @@ class SlicedGlyphAtlas : public Rememberer {
                                        SliceId slice);
 
   std::optional<SlicedAtlasEntry> TryAddAtlasEntry(
-      uint2 atlas_entry_size, CanvasOptionsInfo& info,
+      uint2 atlas_entry_size, CanvasOptionsInfo* info,
       const CanvasOptionsGlyphKey& glyph_key);
 
   // Gets a cached GlyphInfo by key or nullopt if the glyph info is not yet

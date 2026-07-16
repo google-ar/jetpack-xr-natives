@@ -33,9 +33,11 @@ namespace AsyncCanvasSourceFactory {
 std::unique_ptr<AsyncCanvasSource> Create(
     Context context, bool use_hardware_rendering,
     bool force_auto_method_rendering,
-    bool force_individual_glyph_source_instances) {
+    bool force_individual_glyph_source_instances,
+    bool enable_label_prep_profile_logging) {
 #if IMP_PLATFORM(WASM)
-  return std::make_unique<WasmAsyncCanvasSource>();
+  return std::make_unique<WasmAsyncCanvasSource>(
+      enable_label_prep_profile_logging);
 #else
   return absl::make_unique<AsyncCanvasSourceWrapper>(CanvasSource::Create(
       context, use_hardware_rendering, force_auto_method_rendering,

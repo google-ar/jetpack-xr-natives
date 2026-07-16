@@ -52,7 +52,8 @@ class BindingsCustomMesh : public BindingsObject {
 
   // Creates a custom mesh from a BindingsMeshBuffer and a list of subsets.
   // The custom mesh is created from the root mesh of the BindingsMeshBuffer.
-  // The subsets are used to create submeshes of the root mesh.
+  // The subsets are used to create submeshes of the root mesh. Expects at
+  // least one subset to be provided.
   // The bounding_box is optional, and if not provided, the AABB of the
   // mesh buffer will be used.
   // The custom mesh owns the submeshes, and the submeshes will be destroyed
@@ -71,6 +72,9 @@ class BindingsCustomMesh : public BindingsObject {
 
   // Returns the number of submeshes.
   size_t GetSubMeshCount() const;
+
+  // Returns the AABB of the custom mesh.
+  Box GetAabb() const;
 
  private:
   std::shared_ptr<BindingsMeshBuffer> buffer_;

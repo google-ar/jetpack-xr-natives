@@ -113,6 +113,37 @@ cc_library(
 )
 
 cc_library(
+    name = "plane",
+    srcs = ["plane.cc"],
+    hdrs = ["plane.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        ":ramp",
+        "//core/assets",
+        "//core/async:future",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/model/mesh:mesh_data",
+        "//core/ncsb",
+        "//core/render",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "//core/view/utils:frame_time",
+        "//extensions/sceneviewerxr/assets:plane_assets",
+        "//extensions/sceneviewerxr/ux:state_machine",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
+        "@third_party//OpenXR_KHR:generated_openxr_headers",  # buildcleaner: keep for planes retrieval
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//split_engine/materials:svxr_plane_material",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "input_flag",
     srcs = ["input_flag.cc"],
     hdrs = ["input_flag.h"],

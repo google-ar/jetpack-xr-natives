@@ -42,6 +42,7 @@
 #include "core/common/small_source_location.h"
 #include "core/config.h"
 #include "core/geometry/shapes/rect.h"
+#include "core/image/wasm_decode_image.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
@@ -119,11 +120,16 @@ class WasmCanvasManagerCallbacks
 
 }  // namespace
 
-WasmAsyncCanvasSource::WasmAsyncCanvasSource()
+WasmAsyncCanvasSource::WasmAsyncCanvasSource(
+    bool enable_label_prep_profile_logging)
     : measuring_canvas_(
           std::make_unique<WasmCanvasManager>(nullptr, float2(0.0f))),
       measuring_scoped_canvas_(*this, measuring_canvas_.get(), float2(0.0f),
-                               false) {}
+                               false),
+      enable_label_prep_profile_logging_(enable_label_prep_profile_logging) {
+  measuring_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
+                                     /*enable_immediate_get_image_data=*/false);
+}
 
 bool WasmAsyncCanvasSource::IsFeatureSupported(ScopedCanvas::Feature feature) {
   switch (feature) {
@@ -277,13 +283,18 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
 #endif
     drawing_canvas_ = std::make_unique<WasmCanvasManager>(
         std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
+    bool immediate_get_image_data = false;
     if (view.GetConfig().experimental_feature_flags) {
-      bool enable_label_prep = view.GetConfig()
-                                   .experimental_feature_flags
-                                   ->enable_label_prep_profile_logging.Value();
-      drawing_canvas_->SetLabelPrepProfileLogging(enable_label_prep);
-      measuring_canvas_->SetLabelPrepProfileLogging(enable_label_prep);
+      immediate_get_image_data = view.GetConfig()
+                                     .experimental_feature_flags
+                                     ->enable_immediate_get_image_data.Value();
     }
+    drawing_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
+                                     immediate_get_image_data);
+#if IMP_PLATFORM(WASM)
+    image::details::SetLabelPrepProfileLogging(
+        enable_label_prep_profile_logging_);
+#endif  // IMP_PLATFORM(WASM)
     did_texture_change = true;
   }
 
@@ -316,13 +327,18 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
 #endif
     drawing_canvas_ = std::make_unique<WasmCanvasManager>(
         std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
+    bool immediate_get_image_data = false;
     if (view.GetConfig().experimental_feature_flags) {
-      bool enable_label_prep = view.GetConfig()
-                                   .experimental_feature_flags
-                                   ->enable_label_prep_profile_logging.Value();
-      drawing_canvas_->SetLabelPrepProfileLogging(enable_label_prep);
-      measuring_canvas_->SetLabelPrepProfileLogging(enable_label_prep);
+      immediate_get_image_data = view.GetConfig()
+                                     .experimental_feature_flags
+                                     ->enable_immediate_get_image_data.Value();
     }
+    drawing_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
+                                     immediate_get_image_data);
+#if IMP_PLATFORM(WASM)
+    image::details::SetLabelPrepProfileLogging(
+        enable_label_prep_profile_logging_);
+#endif  // IMP_PLATFORM(WASM)
     did_texture_change = true;
 
     on_texture_changed_fn(texture_.Borrow(loc));
@@ -348,16 +364,9 @@ void WasmAsyncCanvasSource::OnPixelBufferReady(BaseView& view, uint8_t* data,
     const uint32_t height = dirty_rects_data[i + 3];
     const int block_size = (int)(width * height * 4);
     Future<absl::Status> gpu_upload;
-    bool enable_label_prep_profile_logging = false;
     double wasm_gpu_upload_start_time = 0.0;
 #if IMP_PLATFORM(WASM)
-    if (view.GetConfig().experimental_feature_flags) {
-      enable_label_prep_profile_logging =
-          view.GetConfig()
-              .experimental_feature_flags->enable_label_prep_profile_logging
-              .Value();
-    }
-    if (enable_label_prep_profile_logging) {
+    if (enable_label_prep_profile_logging_) {
       wasm_gpu_upload_start_time = EM_ASM_DOUBLE({ return performance.now(); });
     }
 #endif  // IMP_PLATFORM(WASM)
@@ -366,7 +375,9 @@ void WasmAsyncCanvasSource::OnPixelBufferReady(BaseView& view, uint8_t* data,
         filament::Texture::PixelBufferDescriptor::make(
             data + data_offset, block_size, format, type,
             [gpu_upload, wasm_gpu_upload_start_time,
-             enable_label_prep_profile_logging](void* buffer, size_t size) {
+             enable_label_prep_profile_logging =
+                 this->enable_label_prep_profile_logging_](void* buffer,
+                                                           size_t size) {
               gpu_upload.Return(absl::OkStatus());
 #if IMP_PLATFORM(WASM)
               if (enable_label_prep_profile_logging) {

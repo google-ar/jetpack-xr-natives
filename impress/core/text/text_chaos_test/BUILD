@@ -25,18 +25,17 @@ imp_app(
         "text_chaos_test_view.h",
     ],
     android_activity_name = "TextChaosActivity",
-    android_base_activity = "//javatests/com/google/ar/imp/samples/textchaostest/test:text_chaos_activity_lib",
+    android_base_activity = "//javatests/com/google/ar/imp/text/textchaostest/test:text_chaos_activity_lib",
     android_java_deps = [
         "//java/com/google/ar/imp/core/glyph",  # unuseddeps: keep
     ],
-    android_package = "com.google.ar.imp.samples.textchaostest",
+    android_package = "com.google.ar.imp.text.textchaostest",
     platforms = [
         "desktop",
         "android",
     ],
     deps = [
         "//core/async:future",
-        "//core/editor:widget",
         "//core/math",
         "//core/ncsb",
         "//core/text:text_collider",
@@ -44,6 +43,7 @@ imp_app(
         "//core/text:text_renderer_proto_cc",
         "//core/view:base_view",
         "//core/view/framework",
+        "//core/view/utils:frame_time",
         "//core/view/utils:view_config_proto_cc_imp",
         "//samples/text_stress_test:dictionaries",
         "@com_google_absl//absl/status",

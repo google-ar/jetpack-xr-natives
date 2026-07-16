@@ -206,7 +206,6 @@ cc_library(
         "//core/view/framework:framework_proto_cc",
         "//core/view/utils:frame_time",
         "//core/view/utils:string_map",
-        "//core/window:default_dev_mode_extension",
         "//core/window:filament_host",
         "//core/window:imgui_renderer",
         "@com_google_absl//absl/status",
@@ -216,6 +215,7 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@dear_imgui",
         "@third_party//filament/filament:filament_hdrs",
+        "@third_party//split_engine/input:split_engine_input_event",
         "@third_party//split_engine/materials:texture_external_material",
     ] + if_android(
         [

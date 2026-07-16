@@ -90,7 +90,7 @@ void CameraZoom::UpdateCameraZoom(float zoom_delta, float zoom_sensitivity,
   float adjusted_zoom_delta = zoom_delta * zoom_sensitivity;
   float3 pivot_position = pivot_->GetWorldPosition();
   float3 node_to_pivot = pivot_position - GetNode()->GetWorldPosition();
-  float distance = length(node_to_pivot) - adjusted_zoom_delta;
+  float distance = length(node_to_pivot) + adjusted_zoom_delta;
   distance = std::clamp(distance, zoom_min_distance, kZoomMaxDistance);
   node_to_pivot = normalize(node_to_pivot);
   float3 target_position = pivot_position - (node_to_pivot * distance);

@@ -82,7 +82,9 @@ class StereoSurfaceManager {
 
   // Sets the subview configuration of a stereo surface entity.
   virtual absl::Status SetSubViewConfigForStereoSurfaceEntity(
-      int32_t node_id, float bottom, float left, float right, float top) = 0;
+      int32_t node_id, float left_bottom, float left_left, float left_right,
+      float left_top, float right_bottom, float right_left, float right_right,
+      float right_top) = 0;
 };
 
 }  // namespace imp

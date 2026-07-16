@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <jni.h>
+
 #include <vector>
 
 #include "openxr/openxr.h"
@@ -59,7 +60,7 @@ Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeGetGetInstanceProcAd
 
 JNIEXPORT jobject JNICALL
 Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeGetPreferredBlendMode(
-    JNIEnv* env, jobject j_provider, jlong manager_ptr) {
+    JNIEnv* env, jclass /*clazz*/, jlong manager_ptr) {
   OpenXrInstanceManager* manager =
       PointerFromJLong<OpenXrInstanceManager>(manager_ptr);
   XrInstance instance = manager->GetInstance(env, nullptr);
@@ -82,6 +83,42 @@ Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeGetPreferre
     }
   }
   return nullptr;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeIsHandTrackingSupported(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong manager_ptr) {
+  return PointerFromJLong<OpenXrInstanceManager>(manager_ptr)
+      ->IsHandTrackingSupported();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeIsEyeTrackingSupported(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong manager_ptr) {
+  return PointerFromJLong<OpenXrInstanceManager>(manager_ptr)
+      ->IsEyeTrackingSupported();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeIsDepthTrackingSupported(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong manager_ptr) {
+  return PointerFromJLong<OpenXrInstanceManager>(manager_ptr)
+      ->IsDepthTrackingSupported();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeIsGeospatialSupported(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong manager_ptr) {
+  return PointerFromJLong<OpenXrInstanceManager>(manager_ptr)
+      ->IsGeospatialSupported();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeIsRenderingModeSupported(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong manager_ptr, jint mode) {
+  return PointerFromJLong<OpenXrInstanceManager>(manager_ptr)
+      ->IsRenderingModeSupported(
+          static_cast<OpenXrInstanceManager::RenderingMode>(mode));
 }
 
 }  // extern "C"

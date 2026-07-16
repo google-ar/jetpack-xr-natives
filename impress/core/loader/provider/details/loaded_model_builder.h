@@ -265,8 +265,14 @@ class LoadedModelBuilder {
     MorphTargetBlock(BufferAccess in_positions, BufferAccess in_tangents)
         : positions(std::move(in_positions)),
           tangents(std::move(in_tangents)) {}
+    MorphTargetBlock(BufferAccess in_positions, BufferAccess in_tangents,
+                     BufferAccess in_texcoords0)
+        : positions(std::move(in_positions)),
+          tangents(std::move(in_tangents)),
+          texcoords0(std::move(in_texcoords0)) {}
     BufferAccess positions;
     BufferAccess tangents;
+    BufferAccess texcoords0;
   };
 
   struct VertexBuffer {

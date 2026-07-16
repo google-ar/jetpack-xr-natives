@@ -49,8 +49,10 @@ namespace {
 // all calls to {function} with calls to __wrap_{function}. It also provides
 // __real_{function} which is the original function.
 
-constexpr uint32_t kMagicNumber = 0xDEADBEEF;
-constexpr uint32_t kFreedMagicNumber = 0xFEEDADAD;
+constexpr uint32_t kMagicNumber = 0xFEEDADAD;
+// This magic number is used to identify freed allocations.
+// Using DEADBEEF as this is a convention for freed memory.
+constexpr uint32_t kFreedMagicNumber = 0xDEADBEEF;
 
 // Header to store the size of the allocation
 struct AllocHeader {
@@ -158,54 +160,18 @@ void* __wrap_realloc(void* ptr, size_t size) {
 }
 
 void* __wrap_aligned_alloc(size_t alignment, size_t size) {
-  size_t total_size = size + sizeof(AllocHeader);
-  // Note: __real_aligned_alloc is not available in WASM,
-  // so we use __real_memalign instead.
-  void* raw_ptr = __real_memalign(alignment, total_size);
-
-  if (!raw_ptr) return nullptr;
-
-  AllocHeader* header = static_cast<AllocHeader*>(raw_ptr);
-  header->size = size;
-  header->magic = kMagicNumber;
-
-  imp::MemoryStats::Get().IncrementMemoryCounters(size);
-  return UserPtrFromRaw(raw_ptr);
+  return __real_memalign(alignment, size);
 }
 
 // Obsolete functions.
 int __wrap_posix_memalign(void** memptr, size_t alignment, size_t size) {
-  size_t total_size = size + sizeof(AllocHeader);
-  void* raw_ptr;
-  int result = __real_posix_memalign(&raw_ptr, alignment, total_size);
-  if (result != 0) {
-    return result;
-  }
-
-  if (!raw_ptr) return ENOMEM;
-
-  AllocHeader* header = static_cast<AllocHeader*>(raw_ptr);
-  header->size = size;
-  header->magic = kMagicNumber;
-
-  imp::MemoryStats::Get().IncrementMemoryCounters(size);
-  *memptr = UserPtrFromRaw(raw_ptr);
-  return 0;
+  return __real_posix_memalign(memptr, alignment, size);
 }
 
 void __wrap_cfree(void* ptr) { __wrap_free(ptr); }
 
 void* __wrap_memalign(size_t alignment, size_t size) {
-  size_t total_size = size + sizeof(AllocHeader);
-  void* raw_ptr = __real_memalign(alignment, total_size);
-  if (!raw_ptr) return nullptr;
-
-  AllocHeader* header = static_cast<AllocHeader*>(raw_ptr);
-  header->size = size;
-  header->magic = kMagicNumber;
-
-  imp::MemoryStats::Get().IncrementMemoryCounters(size);
-  return UserPtrFromRaw(raw_ptr);
+  return __real_memalign(alignment, size);
 }
 
 void* __wrap_valloc(size_t size) {
@@ -257,48 +223,3 @@ void operator delete[](void* ptr, const std::nothrow_t&) noexcept {
 void operator delete(void* ptr, size_t size) noexcept { __wrap_free(ptr); }
 
 void operator delete[](void* ptr, size_t size) noexcept { __wrap_free(ptr); }
-
-#ifdef __cpp_aligned_new
-void* operator new(size_t size, std::align_val_t al) {
-  return __wrap_malloc(size);
-}
-void* operator new[](size_t size, std::align_val_t al) {
-  return __wrap_malloc(size);
-}
-void* operator new(size_t size, std::align_val_t al,
-                   const std::nothrow_t&) noexcept {
-  return __wrap_malloc(size);
-}
-void* operator new[](size_t size, std::align_val_t al,
-                     const std::nothrow_t&) noexcept {
-  return __wrap_malloc(size);
-}
-void operator delete(void* ptr, std::align_val_t al) noexcept {
-  __wrap_free(ptr);
-}
-void operator delete[](void* ptr, std::align_val_t al) noexcept {
-  __wrap_free(ptr);
-}
-void operator delete(void* ptr, size_t size, std::align_val_t al) noexcept {
-  __wrap_free(ptr);
-}
-void operator delete[](void* ptr, size_t size, std::align_val_t al) noexcept {
-  __wrap_free(ptr);
-}
-void operator delete(void* ptr, std::align_val_t al,
-                     const std::nothrow_t&) noexcept {
-  __wrap_free(ptr);
-}
-void operator delete[](void* ptr, std::align_val_t al,
-                       const std::nothrow_t&) noexcept {
-  __wrap_free(ptr);
-}
-void operator delete(void* ptr, size_t size, std::align_val_t al,
-                     const std::nothrow_t&) noexcept {
-  __wrap_free(ptr);
-}
-void operator delete[](void* ptr, size_t size, std::align_val_t al,
-                       const std::nothrow_t&) noexcept {
-  __wrap_free(ptr);
-}
-#endif

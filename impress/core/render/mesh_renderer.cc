@@ -181,16 +181,18 @@ void MeshRenderer::BuildRenderables(const SetupOptions& options) {
   }
 
   if (num_bones > 0) {
+    // Note: imp::mat4f default constructs to an identity matrix.
     bones_.resize(num_bones);
-
-    std::fill(bones_.begin(), bones_.end(), kIdentityMat4f);
 
     builder->EnableSkinningBuffers(false);
     // The Filament `Skinning` function takes a size_t for the number of bones,
     // but the docstring states
     // - "@param boneCount ... the number of bone transforms (up to 255)"
     // so making the public API a uint8_t enforces this limit at compile time.
-    builder->Skinning(static_cast<size_t>(num_bones), bones_.data());
+    // Note: it's wasteful to set the bones here since they are identity - that
+    // is already the default in Filament, so it would just copy an identity
+    // matrix for each bone unnecessarily.
+    builder->Skinning(static_cast<size_t>(num_bones));
   }
 
   builder->Priority(priority_);

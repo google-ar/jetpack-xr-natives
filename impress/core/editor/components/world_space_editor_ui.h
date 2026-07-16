@@ -25,14 +25,13 @@
 #include "core/async/future.h"
 #include "core/editor/components/spatial_ui_canvas.h"
 #include "core/math/vec.h"
-#include "core/model/mesh/mesh.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/texture.h"
-#include "core/view/framework/render/mesh_renderer.h"
 #include "core/view/utils/string_map.h"
+#include "split_engine/input/split_engine_input_event.h"
 
 #if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV)
 #include "core/render/android/android_external_texture_surface.h"
@@ -75,6 +74,11 @@ class WorldSpaceEditorUi : public Component {
   // Converts a ControllerHitEvent into simulated mouse input in the Editor UI.
   void HandleControllerHitEvent(ControllerHitEvent controller_hit_event);
 
+  // Converts a SplitEngineInputEvent into simulated mouse input in the Editor
+  // UI.
+  void HandleSplitEngineInputEvent(
+      const android_xr::SplitEngineInputEvent& event);
+
   // Given the world space coordinate of a hit on the surface of the
   // WorldSpaceEditorUi, transform it into ImGui pixel coordinates and update
   // the mouse position in the ImGui IO system.
@@ -98,6 +102,8 @@ class WorldSpaceEditorUi : public Component {
   float2 texture_resolution_;
   float texture_aspect_ratio_;
   absl::optional<ControllerHitEvent::Hand> active_hand_;
+  absl::optional<android_xr::SplitEngineInputEvent::PointerType>
+      active_split_engine_pointer_;
 
   // The position of each canvas that is known with Setup.
   StringMap<float3> canvas_position_map_;

@@ -18,9 +18,8 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_BRIDGE_SENDER_H_
 
 #include <cstddef>
-#include <functional>
+#include <optional>
 
-#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -87,7 +86,8 @@ class SplitEngineBridgeSender : public BackgroundScheduler {
   // particular sender, but rather the total number of message groups that
   // were sent by every sender and have not been released yet by the remote
   // side.
-  virtual absl::StatusOr<size_t> GetActiveMessageGroupCount() const = 0;
+  virtual absl::StatusOr<size_t> GetActiveMessageGroupCount(
+      std::optional<MessageType> message_type) const = 0;
 
   // Clears any message groups that have been released via ReleaseMessageGroup.
   // This should be called once per frame to ensure that any message groups

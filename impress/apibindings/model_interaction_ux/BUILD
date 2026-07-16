@@ -42,6 +42,7 @@ cc_library(
         "//core/geometry/shapes",
         "//core/math",
         "//core/ncsb",
+        "//core/render:mesh_renderer",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:frame_time",

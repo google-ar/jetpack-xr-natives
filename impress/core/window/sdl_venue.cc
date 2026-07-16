@@ -15,27 +15,28 @@
 #include "core/window/sdl_venue.h"
 
 #include <SDL.h>
-#include <math.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 
-#include "SDL2/include/SDL_keyboard.h"
-#include "SDL2/include/SDL_keycode.h"
+#include "SDL2/include/SDL_error.h"
+#include "SDL2/include/SDL_events.h"
+#include "SDL2/include/SDL_stdinc.h"
+#include "SDL2/include/SDL_video.h"
+#include "filament/libs/math/include/math/mathfwd.h"
+#include "core/common/optional_error.h"
+#include "core/window/filament_host.h"
+#if IMP_MATERIAL_API(METAL)
+#include "SDL2/include/SDL_metal.h"
+#endif
 #include "core/common/log.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "core/common/enum_flags.h"
 #include "core/common/filament_engine_helpers.h"
-#include "core/common/file_helpers.h"
-#include "core/common/platform_helpers.h"
 #include "core/config.h"
 #include "core/input/input_manager.h"
-#include "core/input/key_codes.h"
-#include "core/input/keyboard_event.h"
-#include "core/input/pointer_event.h"
 #include "core/view/platforms/desktop/clipboard/sdl_clipboard_handler.h"
 #include "core/window/native_window_helper.h"
 #include "core/window/sdl_input_processor.h"
@@ -62,7 +63,85 @@ using ::filament::math::uint2;
 using ::imp::FlushEngineAndWait;
 using ::imp::InputManager;
 
-static constexpr int kDefaultMousePointerId = 0;
+// Wraps graphics-API-specific SDL operations to abstract away platform
+// differences between OpenGL and Metal when interacting with SDL windows and
+// Filament swap chains.
+class SdlVenueGraphics {
+ public:
+  // Returns the SDL window flags required by the graphics API (e.g.,
+  // SDL_WINDOW_METAL for Metal, 0 for OpenGL).
+  uint32_t GetWindowFlags() const;
+
+  // Creates the initial swap chain and any necessary underlying views (like
+  // an SDL_MetalView) for the given window.
+  absl::Status CreateSwapChain(FilamentHost* host, SDL_Window* window,
+                               uint64_t flags);
+
+  // Recreates the swap chain without recreating the underlying views. Used when
+  // resizing the window.
+  absl::Status RecreateSwapChain(FilamentHost* host, SDL_Window* window);
+
+  // Retrieves the drawable size of the window, which may differ from the window
+  // size on high-DPI displays.
+  void GetDrawableSize(SDL_Window* window, int* width, int* height) const;
+
+  // Destroys any underlying views created by CreateSwapChain.
+  void Destroy(SDL_Window* window);
+
+#if IMP_MATERIAL_API(METAL)
+
+ private:
+  void* metal_view_ = nullptr;
+#endif
+};
+
+#if IMP_MATERIAL_API(METAL)
+uint32_t SdlVenueGraphics::GetWindowFlags() const { return SDL_WINDOW_METAL; }
+
+absl::Status SdlVenueGraphics::CreateSwapChain(FilamentHost* host,
+                                               SDL_Window* window,
+                                               uint64_t flags) {
+  metal_view_ = SDL_Metal_CreateView(window);
+  return host->CreateSwapChain(SDL_Metal_GetLayer(metal_view_), flags);
+}
+
+absl::Status SdlVenueGraphics::RecreateSwapChain(FilamentHost* host,
+                                                 SDL_Window* window) {
+  return host->CreateSwapChain(SDL_Metal_GetLayer(metal_view_));
+}
+
+void SdlVenueGraphics::GetDrawableSize(SDL_Window* window, int* width,
+                                       int* height) const {
+  SDL_Metal_GetDrawableSize(window, width, height);
+}
+
+void SdlVenueGraphics::Destroy(SDL_Window* window) {
+  if (metal_view_) {
+    SDL_Metal_DestroyView(metal_view_);
+    metal_view_ = nullptr;
+  }
+}
+#else
+uint32_t SdlVenueGraphics::GetWindowFlags() const { return 0; }
+
+absl::Status SdlVenueGraphics::CreateSwapChain(FilamentHost* host,
+                                               SDL_Window* window,
+                                               uint64_t flags) {
+  return host->CreateSwapChain(Impress_getNativeWindow(window), flags);
+}
+
+absl::Status SdlVenueGraphics::RecreateSwapChain(FilamentHost* host,
+                                                 SDL_Window* window) {
+  return host->CreateSwapChain(Impress_getNativeWindow(window));
+}
+
+void SdlVenueGraphics::GetDrawableSize(SDL_Window* window, int* width,
+                                       int* height) const {
+  SDL_GL_GetDrawableSize(window, width, height);
+}
+
+void SdlVenueGraphics::Destroy(SDL_Window* window) {}
+#endif
 
 // Venue is the current strawman-name for the thing that hosts a host.
 class SdlVenueImpl {
@@ -74,8 +153,7 @@ class SdlVenueImpl {
         device_(device),
         window_(nullptr),
         do_post_loop_(true) {
-    host->SetClipboardHandler(
-        std::make_unique<SdlClipboardHandler>());
+    host->SetClipboardHandler(std::make_unique<SdlClipboardHandler>());
   }
   OptionalError CreateWindow(const uint2& dimensions);
   void DestroyWindow();
@@ -92,6 +170,7 @@ class SdlVenueImpl {
   InputManager* input_manager_;
   Device* device_;
   SDL_Window* window_;
+  SdlVenueGraphics graphics_;
   bool do_post_loop_;
 };
 
@@ -151,12 +230,11 @@ void SdlVenueImpl::OnWindowSizeChanged() {
   if (auto status = host_->DestroySwapChain(); !status.ok()) {
     IMP_LOG(imp::ERROR) << status;
   }
-  if (auto status = host_->CreateSwapChain(Impress_getNativeWindow(window_));
-      !status.ok()) {
+  if (auto status = graphics_.RecreateSwapChain(host_, window_); !status.ok()) {
     IMP_LOG(imp::FATAL) << status;
   }
   int draw_width, draw_height;
-  SDL_GL_GetDrawableSize(window_, &draw_width, &draw_height);
+  graphics_.GetDrawableSize(window_, &draw_width, &draw_height);
   int virtual_width, virtual_height;
   SDL_GetWindowSize(window_, &virtual_width, &virtual_height);
   uint2 subpixel_ratio = {draw_width / virtual_width,
@@ -173,8 +251,9 @@ OptionalError SdlVenueImpl::CreateWindow(const uint2& dimensions) {
 
   // Create window
   std::string title = state->Title(host_);
-  const uint32_t window_flags =
+  uint32_t window_flags =
       SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+  window_flags |= graphics_.GetWindowFlags();
   window_ = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_UNDEFINED,
                              SDL_WINDOWPOS_UNDEFINED, dimensions.x,
                              dimensions.y, window_flags);
@@ -182,10 +261,10 @@ OptionalError SdlVenueImpl::CreateWindow(const uint2& dimensions) {
     return Error("Window could not be created! SDL_Error: %s\n",
                  SDL_GetError());
   }
-  MP_RETURN_IF_ERROR(host_->CreateSwapChain(Impress_getNativeWindow(window_), 0));
+  MP_RETURN_IF_ERROR(graphics_.CreateSwapChain(host_, window_, 0));
 
   int draw_width, draw_height;
-  SDL_GL_GetDrawableSize(window_, &draw_width, &draw_height);
+  graphics_.GetDrawableSize(window_, &draw_width, &draw_height);
   int virtual_width, virtual_height;
   SDL_GetWindowSize(window_, &virtual_width, &virtual_height);
   filament::math::uint2 subpixel_ratio = {draw_width / virtual_width,
@@ -221,6 +300,7 @@ void SdlVenueImpl::DestroyWindow() {
   if (auto status = host_->DestroySwapChain(); !status.ok()) {
     IMP_LOG(imp::ERROR) << status;
   }
+  graphics_.Destroy(window_);
   SDL_DestroyWindow(window_);
   SDL_Quit();
 }

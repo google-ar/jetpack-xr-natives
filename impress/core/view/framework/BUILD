@@ -51,6 +51,7 @@ cc_library(
         "//core/animation:morph_target_animation",
         "//core/animation:texture_transform_animation",
         "//core/assets",
+        "//core/assets/gltf:gltf_asset",
         "//core/assets/material:material_asset",
         "//core/assets/material:material_helpers",
         "//core/assets/material:material_load_options_proto_cc",

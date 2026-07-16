@@ -412,6 +412,8 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
 
 const std::vector<SampleNode*>* FrameTimePanel::GetSamples(
     absl::string_view sample_name, int frame_index, std::thread::id thread_id) {
+  if (!Profiler::HasFrameRecorded(frame_index)) return nullptr;
+
   const ProcessedSamples& processed_frame =
       sample_processor_.GetProcessedFrame(frame_index);
 

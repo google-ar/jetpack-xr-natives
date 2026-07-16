@@ -15,6 +15,7 @@
 #include "core/window/default_dev_mode_extension.h"
 
 #include <algorithm>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -38,8 +39,11 @@
 #include "core/common/trace.h"
 #include "core/common/typed_vector.h"
 #include "core/config.h"
+#include "core/editor/editor.h"
+#include "core/editor/editor_info.h"
 #include "core/input/key_codes.h"
 #include "core/math/vec.h"
+#include "core/video/video_writer.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filagui_imgui_renderer.h"
 #include "core/window/filament_host.h"
@@ -146,6 +150,11 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
     return absl::InternalError("Failed to create ImGuiRenderer");
   }
 
+  /// set up video streaming writer here
+#if IMP_PLATFORM(IOS)
+  video_writer_ = video::VideoWriter::CreateVideoWriter(false);
+#endif
+
   io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
   io.MouseDown[0] = false;
   io.MouseDown[1] = false;
@@ -155,6 +164,13 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
       host_->GetEngine(), host_->GetScene(), custom_debug_draw_material_);
 
   return absl::OkStatus();
+}
+
+bool DefaultDevModeExtension::RemoteUiEnabled(FilamentHost* host) {
+  if (ShouldRenderUiInPlace()) {
+    return false;
+  }
+  return video_writer_ != nullptr && video_writer_->IsReady();
 }
 
 void DefaultDevModeExtension::PreCleanup() {
@@ -217,6 +233,51 @@ void DefaultDevModeExtension::PreRender(absl::Duration previous_vsync,
       debug_draw_->Advance();
     });
     last_vsync_ = next_vsync;
+  }
+}
+
+bool DefaultDevModeExtension::ShouldRenderUiInPlace() {
+  if (!video_writer_) {
+    return true;
+  }
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor_status =
+      this->base_view_.GetRegistry().Get<editor::Editor>();
+  if (!editor_status.ok() ||
+      editor_status.status().code() == absl::StatusCode::kUnavailable) {
+    return true;
+  }
+  if ((*editor_status).get().IsEnabled() &&
+      (*editor_status).get().GetDisplayMode() ==
+          editor::EditorInfo::DisplayMode::kRemoteScreen) {
+    return false;
+  }
+  return true;
+}
+
+void DefaultDevModeExtension::RerouteUiRendering() {
+  if (!IsEnabled()) {
+    return;
+  }
+
+  if (ShouldRenderUiInPlace()) {
+    return;
+  }
+
+  uint2 screen_size = {ui_view_.Get()->getViewport().width,
+                       ui_view_.Get()->getViewport().height};
+  // If the image writer is not ready, open it.
+  if (video_writer_ != nullptr && !video_writer_->IsReady()) {
+    absl::Status status = video_writer_->Open(screen_size, "");
+    if (!status.ok()) {
+      IMP_LOG(imp::ERROR) << "Failed to open image writer: " << status;
+      video_writer_ = nullptr;
+    }
+  }
+
+  if (video_writer_ != nullptr && video_writer_->IsReady()) {
+    video_writer_->ProcessInput(base_view_.GetHost());
+    video_writer_->CaptureFrame(base_view_.GetHost());
+    video_writer_->WriteFrame();
   }
 }
 

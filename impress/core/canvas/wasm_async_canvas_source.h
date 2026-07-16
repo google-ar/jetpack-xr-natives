@@ -45,7 +45,7 @@ namespace imp {
 // shapes such as the rounded rectangle.
 class WasmAsyncCanvasSource : public AsyncCanvasSource {
  public:
-  WasmAsyncCanvasSource();
+  WasmAsyncCanvasSource(bool enable_label_prep_profile_logging = false);
 
   // Because this class passes a pointer to itself to callbacks, it may not be
   // copied or moved.
@@ -182,6 +182,8 @@ class WasmAsyncCanvasSource : public AsyncCanvasSource {
   std::unique_ptr<WasmCanvasManager> drawing_canvas_;
   // A scoped canvas used only to measure text size information.
   WasmScopedCanvas measuring_scoped_canvas_ ABSL_GUARDED_BY(canvas_mutex_);
+  // Whether to enable profile logging for label preparation.
+  bool enable_label_prep_profile_logging_;
 };
 
 }  // namespace imp

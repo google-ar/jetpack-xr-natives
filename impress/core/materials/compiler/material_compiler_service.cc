@@ -32,6 +32,7 @@
 #include "filament/libs/filamat/include/filamat/Package.h"
 #include "filament/libs/filament-matp/include/filament-matp/Config.h"
 #include "filament/libs/filament-matp/include/filament-matp/MaterialParser.h"
+#include "filament/libs/utils/include/utils/BitmaskEnum.h"
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -48,20 +49,24 @@ namespace {
 // builder enum.
 inline filamat::MaterialBuilder::TargetApi UnpackTargetApi(
     schemas::TargetApi target_api) {
-  switch (target_api) {
-    case schemas::TargetApi::NONE:
-      return filamat::MaterialBuilder::TargetApi::ALL;
-    case schemas::TargetApi::OpenGL:
-      return filamat::MaterialBuilder::TargetApi::OPENGL;
-    case schemas::TargetApi::Vulkan:
-      return filamat::MaterialBuilder::TargetApi::VULKAN;
-    case schemas::TargetApi::Metal:
-      return filamat::MaterialBuilder::TargetApi::METAL;
-    case schemas::TargetApi::WebGPU:
-      return filamat::MaterialBuilder::TargetApi::WEBGPU;
-    case schemas::TargetApi::ANY:
-      return filamat::MaterialBuilder::TargetApi::ALL;
+  using FilamentApi = filamat::MaterialBuilder::TargetApi;
+  using SchemaApi = schemas::TargetApi;
+
+  FilamentApi result = static_cast<FilamentApi>(0);
+  if (!!(target_api & SchemaApi::OpenGL)) {
+    result |= FilamentApi::OPENGL;
   }
+  if (!!(target_api & SchemaApi::Vulkan)) {
+    result |= FilamentApi::VULKAN;
+  }
+  if (!!(target_api & SchemaApi::Metal)) {
+    result |= FilamentApi::METAL;
+  }
+  if (!!(target_api & SchemaApi::WebGPU)) {
+    result |= FilamentApi::WEBGPU;
+  }
+
+  return any(result) ? result : FilamentApi::ALL;
 }
 
 // Convert the platform enum from the IPC schema to the Filament material
@@ -76,6 +81,19 @@ inline filamat::MaterialBuilder::Platform UnpackPlatform(
     case schemas::Platform::All:
       return filamat::MaterialBuilder::Platform::ALL;
   }
+}
+
+// Unpack the IPC Config table into the RuntimeMaterialCompilerConfig.
+inline void UnpackConfig(const schemas::Config* config,
+                         RuntimeMaterialCompilerConfig& runtime_config) {
+  if (config == nullptr) {
+    // Default to Desktop and ALL APIs.
+    runtime_config.SetPlatform(filamat::MaterialBuilder::Platform::DESKTOP);
+    runtime_config.SetTargetApi(filamat::MaterialBuilder::TargetApi::ALL);
+    return;
+  }
+  runtime_config.SetPlatform(UnpackPlatform(config->platform()));
+  runtime_config.SetTargetApi(UnpackTargetApi(config->target_api()));
 }
 
 // Convert the absl::StatusCode to the IPC schema ErrorStatusCode.
@@ -163,7 +181,7 @@ absl::Status MaterialCompilerService::HandleCompileRequest(
   }
   MP_ASSIGN_OR_RETURN(std::string compiled_shader,
                    CompileMaterial(request->source_material()->string_view(),
-                                   request->platform(), request->target_api()));
+                                   request->config()));
 
   flatbuffers::FlatBufferBuilder builder;
 
@@ -181,17 +199,14 @@ absl::Status MaterialCompilerService::HandleCompileRequest(
 }
 
 absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
-    absl::string_view source_material_string, schemas::Platform platform,
-    schemas::TargetApi target_api) {
+    absl::string_view source_material_string,
+    const schemas::Config* ipc_config) {
   matp::MaterialParser parser;
   filamat::MaterialBuilder builder;
   std::ostringstream compiler_output;
 
-  // TODO: Consider exposing config in the schema. We need the
-  // client to be able to set some config including platform and target api.
   RuntimeMaterialCompilerConfig config(source_material_string, compiler_output);
-  config.SetPlatform(UnpackPlatform(platform));
-  config.SetTargetApi(UnpackTargetApi(target_api));
+  UnpackConfig(ipc_config, config);
 
   // TODO: This is only relevant to XR or stereo variant. This
   // should be updated or removed once we implement handling variant filters

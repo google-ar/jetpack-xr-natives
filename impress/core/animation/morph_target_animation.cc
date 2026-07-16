@@ -16,23 +16,21 @@
 
 #include <assert.h>
 
+#include <array>
+#include <string>
 #include <type_traits>
 #include <utility>
-#include <variant>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "absl/types/variant.h"
+#include "flatbuffers/vector.h"
 #include "core/animation/curve.h"
 #include "core/animation/schemas/gltf_animation_generated.h"
-#include "core/common/filament_helpers.h"
-#include "core/common/flatbuffer_helpers.h"
 #include "core/math/flatbuffer_support.h"
-#include "core/math/math.h"
-#include "core/math/vec.h"
-#include "core/model/model_data.h"
-#include "filament/libs/math/include/math/TVecHelpers.h"
-#include "flatbuffers/flatbuffers.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::animation {
@@ -42,6 +40,9 @@ template <class T>
 struct AlwaysFalse : std::false_type {};
 
 using ::flatbuffers::Vector;
+
+constexpr absl::string_view kAdditiveWeightIndexExtraName =
+    "additiveWeightIndex";
 
 template <typename Curve, typename SchemaValue>
 absl::StatusOr<Curve> CreateCurve(
@@ -113,7 +114,15 @@ absl::StatusOr<MorphTargetAnimation> MorphTargetAnimation::Create(
   MP_ASSIGN_OR_RETURN(
       auto weights,
       CreateCurveVariant<CurveType>(mt_anim.weights_type(), mt_anim.weights()));
-  return MorphTargetAnimation(std::move(weights));
+
+  absl::flat_hash_map<std::string, ExtraValue> extras;
+  // Add any extras from the flatbuffer.
+  if (mt_anim.additive_weight_index().has_value()) {
+    extras.emplace(kAdditiveWeightIndexExtraName,
+                   mt_anim.additive_weight_index().value());
+  }
+
+  return MorphTargetAnimation(std::move(weights), std::move(extras));
 }
 
 std::array<float, 256> MorphTargetAnimation::Evaluate(

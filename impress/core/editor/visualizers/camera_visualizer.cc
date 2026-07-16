@@ -14,47 +14,139 @@
 
 #include "core/editor/visualizers/camera_visualizer.h"
 
+#include <utility>
+
 #include "core/common/log.h"
 #include "absl/status/statusor.h"
-#include "filament/libs/math/include/math/TVecHelpers.h"
+#include "absl/strings/string_view.h"
+#include "filament/filament/include/filament/MaterialInstance.h"
+#include "core/async/future.h"
+#include "core/camera/camera_component.h"
+#include "core/camera/camera_manager.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/visualizers/camera_visualizer_assets.h"
+#include "core/materials/material.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/framework/assets/gltf_mesh.h"
-#include "core/view/framework/assets/gltf_scene.h"
-#include "core/view/framework/camera/camera_component.h"
-#include "core/view/framework/camera/camera_manager.h"
+#include "core/view/framework/assets/material_factory.h"
 #include "core/view/framework/scene/scene_system.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp::editor {
 
+namespace {
+
+// Scale factor for the camera visualizer mesh.
 constexpr float kCameraMeshScaleFactor = 0.02f;
+
+// Color of the camera visualizer mesh.
+constexpr float3 kCameraMeshColor = float3(0.4f, 0.4f, 0.4f);
+
+// Alpha value for the overlay material.
+constexpr float kOverlayAlpha = 0.5f;
+
+// Color of the transparent overlay mesh.
+constexpr float4 kCameraOverlayColor = float4(kCameraMeshColor, kOverlayAlpha);
+
+// Base color parameter name for the camera visualizer mesh.
+constexpr absl::string_view kCameraMeshColorParam = "baseColor";
+
+// Scale factor parameter name for the camera visualizer mesh.
+constexpr absl::string_view kCameraMeshScaleFactorParam = "scaleFactor";
+
+// Group name for the overlay material.
+constexpr absl::string_view kOverlayName = "overlay";
+
+void RecursiveApply(NodeHandle node, BorrowedMaterialPtr material) {
+  auto mesh = node->GetComponent<GltfMesh>();
+  if (mesh) {
+    mesh->SetShadowCastingMode(GltfMesh::ShadowMode::kNone);
+    mesh->SetShadowReceivingMode(GltfMesh::ShadowMode::kNone);
+    mesh->SetMaterialOverride(material);
+  }
+  for (const NodeHandle& child : node->GetChildren()) {
+    RecursiveApply(child, material);
+  }
+}
+
+void ApplyMaterialOverrides(NodeHandle node, BorrowedMaterialPtr opaque,
+                            BorrowedMaterialPtr overlay) {
+  for (const NodeHandle& child : node->GetChildren()) {
+    if (child->GetName() == kOverlayName) {
+      RecursiveApply(child, overlay);
+    } else {
+      RecursiveApply(child, opaque);
+    }
+  }
+}
+
+}  // namespace
+
+void CameraVisualizer::Cleanup() {
+  if (visualizer_model_) {
+    RecursiveApply(visualizer_model_, nullptr);
+  }
+}
 
 void CameraVisualizer::Setup(NodeHandle camera) {
   target_ = camera;
 
-  GetView()
-      .GetSceneSystem()
-      .LoadScene(camera_visualizer_assets::kCameraVisualizerIsf, GetNode())
-      .Then([this](const absl::StatusOr<NodeHandle>& model) {
-        if (!model.ok()) {
-          IMP_LOG(imp::ERROR) << "Failed to load camera visualizer: " << model.status();
-          return;
-        }
-        if (auto scene = (*model)->GetComponent<GltfScene>()) {
-          scene->ForAllNodes([](NodeHandle node) {
-            auto mesh = node->GetComponent<GltfMesh>();
-            if (mesh) {
-              mesh->SetShadowCastingMode(GltfMesh::ShadowMode::kNone);
-              mesh->SetShadowReceivingMode(GltfMesh::ShadowMode::kNone);
-            }
-          });
-        }
+  LoadCameraIsf()
+      .Then([this](NodeHandle node) {
+        visualizer_model_ = node;
+        return LoadMaterials(node);
+      })
+      .Then([this](NodeHandle node) {
+        ApplyMaterialOverrides(node, opaque_material_.Borrow(),
+                               overlay_material_.Borrow());
       })
       .KeptBy(this);
+}
+
+imp::Future<NodeHandle> CameraVisualizer::LoadCameraIsf() {
+  return GetView()
+      .GetSceneSystem()
+      .LoadScene(camera_visualizer_assets::kCameraVisualizerIsf,
+                 {.parent = GetNode()})
+      .Then([](absl::StatusOr<NodeHandle> node) -> absl::StatusOr<NodeHandle> {
+        if (!node.ok()) {
+          IMP_LOG(imp::ERROR) << "Failed to load camera visualizer: " << node.status();
+        }
+        return node;
+      });
+}
+
+imp::Future<NodeHandle> CameraVisualizer::LoadMaterials(NodeHandle model) {
+  auto& factory = GetView().GetMaterialFactory();
+
+  auto load_opaque = factory.LoadMaterial(
+      camera_visualizer_assets::kGizmoVisualizerOpaqueMaterialCmat);
+  auto load_overlay = factory.LoadMaterial(
+      camera_visualizer_assets::kGizmoVisualizerOverlayMaterialCmat);
+
+  return load_opaque.Combine(load_overlay)
+      .Then([this, model, load_opaque, load_overlay](
+                absl::Status status) mutable -> absl::StatusOr<NodeHandle> {
+        if (!status.ok()) return status;
+
+        opaque_material_ = std::move(load_opaque.Move().value());
+        opaque_material_->SetParameter(kCameraMeshColorParam, kCameraMeshColor);
+        opaque_material_->SetParameter(kCameraMeshScaleFactorParam,
+                                       kCameraMeshScaleFactor);
+
+        overlay_material_ = std::move(load_overlay.Move().value());
+        overlay_material_->SetParameter(kCameraMeshColorParam,
+                                        kCameraOverlayColor);
+        overlay_material_->SetParameter(kCameraMeshScaleFactorParam,
+                                        kCameraMeshScaleFactor);
+        // Only draw the overlay material when we're obstructed.
+        overlay_material_->GetFilamentMaterialInstance()->setDepthFunc(
+            filament::MaterialInstance::DepthFunc::NE);
+        return model;
+      });
 }
 
 void CameraVisualizer::Update(const FrameTime& frame_time) {
@@ -71,18 +163,13 @@ void CameraVisualizer::Update(const FrameTime& frame_time) {
     GetNode()->SetEnabled(target_ !=
                           GetView().GetCameraManager().GetCamera()->GetNode());
   }
-  float distance;
+
   if (GetView().IsPreciseTranslationEnabled()) {
     GetNode()->SetWorldPositionPrecise(target_->GetWorldPositionPrecise());
-    distance = norm(target_->GetWorldPositionPrecise() -
-                    editor_camera->GetNode()->GetWorldPositionPrecise());
   } else {
     GetNode()->SetWorldPosition(target_->GetWorldPosition());
-    distance = norm(target_->GetWorldPosition() -
-                    editor_camera->GetNode()->GetWorldPosition());
   }
   GetNode()->SetWorldRotation(target_->GetWorldRotation());
-  GetNode()->SetWorldScale(kCameraMeshScaleFactor * distance);
 }
 
 }  // namespace imp::editor

@@ -21,6 +21,7 @@
 
 #include "absl/status/status.h"
 #include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
 namespace imp::split_engine {
@@ -36,7 +37,7 @@ class SplitEngineMMDesktopBridgeClient {
 
   virtual absl::Status SendRequest(
       absl::Span<const uint8_t> data,
-      std::function<void(absl::Span<const uint8_t>)> callback) = 0;
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) = 0;
 
   // `data` span shall be valid until MessageGroupProcessed callback is called.
   virtual absl::Status SendMessage(MessageGroupId message_group_id,

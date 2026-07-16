@@ -341,6 +341,7 @@ message Primitive {
     optional uint32 position = 1 [json_name = "POSITION"];
     optional uint32 normal = 2 [json_name = "NORMAL"];
     optional uint32 tangent = 3 [json_name = "TANGENT"];
+    optional uint32 texcoord_0 = 4 [json_name = "TEXCOORD_0"];
   }
   repeated Target targets = 6;
 }
@@ -466,6 +467,12 @@ message AnimationChannel {
   }
   optional uint32 sampler = 1;
   Target target = 2;
+
+  message Extras {
+    optional int32 additive_weight_index = 1
+        [json_name = "additiveWeightIndex"];
+  }
+  Extras extras = 3 [(imp.optional_type) = ABSL_OPTIONAL];
 }
 
 message Animation {

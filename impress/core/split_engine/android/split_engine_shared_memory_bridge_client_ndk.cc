@@ -27,7 +27,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -35,16 +34,15 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/common/trace.h"
 #include "core/split_engine/android/extensions/split_engine_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
-#include "core/split_engine/split_engine_bridge_sender.h"
 
 namespace imp::split_engine {
 
@@ -125,18 +123,18 @@ class SplitEngineResponseHandler
 
     if (callback_) {
       callback_(response);
-      callback_ = nullptr;
+      callback_ = {};
     }
     return ndk::ScopedAStatus::ok();
   }
 
   void SetResponseCallback(
-      std::function<void(const std::vector<uint8_t>&)> callback) {
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) {
     callback_ = std::move(callback);
   }
 
  private:
-  std::function<void(const std::vector<uint8_t>&)> callback_;
+  imp::Invocable<void(absl::Span<const uint8_t>)> callback_;
 };
 
 }  // namespace
@@ -248,13 +246,17 @@ SplitEngineSharedMemoryBridgeClientNdk::SetExternalTextureSurfaceSize(
 }
 
 absl::Status SplitEngineSharedMemoryBridgeClientNdk::SendRequest(
-    const std::vector<uint8_t>& data,
-    std::function<void(const std::vector<uint8_t>&)> callback) {
+    absl::Span<const uint8_t> data,
+    imp::Invocable<void(absl::Span<const uint8_t>)> callback) {
   IMP_TRACE();
   std::shared_ptr<SplitEngineResponseHandler> handler =
       ndk::SharedRefBase::make<SplitEngineResponseHandler>();
   handler->SetResponseCallback(std::move(callback));
-  auto status = bridge_service_->sendRequest(bridge_handle_, data, handler);
+
+  // AIDL byte[] converts to std::vector<uint8_t>, so we have to make a copy.
+  std::vector<uint8_t> data_vector(data.begin(), data.end());
+  auto status =
+      bridge_service_->sendRequest(bridge_handle_, data_vector, handler);
   if (!status.isOk()) {
     IMP_LOG(imp::ERROR) << "SplitEngineSharedMemoryBridge failed to send request, "
                << status.getMessage();

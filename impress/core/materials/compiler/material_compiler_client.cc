@@ -34,6 +34,7 @@
 #include "core/common/buffer_access.h"
 #include "core/common/flatbuffer_helpers.h"
 #include "core/ipc/message_pipe.h"
+#include "core/materials/compiler/material_compiler_config.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
 #include "mediapipe/framework/port/status_macros.h"
 
@@ -87,14 +88,15 @@ MaterialCompilerClient::~MaterialCompilerClient() { Close(); }
 // response from the server.
 absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
 MaterialCompilerClient::CompileMaterial(absl::string_view material_string,
-                                        schemas::Platform platform,
-                                        schemas::TargetApi target_api) {
+                                        const MaterialCompilerConfig& config) {
   uint64_t operation_id = ++last_operation_id_;
   flatbuffers::FlatBufferBuilder builder;
+  auto config_offset =
+      schemas::CreateConfig(builder, config.platform, config.target_api);
   auto command_offset = schemas::CreateCompileRequest(
       builder,
       builder.CreateString(material_string.data(), material_string.size()),
-      platform, target_api);
+      config_offset);
   auto request_offset =
       schemas::CreateRequest(builder, schemas::RequestType::CompileRequest,
                              command_offset.Union(), operation_id);

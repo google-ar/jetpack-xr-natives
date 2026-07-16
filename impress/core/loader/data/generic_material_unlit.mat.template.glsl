@@ -84,7 +84,7 @@ fragment {
     // ESSL 1.0 does not support switch statements.
     if (samplerIndex == 0) {
       vec2 uv = uvForSampler(0);
-      return texture2D(materialParams_samplerZero, uv);
+      return texture(materialParams_samplerZero, uv);
     } else if (samplerIndex == 16) {
       return whiteFallbackSample();
     } else if (samplerIndex == 17) {
@@ -113,7 +113,7 @@ fragment {
     if (materialParams.maximumOcclusionFactor > 0.0
         || materialParams.fadeFactor > 0.0) {
       backgroundUv = getBackgroundUvFromWorldPosition(getWorldPosition());
-      vec3 backgroundSample = texture2D(materialParams_cameraTexture,
+      vec3 backgroundSample = texture(materialParams_cameraTexture,
                                         backgroundUv).xyz;
       backgroundColor.xyz = inverseTonemap(srgbToLinear(backgroundSample.xyz));
     }

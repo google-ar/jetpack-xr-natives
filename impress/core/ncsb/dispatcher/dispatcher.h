@@ -44,6 +44,38 @@ template <typename Owner>
 using EnableIfConnectionOwner =
     std::enable_if_t<std::is_constructible<ConnectionOwner, Owner>::value, int>;
 
+class DispatcherEventHandlerMap;
+typedef std::shared_ptr<DispatcherEventHandlerMap> DispatcherEventHandlerMapPtr;
+typedef std::weak_ptr<DispatcherEventHandlerMap>
+    DispatcherEventHandlerMapWeakPtr;
+
+// Handle for event registrations with the Dispatcher. This handle is used to
+// disconnect the connection.
+// Note: this is declared outside of the Dispatcher class because we need to
+// use it in NodeDeclaration as a forward-declared type which doesn't support
+// nested classes.
+class DispatcherConnection {
+ public:
+  DispatcherConnection();
+  DispatcherConnection(const DispatcherEventHandlerMapPtr& handlers,
+                       NodeHandle node, HashValue type, ConnectionId id);
+
+  // Disconnect event handler from the dispatcher.  It is safe to call this
+  // function multiple times.
+  void Disconnect();
+
+  // Get the ConnectionId that can be passed to Dispatcher::Disconnect()
+  ConnectionId GetId() const;
+  HashValue GetTypeHash() const;
+  NodeHandle GetNode() const;
+
+ private:
+  NodeHandle node_;
+  HashValue type_;
+  ConnectionId id_;
+  DispatcherEventHandlerMapWeakPtr handlers_;
+};
+
 // A simple event handling mechanism.
 //
 // The easiest way to explain it is probably through code:
@@ -144,9 +176,11 @@ class Dispatcher {
 
   // Internal class that stores the map of HashValue to EventHandlers (and
   // associated typedefs).
-  class EventHandlerMap;
-  typedef std::shared_ptr<EventHandlerMap> EventHandlerMapPtr;
-  typedef std::weak_ptr<EventHandlerMap> EventHandlerMapWeakPtr;
+  using EventHandlerMap = DispatcherEventHandlerMap;
+  using EventHandlerMapPtr = DispatcherEventHandlerMapPtr;
+  using EventHandlerMapWeakPtr = DispatcherEventHandlerMapWeakPtr;
+
+  friend class DispatcherConnection;
 
  public:
   // Returned from EventHandler to control propagation.
@@ -168,27 +202,7 @@ class Dispatcher {
 
   // Connection object returned by Dispatcher::Connect which must be explicitly
   // disconnected by calling Connection::Disconnect().
-  class Connection {
-   public:
-    Connection();
-    Connection(const EventHandlerMapPtr& handlers, NodeHandle node,
-               HashValue type, ConnectionId id);
-
-    // Disconnect event handler from the dispatcher.  It is safe to call this
-    // function multiple times.
-    void Disconnect();
-
-    // Get the ConnectionId that can be passed to Dispatcher::Disconnect()
-    ConnectionId GetId() const;
-    HashValue GetTypeHash() const;
-    NodeHandle GetNode() const;
-
-   private:
-    NodeHandle node_;
-    HashValue type_;
-    ConnectionId id_;
-    EventHandlerMapWeakPtr handlers_;
-  };
+  using Connection = DispatcherConnection;
 
   // ScopedConnection object returned by Dispatcher::Connect which will
   // automatically disconnect the connection when this object goes out of

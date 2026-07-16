@@ -90,6 +90,7 @@ class MockInteractionOwner : public InteractionOwner {
   MOCK_METHOD(void, PlayReleaseSound, (), (override));
   MOCK_METHOD(bool, IsPassthrough, (), (override));
   MOCK_METHOD(UiEventListener*, GetUiEventListener, (), (override));
+  MOCK_METHOD(void, TriggerShutdownCallback, (), (override));
   MOCK_METHOD(svxr::AxisBounds, GetModelLogScaleLimits, (), (override));
   MOCK_METHOD(float, ConstrainElastically,
               (float value, svxr::AxisBounds range, float scale), (override));

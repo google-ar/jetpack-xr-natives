@@ -17,13 +17,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/base/no_destructor.h"
 #include "absl/container/fixed_array.h"
 #include "absl/container/inlined_vector.h"
 #include "core/common/log.h"
@@ -49,9 +47,11 @@ namespace imp::imp_internal {
 NodeController::NodeController(BaseView* view, utils::Entity entity,
                                std::size_t index)
     : view_(view),
-      node_(entity, this),
-      index_(index),
-      flags_(NodeFlags::kIsEnabled) {}
+      entity_(entity),
+      flags_(NodeFlags::kIsEnabled),
+      index_(index) {
+  group_hashes_.push_back(GroupsManager::kMainGroupHash);
+}
 
 void NodeController::PostCreated() {
   view_->GetGroupsManager().AddNodeToGroup(
@@ -78,7 +78,7 @@ void NodeController::PreDestroyed() {
     return;
   }
 
-  for (const HashValue& group_hash : GetGroupHashes()) {
+  for (HashValue group_hash : group_hashes_) {
     view_->GetGroupsManager().RemoveNodeFromGroup(group_hash, node);
   }
   view_->GetPathManager().SetRoot(node, false);
@@ -124,7 +124,7 @@ void NodeController::SetAsEditorStaging(bool is_editor_staging) {
   }
 }
 
-bool NodeController::IsParentEditorStaging() const {
+bool NodeController::IsParentEditorStaging() {
   NodeHandle parent = GetNode()->GetParent();
   if (parent.IsValid()) {
     return parent->node_controller_->IsEditorStaging();
@@ -186,23 +186,13 @@ void NodeController::AddToGroup(absl::string_view group_name) {
 void NodeController::AddToGroupSelf(absl::string_view group_name) {
   HashValue group_hash = Hash(group_name);
 
-  // Special case logic: if the node was previously in zero groups and is added
-  // to the main group, delete group_hashes_ (return to default state).
-  if (group_hash == GroupsManager::kMainGroupHash && group_hashes_ &&
-      group_hashes_->empty()) {
-    // Optimization: If the node is only in the 'Main' group (which is the
-    // default), release the vector storage to save memory.
-    group_hashes_.reset();
-    view_->GetGroupsManager().AddNodeToGroup(group_name, group_hash, GetNode());
-    OnGroupsChanged();
-    return;
-  }
+  flags_ = SetBit(flags_, NodeFlags::kIsGroupsOverridden);
 
-  std::vector<HashValue>& hashes = MutableGroups();
-  auto it = std::lower_bound(hashes.begin(), hashes.end(), group_hash);
-  if (it == hashes.end() || *it != group_hash) {
+  auto it =
+      std::lower_bound(group_hashes_.begin(), group_hashes_.end(), group_hash);
+  if (it == group_hashes_.end() || *it != group_hash) {
     // This group is new.
-    hashes.insert(it, group_hash);
+    group_hashes_.insert(it, group_hash);
     view_->GetGroupsManager().AddNodeToGroup(group_name, group_hash, GetNode());
     OnGroupsChanged();
   }
@@ -215,28 +205,19 @@ void NodeController::RemoveFromGroup(absl::string_view group_name) {
 
 void NodeController::RemoveFromGroupSelf(absl::string_view group_name) {
   HashValue group_hash = Hash(group_name);
-  // Optimization: If implicit main and removing something else, do nothing.
-  if (!group_hashes_ && group_hash != GroupsManager::kMainGroupHash) {
-    return;
-  }
 
-  std::vector<HashValue>& hashes = MutableGroups();
-  auto it = std::lower_bound(hashes.begin(), hashes.end(), group_hash);
-  if (it == hashes.end() || *it != group_hash) {
+  flags_ = SetBit(flags_, NodeFlags::kIsGroupsOverridden);
+
+  auto it =
+      std::lower_bound(group_hashes_.begin(), group_hashes_.end(), group_hash);
+  if (it == group_hashes_.end() || *it != group_hash) {
     // This group is not present.
     return;
   }
 
-  hashes.erase(it);
+  group_hashes_.erase(it);
   view_->GetGroupsManager().RemoveNodeFromGroup(group_hash, GetNode());
   OnGroupsChanged();
-
-  // Optimization: If the node is only in the 'Main' group (which is the
-  // default), release the vector storage to save memory.
-  if (group_hashes_ && group_hashes_->size() == 1 &&
-      (*group_hashes_)[0] == GroupsManager::kMainGroupHash) {
-    group_hashes_.reset();
-  }
 }
 
 void NodeController::SetGroups(
@@ -244,7 +225,7 @@ void NodeController::SetGroups(
   if (group_names.has_value()) {
     SetGroupsSelf(*group_names, false);
   } else {
-    ClearBit(NodeFlags::kIsGroupsOverridden, flags_);
+    flags_ = ClearBit(flags_, NodeFlags::kIsGroupsOverridden);
     UpdateInheritedGroupsSelf();
   }
 
@@ -257,8 +238,8 @@ void NodeController::SetGroupsSelf(
       SetBitFromBool(flags_, NodeFlags::kIsGroupsOverridden, !is_inherited);
 
   // Using absl::InlinedVector<HashValue, kGroupHashInlineCapacity> for
-  // temporary group name hash lists. Since HashValue is usually 4-8 bytes, a
-  // size of 16 fits comfortably on the stack (approx 64-128 bytes), covering
+  // temporary group name hash lists. Since HashValue is usually 4 bytes, a
+  // size of 16 fits comfortably on the stack (approx 64 bytes), covering
   // the vast majority of use cases without heap allocation.
   static constexpr size_t kGroupHashInlineCapacity = 16;
 
@@ -275,68 +256,38 @@ void NodeController::SetGroupsSelf(
   new_hashes.erase(std::unique(new_hashes.begin(), new_hashes.end()),
                    new_hashes.end());
 
-  const std::vector<HashValue>& old_hashes = GetGroupHashes();
-
-  if (std::equal(new_hashes.begin(), new_hashes.end(), old_hashes.begin(),
-                 old_hashes.end())) {
+  if (std::equal(new_hashes.begin(), new_hashes.end(), group_hashes_.begin(),
+                 group_hashes_.end())) {
     return;
   }
 
-  // Compute Diff between old and new.
-  // std::set_difference expects sorted ranges and outputs the elements present
-  // in the first range but not the second.
-  absl::InlinedVector<HashValue, kGroupHashInlineCapacity> to_remove;
-  std::set_difference(old_hashes.begin(), old_hashes.end(), new_hashes.begin(),
-                      new_hashes.end(), std::back_inserter(to_remove));
+  view_->GetGroupsManager().UpdateNodeGroups(group_hashes_, new_hashes,
+                                             GetNode(), group_names);
 
-  absl::InlinedVector<HashValue, kGroupHashInlineCapacity> to_add;
-  std::set_difference(new_hashes.begin(), new_hashes.end(), old_hashes.begin(),
-                      old_hashes.end(), std::back_inserter(to_add));
+  // Update Storage with the new entries.
+  group_hashes_.assign(new_hashes.begin(), new_hashes.end());
 
-  // Apply changes.
-  for (const HashValue& h : to_remove) {
-    view_->GetGroupsManager().RemoveNodeFromGroup(h, GetNode());
-  }
+  OnGroupsChanged();
+}
 
-  // Notify the groups manager of the new groups.
-  // We need names for AddNodeToGroup. Since we only have hashes, we must find
-  // the name.
-  // Assuming group_names is small, linear scan is fine for performance.
-  for (const HashValue& h : to_add) {
-    // Find name corresponding to hash h.
-    std::optional<absl::string_view> name;
-    for (absl::string_view n : group_names) {
-      if (Hash(n) == h) {
-        name = n;
-        break;
-      }
-    }
+void NodeController::SetGroupsSelfByHash(
+    absl::Span<const HashValue> group_hashes, bool is_inherited) {
+  flags_ =
+      SetBitFromBool(flags_, NodeFlags::kIsGroupsOverridden, !is_inherited);
 
-    if (name.has_value()) {
-      view_->GetGroupsManager().AddNodeToGroup(*name, h, GetNode());
-    } else {
-      IMP_LOG(imp::FATAL) << "Could not find name for group hash during SetGroupsSelf";
-    }
-  }
+  view_->GetGroupsManager().UpdateNodeGroups(group_hashes_, group_hashes,
+                                             GetNode(), {});
 
-  if (new_hashes.size() == 1 &&
-      new_hashes[0] == GroupsManager::kMainGroupHash) {
-    // Optimization: If the node is only in the 'Main' group (which is the
-    // default), release the vector storage to save memory.
-    group_hashes_.reset();
-  } else {
-    // Update Storage with the new entries.
-    MutableGroups().assign(new_hashes.begin(), new_hashes.end());
-  }
+  // Update Storage with the new entries.
+  group_hashes_.assign(group_hashes.begin(), group_hashes.end());
 
   OnGroupsChanged();
 }
 
 std::vector<std::string> NodeController::GetGroups() const {
   std::vector<std::string> group_names;
-  const std::vector<HashValue>& group_hashes = GetGroupHashes();
-  group_names.reserve(group_hashes.size());
-  for (HashValue group_hash : group_hashes) {
+  group_names.reserve(group_hashes_.size());
+  for (HashValue group_hash : group_hashes_) {
     absl::string_view group_name =
         view_->GetGroupsManager().GetGroupName(group_hash);
     if (group_name.empty()) {
@@ -350,8 +301,7 @@ std::vector<std::string> NodeController::GetGroups() const {
 
 bool NodeController::IsInGroup(absl::string_view group_name) const {
   HashValue group_hash = Hash(group_name);
-  const std::vector<HashValue>& group_hashes = GetGroupHashes();
-  return std::binary_search(group_hashes.begin(), group_hashes.end(),
+  return std::binary_search(group_hashes_.begin(), group_hashes_.end(),
                             group_hash);
 }
 
@@ -399,7 +349,7 @@ void NodeController::UpdateActiveSelf(bool is_parent_active) {
   flags_ = SetBitFromBool(flags_, NodeFlags::kIsActive, active);
 
   if (was_active != active) {
-    for (HashValue group_hash : GetGroupHashes()) {
+    for (HashValue group_hash : group_hashes_) {
       view_->GetGroupsManager().SetNodeActiveInGroup(group_hash, GetNode(),
                                                      active);
     }
@@ -414,59 +364,43 @@ void NodeController::PropagateInheritedGroupsRecursive() {
 
 void NodeController::UpdateInheritedGroupsRecursive() {
   if (!CheckBit(NodeFlags::kIsGroupsOverridden, flags_)) {
-    UpdateInheritedGroupsSelf();
+    bool updated = UpdateInheritedGroupsSelf();
 
-    for (auto child : GetNode()->GetChildren()) {
-      child->node_controller_->UpdateInheritedGroupsRecursive();
+    if (updated) {
+      for (auto child : GetNode()->GetChildren()) {
+        child->node_controller_->UpdateInheritedGroupsRecursive();
+      }
     }
   }
 }
 
-const std::vector<HashValue>& NodeController::GetGroupHashes() const {
-  static const absl::NoDestructor<std::vector<HashValue>> kMainGroupVector(
-      {GroupsManager::kMainGroupHash});
-  return group_hashes_ ? *group_hashes_ : *kMainGroupVector;
-}
-
-std::vector<HashValue>& NodeController::MutableGroups() {
-  if (!group_hashes_) {
-    group_hashes_ = std::make_unique<std::vector<HashValue>>();
-    group_hashes_->push_back(GroupsManager::kMainGroupHash);
-  }
-  return *group_hashes_;
-}
-
 bool NodeController::DoGroupsMatch(NodeController& other_node_controller) {
-  if (!other_node_controller.group_hashes_ && !group_hashes_) {
-    // If both nodes have default groups, then they match.
-    return true;
-  }
-
-  if (!group_hashes_ || !other_node_controller.group_hashes_) {
-    // If only one group is set, then they don't match.
-    return false;
-  }
-
-  // Neither component is default, compare the actual groups.
   // Vectors are sorted, so direct comparison works.
-  return *group_hashes_ == *other_node_controller.group_hashes_;
+  return group_hashes_ == other_node_controller.group_hashes_;
 }
 
-void NodeController::UpdateInheritedGroupsSelf() {
+bool NodeController::UpdateInheritedGroupsSelf() {
   NodeHandle parent = GetNode()->GetParent();
   if (!parent) {
-    return;
+    // If this is a root node and the groups aren't overridden, then it should
+    // only be in the main group.
+    if (group_hashes_.size() != 1 ||
+        group_hashes_[0] != GroupsManager::kMainGroupHash) {
+      SetGroupsSelfByHash({GroupsManager::kMainGroupHash}, true);
+      return true;
+    }
+
+    return false;
   }
 
   // If this component's groups don't match the parent component, then set this
   // component's groups to match.
   if (!DoGroupsMatch(*parent->node_controller_)) {
-    std::vector<std::string> parentgroups =
-        parent->node_controller_->GetGroups();
-    SetGroupsSelf(absl::FixedArray<absl::string_view>(parentgroups.begin(),
-                                                      parentgroups.end()),
-                  true);
+    SetGroupsSelfByHash(parent->node_controller_->group_hashes_, true);
+    return true;
   }
+
+  return false;
 }
 
 void NodeController::OnGroupsChanged() {

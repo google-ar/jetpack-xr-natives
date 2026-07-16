@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_DISPATCHER_EVENT_H_
 
 #include "core/ncsb/dispatcher/connection_holder.h"
+#include "core/ncsb/dispatcher/connection_id.h"
 #include "core/ncsb/node_handle.h"
 #include "core/proto/any.proto.imp.h"
 
@@ -97,6 +98,7 @@ class Event {
   ConnectionId connection_id_;
 
   friend class Dispatcher;
+  friend class DispatcherEventHandlerMap;
 };
 
 }  // namespace imp

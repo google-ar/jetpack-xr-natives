@@ -107,6 +107,15 @@ table SkinningBufferInfo {
 table MorphTargetAttributeInfo {
   positions : [uint8] (required);
   tangents: [uint8] (required);
+  // Note: texcoords0 is not reflected in the split engine
+  // MorphTargetAttributeInfo since the data is instead serialized via a
+  // SAMPLER2D_ARRAY texture.
+  // However, the presence of texcoords0 data is indicated by
+  // enable_custom_morphing in the split engine MorphTargetBufferInfo, which
+  // will be passed to the
+  // filament::MorphTargetBuffer::Builder::enableCustomMorphing(bool enable)
+  // accordingly.
+  texcoords0: [uint8];
 }
 
 table MorphTargetBufferInfo {

@@ -22,15 +22,15 @@
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
-#include "core/particle/particle_format.h"
 #include "core/particle/utils/data_provider.h"
+#include "core/particle/utils/particle_format.h"
 
 namespace imp {
 
-ParticleInstance::ParticleInstance(imp_particle::DataProvider& data_provider,
-                                   const ParticleFormat& particle_format,
-                                   int32_t particle_index,
-                                   NodeHandle emitter_node)
+ParticleInstance::ParticleInstance(
+    imp_particle::DataProvider& data_provider,
+    const imp_particle::ParticleFormat& particle_format, int32_t particle_index,
+    NodeHandle emitter_node)
     : data_provider_(data_provider),
       particle_format_(particle_format),
       particle_index_(particle_index),
@@ -48,11 +48,13 @@ int32_t ParticleInstance::GetParticleIndex() const { return particle_index_; }
 NodeHandle ParticleInstance::GetEmitterNode() const { return emitter_node_; }
 
 bool ParticleInstance::HasRemainingLifetimeSeconds() const {
-  return particle_format_.GetLifetime() != kInvalidParticleDataOffset;
+  return particle_format_.GetLifetime() !=
+         imp_particle::kInvalidParticleDataOffset;
 }
 
 float ParticleInstance::GetRemainingLifetimeSeconds() const {
-  if (particle_format_.GetLifetime() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetLifetime() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid lifetime access.";
   }
 
@@ -61,7 +63,8 @@ float ParticleInstance::GetRemainingLifetimeSeconds() const {
 }
 
 void ParticleInstance::SetRemainingLifetimeSeconds(float seconds) {
-  if (particle_format_.GetLifetime() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetLifetime() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid lifetime access.";
   }
 
@@ -70,11 +73,12 @@ void ParticleInstance::SetRemainingLifetimeSeconds(float seconds) {
 }
 
 bool ParticleInstance::HasAlpha() const {
-  return particle_format_.GetAlpha() != kInvalidParticleDataOffset;
+  return particle_format_.GetAlpha() !=
+         imp_particle::kInvalidParticleDataOffset;
 }
 
 float ParticleInstance::GetAlpha() const {
-  if (particle_format_.GetAlpha() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetAlpha() == imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid alpha access.";
   }
 
@@ -82,7 +86,7 @@ float ParticleInstance::GetAlpha() const {
 }
 
 void ParticleInstance::SetAlpha(float alpha) {
-  if (particle_format_.GetAlpha() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetAlpha() == imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid alpha access.";
   }
 
@@ -90,11 +94,12 @@ void ParticleInstance::SetAlpha(float alpha) {
 }
 
 bool ParticleInstance::HasScale() const {
-  return particle_format_.GetScale() != kInvalidParticleDataOffset;
+  return particle_format_.GetScale() !=
+         imp_particle::kInvalidParticleDataOffset;
 }
 
 float3 ParticleInstance::GetScale() const {
-  if (particle_format_.GetScale() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetScale() == imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid scale access.";
   }
 
@@ -103,7 +108,7 @@ float3 ParticleInstance::GetScale() const {
 }
 
 void ParticleInstance::SetScale(float3 scale) {
-  if (particle_format_.GetScale() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetScale() == imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid scale access.";
   }
 
@@ -112,7 +117,8 @@ void ParticleInstance::SetScale(float3 scale) {
 }
 
 float3 ParticleInstance::GetPosition() const {
-  if (particle_format_.GetPosition() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetPosition() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid position access.";
   }
 
@@ -121,7 +127,8 @@ float3 ParticleInstance::GetPosition() const {
 }
 
 void ParticleInstance::SetPosition(float3 position) {
-  if (particle_format_.GetPosition() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetPosition() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid position access.";
   }
 
@@ -130,11 +137,13 @@ void ParticleInstance::SetPosition(float3 position) {
 }
 
 bool ParticleInstance::HasVelocity() const {
-  return particle_format_.GetVelocity() != kInvalidParticleDataOffset;
+  return particle_format_.GetVelocity() !=
+         imp_particle::kInvalidParticleDataOffset;
 }
 
 float3 ParticleInstance::GetVelocity() const {
-  if (particle_format_.GetVelocity() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetVelocity() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid velocity access.";
   }
 
@@ -143,7 +152,8 @@ float3 ParticleInstance::GetVelocity() const {
 }
 
 void ParticleInstance::SetVelocity(float3 velocity) {
-  if (particle_format_.GetVelocity() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetVelocity() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid velocity access.";
   }
 
@@ -152,11 +162,13 @@ void ParticleInstance::SetVelocity(float3 velocity) {
 }
 
 bool ParticleInstance::HasAcceleration() const {
-  return particle_format_.GetAcceleration() != kInvalidParticleDataOffset;
+  return particle_format_.GetAcceleration() !=
+         imp_particle::kInvalidParticleDataOffset;
 }
 
 float3 ParticleInstance::GetAcceleration() const {
-  if (particle_format_.GetAcceleration() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetAcceleration() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid acceleration access.";
   }
 
@@ -165,7 +177,8 @@ float3 ParticleInstance::GetAcceleration() const {
 }
 
 void ParticleInstance::SetAcceleration(float3 acceleration) {
-  if (particle_format_.GetAcceleration() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetAcceleration() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid acceleration access.";
   }
 
@@ -174,11 +187,13 @@ void ParticleInstance::SetAcceleration(float3 acceleration) {
 }
 
 bool ParticleInstance::HasRotation() const {
-  return particle_format_.GetRotation() != kInvalidParticleDataOffset;
+  return particle_format_.GetRotation() !=
+         imp_particle::kInvalidParticleDataOffset;
 }
 
 quatf ParticleInstance::GetRotation() const {
-  if (particle_format_.GetRotation() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetRotation() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid rotation access.";
   }
 
@@ -187,7 +202,8 @@ quatf ParticleInstance::GetRotation() const {
 }
 
 void ParticleInstance::SetRotation(quatf rotation) {
-  if (particle_format_.GetRotation() == kInvalidParticleDataOffset) {
+  if (particle_format_.GetRotation() ==
+      imp_particle::kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid rotation access.";
   }
 

@@ -18,11 +18,13 @@
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "absl/types/optional.h"
 #include "filament/libs/math/include/math/TVecHelpers.h"
 #include "core/actions/action_config.h"
 #include "core/actions/controller_events.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
+#include "core/camera/camera_manager.h"
 #include "core/collision/ray.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
@@ -32,22 +34,22 @@
 #include "core/math/math.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/model/mesh/mesh_factory.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
+#include "core/render/mesh_renderer.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
-#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/collision_manager.h"
 #include "core/view/framework/input/pointer_input_handler.h"
-#include "core/view/framework/render/mesh_factory.h"
-#include "core/view/framework/render/mesh_renderer.h"
 #include "core/view/utils/frame_time.h"
+#include "split_engine/input/split_engine_input_event.h"
 
 namespace imp::editor {
-
+namespace {
 constexpr absl::string_view kMainColorParameterName = "mainColor";
 // Dark blue
 constexpr float4 kNotHoveredColor = {0.14f, 0.29f, 0.51f, 1.0f};
@@ -55,6 +57,23 @@ constexpr float4 kNotHoveredColor = {0.14f, 0.29f, 0.51f, 1.0f};
 constexpr float4 kHoveredColor = {0.19f, 0.41f, 0.69f, 1.0f};
 // Lighter blue
 constexpr float4 kGrabbedColor = {0.2f, 0.9f, 0.9f, 1.0f};
+
+XrGrabHandle::InputSourceType GetInputSourceType(
+    const ControllerHitEvent::Hand& hand) {
+  if (hand == ControllerHitEvent::Hand::kLeft) {
+    return XrGrabHandle::InputSourceType::kControllerLeftHand;
+  }
+  return XrGrabHandle::InputSourceType::kControllerRightHand;
+}
+
+XrGrabHandle::InputSourceType GetInputSourceType(
+    const android_xr::SplitEngineInputEvent::PointerType& pointer_type) {
+  if (pointer_type == android_xr::SplitEngineInputEvent::PointerType::LEFT) {
+    return XrGrabHandle::InputSourceType::kSplitEngineLeftHand;
+  }
+  return XrGrabHandle::InputSourceType::kSplitEngineRightHand;
+}
+}  // namespace
 
 constexpr float kGrabHandleSize = 0.1f;
 
@@ -101,6 +120,11 @@ void XrGrabHandle::Setup(float distance_from_camera,
               HandlePointerHitEvent(event);
             },
             this);
+        GetView().GetDispatcher().Connect(
+            [this](const android_xr::SplitEngineInputEvent& event) mutable {
+              HandleSplitEngineInputEvent(event);
+            },
+            this);
       })
       .KeptBy(this);
 }
@@ -116,7 +140,8 @@ void XrGrabHandle::Update(const FrameTime& frame_time) {
 }
 
 void XrGrabHandle::HandleControllerHitEvent(ControllerHitEvent event) {
-  if (active_hand_.has_value() && event.GetHand() != active_hand_) {
+  if (active_input_source_.has_value() &&
+      GetInputSourceType(event.GetHand()) != active_input_source_) {
     return;
   }
 
@@ -133,34 +158,39 @@ void XrGrabHandle::HandleControllerHitEvent(ControllerHitEvent event) {
 
   bool has_changed = is_select_or_pinch_action_activated !=
                      is_select_or_pinch_button_activated_;
-  UpdateGrabHandleState(event,
+
+  absl::optional<float3> hit_world_point;
+  if (event.GetHitNode() == GetNode()) {
+    hit_world_point = event.GetHit()->world_point;
+  }
+  UpdateGrabHandleState(hit_world_point, GetInputSourceType(event.GetHand()),
+                        event.GetControllerRay(),
                         /*button_down=*/is_select_or_pinch_action_activated,
                         /*has_changed=*/has_changed);
 }
 
-void XrGrabHandle::UpdateGrabHandleState(imp::ControllerHitEvent event,
-                                         bool button_down, bool has_changed) {
-  float3 hit_world_point;
-
+void XrGrabHandle::UpdateGrabHandleState(
+    absl::optional<float3> hit_world_point,
+    XrGrabHandle::InputSourceType input_source_type, Ray ray, bool button_down,
+    bool has_changed) {
   // Logic to transition between states.
-  if (event.GetHitNode() == GetNode()) {
-    hit_world_point = event.GetHit()->world_point;
-    active_hand_ = event.GetHand();
+  if (hit_world_point.has_value()) {
+    active_input_source_ = input_source_type;
     // If select button was pressed down this frame, start grabbing.
     if (button_down && has_changed) {
       grab_state_ = XrGrabHandle::XrGrabHandleState::kGrabbed;
     } else if (!button_down) {
       grab_state_ = XrGrabHandle::XrGrabHandleState::kHovered;
     }
-  } else if (active_hand_.has_value() && event.GetHand() == active_hand_) {
+  } else if (active_input_source_.has_value() &&
+             input_source_type == active_input_source_) {
     if (grab_state_ == XrGrabHandle::XrGrabHandleState::kGrabbed) {
-      Ray ray = event.GetControllerRay();
       // If the component is in a grabbed state but there is no hit, we still
       // want to move the panel to the end of the controller ray.
       hit_world_point = ray.origin + (ray.direction * distance_from_camera_);
     } else {
       grab_state_ = XrGrabHandle::XrGrabHandleState::kNotHovered;
-      active_hand_ = std::nullopt;
+      active_input_source_ = std::nullopt;
     }
   }
 
@@ -172,8 +202,31 @@ void XrGrabHandle::UpdateGrabHandleState(imp::ControllerHitEvent event,
     return;
   }
   direction_vector_ = normalize(
-      hit_world_point -
+      *hit_world_point -
       GetView().GetCameraManager().GetCamera()->GetNode()->GetWorldPosition());
+}
+
+void XrGrabHandle::HandleSplitEngineInputEvent(
+    const android_xr::SplitEngineInputEvent& event) {
+  if (active_input_source_.has_value() &&
+      GetInputSourceType(event.pointer_type) != active_input_source_) {
+    return;
+  }
+
+  bool is_action_activated = (event.button_state != 0);
+
+  bool has_changed = is_action_activated != is_split_engine_button_activated_;
+  is_split_engine_button_activated_ = is_action_activated;
+
+  absl::optional<float3> hit_world_point;
+  if (event.hit_node && event.hit_node->target == GetNode()) {
+    hit_world_point = event.hit_node->world_hit_position.value_or(
+        event.hit_node->hit_position);
+  }
+  UpdateGrabHandleState(
+      hit_world_point, GetInputSourceType(event.pointer_type),
+      Ray{event.origin, normalize(event.direction - event.origin)},
+      /*button_down=*/is_action_activated, has_changed);
 }
 
 void XrGrabHandle::HandlePointerHitEvent(imp::PointerHitEvent event) {

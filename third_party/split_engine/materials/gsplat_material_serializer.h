@@ -21,6 +21,7 @@
 #include <optional>
 #include <utility>
 
+#include "absl/strings/string_view.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/assets/asset_ptr.h"
@@ -29,7 +30,9 @@
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node.h"
 #include "core/render/texture.h"
+#include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
@@ -46,12 +49,17 @@ namespace android_xr {
 class GsplatMaterialSerializer
     : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
+  // Creates a Gsplat material with a specified Rendering mode that uses a given
+  // precomputed data texture to render the Gsplat scene.
   static imp::Future<std::unique_ptr<GsplatMaterialSerializer>> Create(
       imp::NodeHandle gsplat_node, imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
       android_xr::schemas::GsplatMode material_mode,
       bool use_triangles_for_splats,
       imp::BorrowedTexturePtr precomputed_data_texture =
-          imp::BorrowedTexturePtr());
+          imp::BorrowedTexturePtr(),
+      absl::string_view render_group = imp::Node::kMainGroupName,
+      std::optional<imp::uint2> magic_window_offscreen_resolution =
+          std::nullopt);
 
   ~GsplatMaterialSerializer() override;
 
@@ -75,19 +83,6 @@ class GsplatMaterialSerializer
     MarkParametersDirty();
   }
 
-  void SetWindowDimensionInMagicWindow(
-      imp::float2 window_dimension_in_magic_window) {
-    window_dimension_in_magic_window_ =
-        imp::split_engine::Pack(window_dimension_in_magic_window);
-    MarkParametersDirty();
-  }
-
-  void SetMagicWindowFromUserWorldMatrix(
-      imp::mat4f magic_window_from_user_world_matrix) {
-    magic_window_from_user_world_matrix_ =
-        imp::split_engine::Pack(magic_window_from_user_world_matrix);
-    MarkParametersDirty();
-  }
 
   void SetPrecomputedDataTexture(imp::OwnedOrBorrowedTexturePtr texture) {
     precomputed_data_texture_ = std::move(texture);
@@ -95,6 +90,10 @@ class GsplatMaterialSerializer
   }
 
   void SetPrecomputeTextures(imp::AssetPtr<imp::GSplatAsset> gsplat_asset) {
+    if (!gsplat_asset) {
+      return;
+    }
+
     position_data_texture_ = gsplat_asset->position_data_texture();
     cov3d_data_texture_ = gsplat_asset->cov3d_data_texture();
     color_data_texture_ = gsplat_asset->color_data_texture();
@@ -112,10 +111,41 @@ class GsplatMaterialSerializer
     MarkParametersDirty();
   }
 
+  // The `projection_quad` is specified in the local space of the `gsplat_node`.
+  // See (broken link)
+  void SetMagicWindowProjectionQuad(
+      const std::optional<imp::TexturePipelineRendererProjectionQuad>&
+          projection_quad) {
+    magic_window_projection_quad_ = projection_quad;
+    MarkParametersDirty();
+  }
+
+  void SetMagicWindowOffscreenResolution(
+      const std::optional<imp::uint2>& magic_window_offscreen_resolution) {
+    if (magic_window_offscreen_resolution.has_value()) {
+      magic_window_offscreen_resolution_ =
+          imp::split_engine::Pack(magic_window_offscreen_resolution.value());
+    } else {
+      magic_window_offscreen_resolution_ = std::nullopt;
+    }
+    MarkParametersDirty();
+  }
+
+  void SetViewResolution(imp::float2 view_resolution) {
+    view_resolution_ = imp::split_engine::Pack(view_resolution);
+    MarkParametersDirty();
+  }
+
  private:
+  friend class GsplatMaterialSerializerTest;
+
   GsplatMaterialSerializer(imp::BaseView& view, imp::OwnedMaterialPtr material,
                            imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
-                           imp::BorrowedTexturePtr precomputed_data_texture);
+                           android_xr::schemas::GsplatMode material_mode,
+                           imp::BorrowedTexturePtr precomputed_data_texture,
+                           std::optional<android_xr::schemas::Uint2>
+                               magic_window_offscreen_resolution);
+
   imp::AssetPtr<imp::GSplatAsset> gsplat_asset_;
 
   std::optional<android_xr::schemas::GsplatMode> material_mode_;
@@ -123,9 +153,6 @@ class GsplatMaterialSerializer
   std::optional<android_xr::schemas::Float> opacity_scale_;
   std::optional<android_xr::schemas::Float2> min_screen_size_;
   std::optional<android_xr::schemas::Float2> max_screen_size_;
-  std::optional<android_xr::schemas::Float2> window_dimension_in_magic_window_;
-  std::optional<android_xr::schemas::Mat4f>
-      magic_window_from_user_world_matrix_;
 
   imp::OwnedOrBorrowedTexturePtr precomputed_data_texture_;
   imp::OwnedOrBorrowedTexturePtr position_data_texture_;
@@ -137,6 +164,11 @@ class GsplatMaterialSerializer
   // built-in material may still be using it.
   imp::OwnedOrBorrowedTexturePtr condemned_texture_;
   std::optional<android_xr::schemas::Float> splat_scale_;
+  std::optional<imp::TexturePipelineRendererProjectionQuad>
+      magic_window_projection_quad_;
+  std::optional<android_xr::schemas::Uint2> magic_window_offscreen_resolution_;
+  // The resolution of the view the gsplat is being rendered to.
+  std::optional<android_xr::schemas::Float2> view_resolution_;
 };
 
 }  // namespace android_xr

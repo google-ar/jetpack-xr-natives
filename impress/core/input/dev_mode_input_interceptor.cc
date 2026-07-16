@@ -32,6 +32,7 @@
 #include "core/common/registry.h"
 #include "core/common/trace.h"
 #include "core/editor/editor.h"
+#include "core/editor/editor_info.h"
 #include "core/editor/xr/xr_editor_ui.h"
 #include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
@@ -140,12 +141,25 @@ void DevModeInputInterceptor::FilterPointerEvents(
     std::vector<PointerEvent>& pointer_events) {
   IMP_TRACE();
   if (!ImGui::GetCurrentContext()) return;
+
+  bool use_remote_screen = false;
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_->GetRegistry().Get<editor::Editor>();
+  if (editor.ok()) {
+    if (editor->get().GetDisplayMode() ==
+        editor::EditorInfo::DisplayMode::kRemoteScreen) {
+      use_remote_screen = true;
+    }
+  }
+
   window::FilamentHost::DevModeExtension* dev_mode_extension =
       view_->GetHost()->TryGetExtension();
-  // Don't filter pointer events if we're rendering to a render target.
-  if (dev_mode_extension && dev_mode_extension->HasRenderTarget()) {
+  if (dev_mode_extension && dev_mode_extension->HasRenderTarget() &&
+      !use_remote_screen) {
+    // In this case, UI is in 3D floating panel, so the 2D pointer is ignored.
     return;
   }
+
   ImGuiIO& io = ImGui::GetIO();
 
   // If we have no pointer capture yet, see if we can acquire one.
@@ -227,19 +241,21 @@ void DevModeInputInterceptor::FilterPointerEvents(
     auto& pointer = event.GetPointer(pointer_index);
     io.MousePos = ImVec2(pointer.point.x, pointer.point.y);
 
-    if (event.PointerCount() == 1 ||
-        (pointer_index == 0 && event.ChangedPointerCount() == 1)) {
-      // The removal of this pointer makes the event irrelevant; drop it.
-      pointer_events.erase(pointer_events.begin() + event_index--);
-    } else {
-      std::vector<Pointer> new_pointers(event.GetPointers().begin(),
-                                        event.GetPointers().end());
-      new_pointers.erase(new_pointers.begin() + pointer_index);
-      pointer_events[event_index] = PointerEvent(
-          event.Type(), new_pointers,
-          event.ChangedPointerCount() -
-              (pointer_index < event.ChangedPointerCount() ? 1 : 0),
-          event.ElapsedTime());
+    if (!use_remote_screen) {
+      if (event.PointerCount() == 1 ||
+          (pointer_index == 0 && event.ChangedPointerCount() == 1)) {
+        // The removal of this pointer makes the event irrelevant; drop it.
+        pointer_events.erase(pointer_events.begin() + event_index--);
+      } else {
+        std::vector<Pointer> new_pointers(event.GetPointers().begin(),
+                                          event.GetPointers().end());
+        new_pointers.erase(new_pointers.begin() + pointer_index);
+        pointer_events[event_index] = PointerEvent(
+            event.Type(), new_pointers,
+            event.ChangedPointerCount() -
+                (pointer_index < event.ChangedPointerCount() ? 1 : 0),
+            event.ElapsedTime());
+      }
     }
   }
 

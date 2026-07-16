@@ -37,6 +37,14 @@
 namespace imp {
 namespace {
 
+bool IsPlaceholderSplitEngineMaterial(const filament::Material* material) {
+  if (material) {
+    // TODO: (broken link) - Find a better way to check the placeholder material.
+    return strcmp(material->getName(), "Split Engine Placeholder") == 0;
+  }
+  return false;
+}
+
 filament::Material::Builder::ShadowSamplingQuality
 ToFilamentShadowSamplingQuality(
     MaterialPreCompileOptions::ShadowSamplingQuality quality) {
@@ -88,10 +96,8 @@ Future<std::unique_ptr<MaterialAsset>> CreateMaterialFromResource(
     // app-side handle. The built-in materials expect it to be loaded as a
     // normal app-side material. Because of this, we should not request it
     // from split engine.
-    // TODO: (broken link) - Find a better way to check the placeholder
-    // material.
-    if (!material_source.empty() &&
-        strcmp(filament_material->getName(), "Split Engine Placeholder") != 0) {
+    if (!IsPlaceholderSplitEngineMaterial(filament_material) &&
+        !material_source.empty()) {
       Future<absl::Status> request_material_status =
           view->GetSplitEngineSerializer()->RequestCustomFilamentMaterial(
               material_source, filament_material, material_pre_compile_options);
@@ -172,6 +178,12 @@ MaterialAsset::MaterialAsset(BaseView* view, filament::Material* material)
 MaterialAsset::~MaterialAsset() {
   if (view_ != nullptr && view_->GetSharedEngine() != nullptr &&
       material_ != nullptr) {
+    if (auto serializer = view_->GetSplitEngineSerializer()) {
+      if (!IsPlaceholderSplitEngineMaterial(material_) &&
+          !material_->getSource().empty()) {
+        serializer->RemoveMaterial(material_);
+      }
+    }
     view_->GetSharedEngine()->destroy(material_);
     material_ = nullptr;
   }

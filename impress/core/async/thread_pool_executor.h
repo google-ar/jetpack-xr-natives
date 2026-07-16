@@ -44,6 +44,7 @@ namespace imp {
 class ThreadPoolExecutor : public Executor {
  public:
   ThreadPoolExecutor(Executor* foreground_executor);
+  ThreadPoolExecutor(Executor* foreground_executor, int thread_pool_size);
   ~ThreadPoolExecutor() override;
 
   TaskId ScheduleInvocable(Invocable<void()> invocable,
@@ -76,6 +77,8 @@ class ThreadPoolExecutor : public Executor {
   // Returns the number of pending tasks waiting to be executed at the
   // next explicit pump/drain.
   int GetPendingTaskCount() override;
+
+  int GetPoolSize() const;
 
  private:
 #if IMP_THREADS(GOOGLE3)

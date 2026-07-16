@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 
+#include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 
 namespace imp::editor {
@@ -51,7 +52,7 @@ void SetDragAndDropPayload(DragAndDropType drag_and_drop_type,
       std::string(GetDragAndDropTypeId(drag_and_drop_type)).c_str(),
       payload.data(), payload.size());
   if (!label.empty()) {
-    ImGui::Text(std::string(label).c_str());
+    ImGui::Text("%s", std::string(label).c_str());
   }
 }
 

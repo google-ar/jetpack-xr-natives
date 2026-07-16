@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -127,6 +127,20 @@ uint64_t next_future_id = 1;
 bool anchor_persistence_handle_created = false;
 bool geospatial_tracker_handle_created = false;
 bool geospatial_tracker_running = false;
+
+const XrFutureEXT kFuture = XrFutureEXT(1);
+const XrTrackableImageDatabaseANDROID kDatabase =
+    XrTrackableImageDatabaseANDROID(1);
+const XrTrackableImageDatabaseANDROID kAltDatabase =
+    XrTrackableImageDatabaseANDROID(2);
+
+XrTrackableImageDatabaseANDROID curr_image_database = XR_NULL_HANDLE;
+XrTrackableImageDatabaseANDROID prev_image_database = XR_NULL_HANDLE;
+int prev_loaded_image_count = 0;
+int curr_loaded_image_count = 0;
+int next_loaded_image_count = 0;
+const int kMaxLoadedImages = 5;
+const int kMaxTrackedImages = 5;
 
 }  // namespace
 
@@ -316,10 +330,10 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrEnumeratePersistedAnchorsANDROID(
 
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrUnpersistAnchorANDROID(
     XrDeviceAnchorPersistenceANDROID handle, const XrUuidEXT* anchorId) {
-    if (anchorId != nullptr &&
-        memcmp(anchorId->data, kZeroUuid.data, XR_UUID_SIZE) == 0) {
-      return XR_ERROR_ANCHOR_ID_NOT_FOUND_ANDROID;
-    }
+  if (anchorId != nullptr &&
+      memcmp(anchorId->data, kZeroUuid.data, XR_UUID_SIZE) == 0) {
+    return XR_ERROR_ANCHOR_ID_NOT_FOUND_ANDROID;
+  }
   if (!anchor_persistence_handle_created) {
     return XR_ERROR_HANDLE_INVALID;
   }
@@ -385,13 +399,13 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateFaceTrackerANDROID(
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL Internal_xrDestroyFaceTrackerANDROID(
-    XrFaceTrackerANDROID faceTracker) {
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrDestroyFaceTrackerANDROID(XrFaceTrackerANDROID faceTracker) {
   return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetFaceStateANDROID(
-    XrFaceTrackerANDROID faceTracker, const XrFaceStateGetInfoANDROID *getInfo,
+    XrFaceTrackerANDROID faceTracker, const XrFaceStateGetInfoANDROID* getInfo,
     XrFaceStateANDROID* faceState) {
   if (!faceTracker) {
     return XR_ERROR_HANDLE_INVALID;
@@ -411,8 +425,8 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetFaceStateANDROID(
     faceState->parameters[i] = (float)i / XR_FACE_PARAMETER_COUNT_ANDROID;
   }
   for (int i = 0; i < XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID; ++i) {
-    faceState->regionConfidences[i] = (float)i /
-      XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID;
+    faceState->regionConfidences[i] =
+        (float)i / XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID;
   }
 
   return XR_SUCCESS;
@@ -480,9 +494,8 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateGeospatialPoseFromPoseANDROID(
     return XR_ERROR_HANDLE_INVALID;
   }
   geospatialPose->type = XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROID;
-  geospatialPose->poseFlags =
-      XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROID |
-      XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROID;
+  geospatialPose->poseFlags = XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROID |
+                              XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROID;
   geospatialPose->geospatialPose.latitude = 37.422;
   geospatialPose->geospatialPose.longitude = -122.084;
   geospatialPose->geospatialPose.altitude = 10.0;
@@ -781,8 +794,7 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialAnchorEXT(
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL
-Internal_xrCreateSpatialAnchorSpaceFromIdANDROID(
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialAnchorSpaceFromIdANDROID(
     XrSession session, XrSpatialContextEXT spatialContext,
     const XrSpatialAnchorSpaceFromIdCreateInfoANDROID* createInfo,
     XrSpace* anchorSpace) {
@@ -801,6 +813,114 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrSetGoogleCloudAuthAsyncANDROID(
 
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrSetGoogleCloudAuthCompleteANDROID(
     XrSession session, XrFutureEXT future, XrFutureCompletionEXT* completion) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrGetTrackableImageANDROID(XrTrackableTrackerANDROID trackableTracker,
+                                    const XrTrackableGetInfoANDROID* getInfo,
+                                    XrTrackableImageANDROID* imageOutput) {
+  if (!trackableTracker) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+
+  imageOutput->trackingState =
+      XrTrackingStateANDROID(XR_TRACKING_STATE_TRACKING_ANDROID);
+  imageOutput->database = curr_image_database;
+  imageOutput->databaseEntryIndex = 0;
+  imageOutput->centerPose = kPose;
+  imageOutput->extents = kExtent2D;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrAddTrackableImageDatabaseANDROID(
+    XrTrackableTrackerANDROID trackableTracker,
+    XrTrackableImageDatabaseANDROID database) {
+  if (!trackableTracker || !database) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+
+  curr_image_database = database;
+  curr_loaded_image_count = next_loaded_image_count;
+  prev_loaded_image_count = 0;
+  next_loaded_image_count = 0;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrRemoveTrackableImageDatabaseANDROID(
+    XrTrackableTrackerANDROID trackableTracker,
+    XrTrackableImageDatabaseANDROID imageDatabase) {
+  if (!trackableTracker || !imageDatabase) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+
+  if (curr_image_database == imageDatabase) {
+    curr_image_database = XR_NULL_HANDLE;
+    prev_image_database = imageDatabase;
+    prev_loaded_image_count = curr_loaded_image_count;
+    curr_loaded_image_count = 0;
+  }
+
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrDestroyTrackableImageDatabaseANDROID(
+    XrTrackableImageDatabaseANDROID database) {
+  if (!database) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+
+  if (curr_image_database == database) {
+    curr_image_database = XR_NULL_HANDLE;
+    curr_loaded_image_count = 0;
+  }
+
+  if (prev_image_database == database) {
+    prev_image_database = XR_NULL_HANDLE;
+    prev_loaded_image_count = 0;
+  }
+
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrCreateTrackableImageDatabaseAsyncANDROID(
+    XrSession session,
+    const XrTrackableImageDatabaseCreateInfoANDROID* createInfo,
+    XrFutureEXT* future) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+
+  if (createInfo->entryCount + curr_loaded_image_count > kMaxLoadedImages) {
+    next_loaded_image_count = prev_loaded_image_count;
+    return XR_ERROR_LIMIT_REACHED;
+  }
+
+  next_loaded_image_count = createInfo->entryCount;
+  *future = kFuture;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrCreateTrackableImageDatabaseCompleteANDROID(
+    XrSession session, XrFutureEXT future,
+    XrCreateTrackableImageDatabaseCompletionANDROID* completion) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+
+  if (future == XR_NULL_FUTURE_EXT) {
+    return XR_ERROR_FUTURE_INVALID_EXT;
+  }
+
+  completion->futureResult = XR_SUCCESS;
+  if (prev_image_database == kDatabase) {
+    completion->database = kAltDatabase;
+  } else {
+    completion->database = kDatabase;
+  }
+
   return XR_SUCCESS;
 }
 
@@ -947,6 +1067,18 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrSetGoogleCloudAuthAsyncANDROID)},
     {"xrSetGoogleCloudAuthCompleteANDROID",
      ToXrVoidFunction(Internal_xrSetGoogleCloudAuthCompleteANDROID)},
+    {"xrGetTrackableImageANDROID",
+     ToXrVoidFunction(Internal_xrGetTrackableImageANDROID)},
+    {"xrAddTrackableImageDatabaseANDROID",
+     ToXrVoidFunction(Internal_xrAddTrackableImageDatabaseANDROID)},
+    {"xrRemoveTrackableImageDatabaseANDROID",
+     ToXrVoidFunction(Internal_xrRemoveTrackableImageDatabaseANDROID)},
+    {"xrCreateTrackableImageDatabaseCompleteANDROID",
+     ToXrVoidFunction(Internal_xrCreateTrackableImageDatabaseCompleteANDROID)},
+    {"xrCreateTrackableImageDatabaseAsyncANDROID",
+     ToXrVoidFunction(Internal_xrCreateTrackableImageDatabaseAsyncANDROID)},
+    {"xrDestroyTrackableImageDatabaseANDROID",
+     ToXrVoidFunction(Internal_xrDestroyTrackableImageDatabaseANDROID)},
 });
 
 }  // namespace
@@ -1005,6 +1137,8 @@ const std::vector<XrExtensionProperties> kExtensions = {
      XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME},
 };
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
@@ -1042,9 +1176,48 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
   if (properties == nullptr) {
     return XR_ERROR_HANDLE_INVALID;
   }
-  if (properties->next != nullptr) {
-    reinterpret_cast<XrSystemGeospatialPropertiesANDROID*>(properties->next)
-        ->supportsGeospatial = XR_TRUE;
+  properties->systemId = systemId;
+  XrBaseOutStructure* nextPtr =
+      reinterpret_cast<XrBaseOutStructure*>(properties->next);
+  while (nextPtr != nullptr) {
+    switch ((int)nextPtr->type) {
+      case XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT: {
+        XrSystemHandTrackingPropertiesEXT* handTrackingProperties =
+            reinterpret_cast<XrSystemHandTrackingPropertiesEXT*>(nextPtr);
+        handTrackingProperties->supportsHandTracking = true;
+        break;
+      }
+      case XR_TYPE_SYSTEM_EYE_TRACKING_PROPERTIES_ANDROID: {
+        XrSystemEyeTrackingPropertiesANDROID* eyeTrackingProperties =
+            reinterpret_cast<XrSystemEyeTrackingPropertiesANDROID*>(nextPtr);
+        eyeTrackingProperties->supportsEyeTracking = true;
+        break;
+      }
+      case XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROID: {
+        XrSystemGeospatialPropertiesANDROID* geospatialProperties =
+            reinterpret_cast<XrSystemGeospatialPropertiesANDROID*>(nextPtr);
+        geospatialProperties->supportsGeospatial = true;
+        break;
+      }
+      case XR_TYPE_SYSTEM_DEPTH_TRACKING_PROPERTIES_ANDROID: {
+        XrSystemDepthTrackingPropertiesANDROID* depthTrackingProperties =
+            reinterpret_cast<XrSystemDepthTrackingPropertiesANDROID*>(nextPtr);
+        depthTrackingProperties->supportsDepthTracking = true;
+        break;
+      }
+      case XR_TYPE_SYSTEM_IMAGE_TRACKING_PROPERTIES_ANDROID: {
+        XrSystemImageTrackingPropertiesANDROID* imageTrackingProperties =
+            reinterpret_cast<XrSystemImageTrackingPropertiesANDROID*>(nextPtr);
+        imageTrackingProperties->supportsImageTracking = true;
+        imageTrackingProperties->supportsPhysicalSizeEstimation = true;
+        imageTrackingProperties->maxTrackedImageCount = kMaxTrackedImages;
+        imageTrackingProperties->maxLoadedImageCount = kMaxLoadedImages;
+        break;
+      }
+      default:
+        break;
+    }
+    nextPtr = nextPtr->next;
   }
   return XR_SUCCESS;
 }
@@ -1164,6 +1337,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
     return XR_ERROR_HANDLE_INVALID;
   }
   *space = kSpace;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId,
+                              uint32_t viewConfigurationTypeCapacityInput,
+                              uint32_t* viewConfigurationTypeCountOutput,
+                              XrViewConfigurationType* viewConfigurationTypes) {
+  *viewConfigurationTypeCountOutput = 1;
+  if (viewConfigurationTypeCapacityInput == 0) {
+    return XR_SUCCESS;
+  }
+  if (viewConfigurationTypeCapacityInput < 1) {
+    return XR_ERROR_SIZE_INSUFFICIENT;
+  }
+  viewConfigurationTypes[0] = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
   return XR_SUCCESS;
 }
 

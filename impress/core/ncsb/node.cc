@@ -17,25 +17,23 @@
 #include <cassert>
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "absl/container/fixed_array.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/libs/math/include/math/TMatHelpers.h"
 #include "filament/libs/utils/include/utils/Entity.h"
-#include "core/common/holdable.h"
-#include "core/common/invocable.h"
-#include "core/config.h"
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node_attachment_manager.h"
+#include "core/ncsb/node_children_iterator.h"
 #include "core/ncsb/node_controller.h"
-#include "core/ncsb/node_handle.h"
 #include "core/ncsb/path_manager.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
@@ -43,6 +41,18 @@
 
 namespace imp {
 using TransformInstance = ::filament::TransformManager::Instance;
+
+Node::Node(utils::Entity entity) : entity_(entity) {
+  // If this entity is valid, then try to get the NodeController and cache it.
+  if (!entity_.isNull()) {
+    node_controller_ = imp_internal::NodeAttachmentManager::Get(entity_);
+  }
+}
+
+Node::Node(utils::Entity entity, imp_internal::NodeController* node_controller)
+    : entity_(entity), node_controller_(node_controller) {
+  
+}
 
 absl::string_view Node::GetName() const { return node_controller_->GetName(); }
 
@@ -219,25 +229,17 @@ NodeHandle Node::GetParent() const {
 }
 
 std::vector<NodeHandle> Node::GetChildren() const {
-  auto& tm = GetTransformManager();
-  auto ti = tm.getInstance(GetEntity());
-  const auto child_count = tm.getChildCount(ti);
-  if (!child_count) return {};
-
-  std::vector<utils::Entity> entities(child_count);
-  tm.getChildren(ti, entities.data(), entities.size());
-
+  NodeChildrenRange range = GetChildrenRange();
   std::vector<NodeHandle> result;
-  result.reserve(child_count);
-
-  for (const auto& entity : entities) {
-    NodeHandle node(entity);
-    if (node.IsValid()) {
-      result.push_back(node);
-    }
-  }
-
+  result.reserve(range.GetCount());
+  result.assign(range.begin(), range.end());
   return result;
+}
+
+NodeChildrenRange Node::GetChildrenRange() const {
+  auto& tm = GetTransformManager();
+  TransformInstance instance = tm.getInstance(GetEntity());
+  return NodeChildrenRange(tm, instance);
 }
 
 void Node::SetLocalPosition(const float3& position) {

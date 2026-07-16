@@ -17,19 +17,20 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_NCSB_NODE_HANDLE_H_
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_NODE_HANDLE_H_
 
-#include <functional>
 #include <string>
+#include <utility>
 
 #include "absl/hash/hash.h"
+#include "absl/strings/string_view.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/common/hash.h"
-#include "core/ncsb/base_node.h"
+// Export Node class definition so that users only need this include and node.h.
+#include "core/ncsb/node_definition.h"  // IWYU pragma: export
 
 namespace imp {
 
-class Node;
-
 namespace imp_internal {
+class NodeController;
 class NodeAttachmentManager;
 }  // namespace imp_internal
 
@@ -110,7 +111,7 @@ class NodeHandle {
   // a constant node - instead it's a constant handle to a mutable node (meaning
   // that the node the const NodeHandle references can't change, but the node
   // can be mutated).
-  mutable BaseNode node_;
+  mutable Node node_;
 
   friend class imp_internal::NodeController;
   friend class imp_internal::NodeAttachmentManager;
@@ -122,6 +123,7 @@ template <typename Sink>
 void AbslStringify(Sink& sink, const NodeHandle& node) {
   sink.Append(ToString(node));
 }
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_NCSB_NODE_HANDLE_H_

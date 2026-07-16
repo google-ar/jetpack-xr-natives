@@ -24,13 +24,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "flatbuffers/allocator.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/common/invocable.h"
 #include "core/common/owned_ptr.h"
@@ -67,8 +69,8 @@ class TestSplitEngineAndroidBridge : public SplitEngineAndroidBridge {
   bool SendCommand(const std::vector<uint8_t>& data);
 
   bool SendRequest(
-      const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback) override;
+      absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) override;
 
   MessageGroupId GenerateMessageGroupId();
 
@@ -88,8 +90,8 @@ class TestSplitEngineBridgeBuffer {
 
   ~TestSplitEngineBridgeBuffer();
 
-  void* Data() { return mmapped_ptr_; }
-  const void* Data() const { return mmapped_ptr_; }
+  uint8_t* Data() { return mmapped_ptr_; }
+  const uint8_t* Data() const { return mmapped_ptr_; }
   bool IsValidBlock(const uint8_t* data, size_t data_size_in_bytes) const {
     return data >= Data() &&
            (data + data_size_in_bytes) <=
@@ -98,7 +100,7 @@ class TestSplitEngineBridgeBuffer {
 
  private:
   int shared_memory_region_fd_ = 0;
-  void* mmapped_ptr_ = nullptr;
+  uint8_t* mmapped_ptr_ = nullptr;
   size_t size_in_bytes_ = 0;
 };
 
@@ -128,10 +130,11 @@ class TestSplitEngineBridgeSender : public SplitEngineBridgeSender {
 
   void ClearReleasedMessageGroups() override;
 
-  absl::StatusOr<size_t> GetActiveMessageGroupCount() const override;
+  absl::StatusOr<size_t> GetActiveMessageGroupCount(
+      std::optional<MessageType> message_type) const override;
 
-  void* CreateSharedMemoryBuffer(size_t size_in_bytes);
-  void DestroySharedMemoryBuffer(void*);
+  uint8_t* CreateSharedMemoryBuffer(size_t size_in_bytes);
+  void DestroySharedMemoryBuffer(uint8_t*);
 
   void Schedule(imp::Invocable<absl::Status()> fn) override;
 
@@ -150,6 +153,12 @@ class TestSplitEngineBridgeSender : public SplitEngineBridgeSender {
   absl::flat_hash_map<MessageGroupId, MessageType> message_group_types_;
 
   MessageType GetMessageGroupType(MessageGroupId message_group_id);
+
+  absl::flat_hash_map<ArenaAllocator::ArenaHandle,
+                      std::unique_ptr<flatbuffers::Allocator>>
+      flatbuffer_allocators_;
+
+  flatbuffers::Allocator& GetFlatbufferAllocator(MessageGroupId group_id);
 };
 
 }  // namespace imp::split_engine

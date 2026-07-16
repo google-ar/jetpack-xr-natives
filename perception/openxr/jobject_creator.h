@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,6 +73,11 @@ jobjectArray CreateJavaPlaneVertices(JNIEnv* env, uint32_t vertex_count,
 // an `XrTrackableObjectANDROID`.
 jobject CreateJavaAugmentedObjectState(JNIEnv* env,
                                      const XrTrackableObjectANDROID& xr_object);
+
+// Returns a JVM object of type `androidx.xr.runtime.openxr.AugmentedImageState`
+// from an `XrTrackableImageANDROID`.
+jobject CreateJavaAugmentedImageState(
+    JNIEnv* env, const XrTrackableImageANDROID& xr_image);
 
 // Returns a JVM object of type `androidx.xr.openxr.AnchorState` from an
 // `XrSpaceLocation`.

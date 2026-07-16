@@ -20,6 +20,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
+#include "core/camera/camera_component.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
@@ -31,6 +32,7 @@
 #include "core/render/mesh_renderer.h"
 #include "core/render/texture.h"
 #include "core/render_passes/texture_pipeline_renderer.h"
+#include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/resources/resource_definition.h"
 
 namespace imp::split_engine {
@@ -57,6 +59,19 @@ class PrecomputeTexturePipeline : public imp::Component {
       SmallSourceLocation loc = SmallSourceLocation::Current()) const;
 
   absl::Status ResizePassTexture(int pass_index, imp::uint2 texture_size);
+  // Sets the camera for the precompute pass.
+  absl::Status SetCamera(imp::ComponentHandle<imp::CameraComponent> camera);
+
+  // Sets the projection quad for the precompute pass. This is required if the
+  // Gsplat scene is rendered to a stereo offscreen texture to create Magic
+  // Window look. We need to provide the projection quad to
+  // TexturePipelineRenderer, so it uses the same projection matrices that are
+  // going to be used for the actual stereo rendering.
+  void SetProjectionQuad(
+      const std::optional<imp::TexturePipelineRendererProjectionQuad>&
+          projection_quad) {
+    texture_pipeline_renderer_->SetProjectionQuad(projection_quad);
+  }
 
   static constexpr absl::string_view kType =
       "split_engine.PrecomputeTexturePipeline";
@@ -76,6 +91,7 @@ class PrecomputeTexturePipeline : public imp::Component {
   imp::ComponentHandle<imp::MeshRenderer> mesh_renderer_;
   imp::ComponentHandle<imp::TexturePipelineRenderer> texture_pipeline_renderer_;
   imp::OwnedMaterialPtr precompute_material_;
+  imp::ComponentHandle<imp::CameraComponent> camera_override_;
 };
 
 }  // namespace imp::split_engine

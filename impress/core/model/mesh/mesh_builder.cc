@@ -256,6 +256,15 @@ MorphTargetBufferBuilder& MorphTargetBufferBuilder::Count(
   return *this;
 }
 
+MorphTargetBufferBuilder& MorphTargetBufferBuilder::EnableCustomMorphing(
+    bool enabled) noexcept {
+  if (spy_) {
+    spy_->EnableCustomMorphing(enabled);
+  }
+  builder_ = builder_.enableCustomMorphing(enabled);
+  return *this;
+}
+
 MorphTargetBufferBuilder& MorphTargetBufferBuilder::PositionsAt(
     size_t target_index, const float3* positions, size_t count,
     size_t offset) noexcept {

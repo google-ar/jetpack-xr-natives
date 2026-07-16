@@ -18,10 +18,14 @@
 #include <optional>
 
 #include "core/camera/camera_component.h"
+#include "core/collision/collision_helpers.h"
 #include "core/common/enum_flags.h"
 #include "core/math/math.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
+#include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/utils/frame_time.h"
+#include "extensions/sceneviewerxr/ux/gltf_bounds.h"
 #include "extensions/sceneviewerxr/ux/input_flag.h"
 #include "extensions/sceneviewerxr/ux/interaction_mode.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
@@ -32,55 +36,111 @@
 namespace svxr::interaction_states {
 namespace {
 
-constexpr imp::float3 kOneHandedScaleUnit = imp::float3(0.17f, 0.17f, 1.0f);
-constexpr imp::float3 kOneHandedScaleDeadzone = imp::float3(0.05f);
-constexpr float kOneHandedScaleThrow = 2.0f;
-constexpr float kOneHandedScaleMultiplier = 1.0f;
-
 constexpr float kElasticScale = 10.f;
+constexpr float kMinDistanceForDivision = 1e-3f;
+constexpr float kMinScaleOffsetToMarkScaled = 1e-5f;
 
 }  // namespace
 
 Machine::OptionalState Update(const imp::FrameTime& delta_time,
                               OneHandedScale& state, InteractionOwner& owner) {
-  imp::mat4 world_from_camera =
-      owner.GetCamera()->GetCamera()->getModelMatrix();
-  imp::mat4 camera_from_world = inverse(world_from_camera);
+  imp::NodeHandle footprint_node = owner.GetFootprintNode();
+  if (!footprint_node) {
+    return {};
+  }
 
-  // Convert points to camera space.
-  imp::float3 initial_camera_space_origin =
-      (camera_from_world *
-       imp::float4(state.initial_world_space_ray.origin, 1.0f))
-          .xyz;
-  imp::float3 current_camera_space_origin =
-      (camera_from_world *
-       imp::float4(state.current_world_space_ray.origin, 1.0f))
-          .xyz;
+  imp::ComponentHandle<imp::CameraComponent> camera = owner.GetCamera();
+  if (!camera) {
+    return {};
+  }
 
-  imp::float3 delta_translation =
-      current_camera_space_origin - initial_camera_space_origin;
-  // Ignore Z (depth) changes for the 1D scale.
-  delta_translation.z = 0.0f;
+  imp::mat4f footprint_world_trs = footprint_node->GetWorldTrs();
+  imp::float3 plane_point = footprint_node->GetWorldPosition();
+  // Extracts the Y column (up vector) from the footprint's world transform.
+  imp::float3 plane_normal = normalize(footprint_world_trs[1].xyz);
 
-  imp::float3 delta_translation_with_deadzone =
-      greaterThan(delta_translation, kOneHandedScaleDeadzone) *
-          (delta_translation - kOneHandedScaleDeadzone) +
-      lessThan(delta_translation, -kOneHandedScaleDeadzone) *
-          (delta_translation + kOneHandedScaleDeadzone);
+  // Get model center in world space and project onto plane.
+  imp::NodeHandle model_node = owner.GetModelNode();
+  imp::float3 center = plane_point;  // Fallback to footprint center.
+  auto get_local_center =
+      [](imp::NodeHandle node) -> std::optional<imp::float3> {
+    imp::ComponentHandle<GltfBounds> gltf_bounds =
+        node->GetComponent<GltfBounds>();
+    if (gltf_bounds) {
+      return gltf_bounds->GetLocalBounds().center;
+    }
+    imp::ComponentHandle<imp::GltfRenderer> gltf_renderer =
+        node->GetComponent<imp::GltfRenderer>();
+    if (gltf_renderer) {
+      return gltf_renderer->GetLocalBounds().center;
+    }
+    return std::nullopt;
+  };
 
-  // Project delta strictly along the camera's Y axis (Up/Down in the camera
-  // plane). This makes scaling up = dragging anywhere in the upper half (Up,
-  // Up-Left, Up-Right) and down = dragging anywhere in the lower half (Down,
-  // Down-Left, Down-Right).
-  float scalar_delta_translation =
-      delta_translation_with_deadzone.y / kOneHandedScaleUnit.y;
+  if (model_node) {
+    std::optional<imp::float3> local_center_opt = get_local_center(model_node);
+    if (local_center_opt) {
+      imp::float3 world_center =
+          (model_node->GetWorldTrs() * imp::float4(*local_center_opt, 1.0f))
+              .xyz;
+      // Project world center onto plane.
+      float distance_to_plane = dot(world_center - plane_point, plane_normal);
+      center = world_center - distance_to_plane * plane_normal;
+    }
+  }
 
-  float scale_offset =
-      pow(fabs(scalar_delta_translation), kOneHandedScaleThrow) *
-      ((scalar_delta_translation < 0.f) ? -1.f : 1.f) *
-      kOneHandedScaleMultiplier;
+  // Project initial ray onto plane to find handle proxy.
+  std::optional<float> initial_t = imp::collision::RayIntersectPlane(
+      state.initial_world_space_ray, plane_normal, plane_point);
+  if (!initial_t.has_value()) {
+    return {};
+  }
+  imp::float3 initial_intersection =
+      state.initial_world_space_ray.origin +
+      initial_t.value() * state.initial_world_space_ray.direction;
 
-  if (std::abs(scale_offset) > 1e-5f) {
+  // Project points to camera clip space.
+  std::optional<imp::float3> center_clip_opt =
+      camera->ClipFromWorldPoint(center);
+  std::optional<imp::float3> handle_clip_opt =
+      camera->ClipFromWorldPoint(initial_intersection);
+  std::optional<imp::float3> hand_0_clip_opt =
+      camera->ClipFromWorldPoint(state.initial_world_space_ray.origin);
+  std::optional<imp::float3> hand_t_clip_opt =
+      camera->ClipFromWorldPoint(state.current_world_space_ray.origin);
+
+  if (!center_clip_opt.has_value() || !handle_clip_opt.has_value() ||
+      !hand_0_clip_opt.has_value() || !hand_t_clip_opt.has_value()) {
+    return {};  // Fallback or ignore if behind camera.
+  }
+
+  imp::float2 center_clip = imp::float2(center_clip_opt->x, center_clip_opt->y);
+  imp::float2 handle_clip = imp::float2(handle_clip_opt->x, handle_clip_opt->y);
+  imp::float2 hand_0_clip = imp::float2(hand_0_clip_opt->x, hand_0_clip_opt->y);
+  imp::float2 hand_t_clip = imp::float2(hand_t_clip_opt->x, hand_t_clip_opt->y);
+
+  imp::float2 dir_clip = handle_clip - center_clip;
+  float dir_len = length(dir_clip);
+  if (dir_len < kMinDistanceForDivision) {
+    return {};  // Avoid division by zero.
+  }
+  imp::float2 dir_norm = dir_clip / dir_len;
+
+  imp::float2 v_hand_0 = hand_0_clip - center_clip;
+  imp::float2 v_hand_t = hand_t_clip - center_clip;
+
+  float initial_signed_dist = dot(v_hand_0, dir_norm);
+  float current_signed_dist = dot(v_hand_t, dir_norm);
+
+  // Delta movement along handle direction.
+  float delta = current_signed_dist - initial_signed_dist;
+
+  // Map delta to log scale offset.
+  // Sensitivity factor mapping clip space movement to log scale.
+  constexpr float kScaleSensitivity = 1.5f;
+  float scale_offset = delta * kScaleSensitivity;
+
+  if (std::abs(scale_offset) > kMinScaleOffsetToMarkScaled) {
     state.has_scaled = true;
   }
 

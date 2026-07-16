@@ -26,7 +26,6 @@
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
-#include "filament/filament/include/filament/Texture.h"
 #include "core/actions/action_config.h"
 #include "core/actions/controller_events.h"
 #include "core/async/future.h"
@@ -42,13 +41,13 @@
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/texture.h"
-#include "core/render/texture_factory.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/collision/collision_manager.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/utils/string_map.h"
 #include "core/window/filament_host.h"
 #include "core/window/imgui_renderer.h"
+#include "split_engine/input/split_engine_input_event.h"
 
 namespace imp::editor {
 
@@ -97,6 +96,11 @@ Future<absl::Status> WorldSpaceEditorUi::Setup(
   editor_dispatcher.Connect(
       [this](const ControllerHitEvent& event) mutable {
         HandleControllerHitEvent(event);
+      },
+      this);
+  GetView().GetDispatcher().Connect(
+      [this](const android_xr::SplitEngineInputEvent& event) mutable {
+        HandleSplitEngineInputEvent(event);
       },
       this);
   // Listen to PointerHitEvents.
@@ -256,6 +260,53 @@ void WorldSpaceEditorUi::HandleControllerHitEvent(
                                  .value_or(false);
 
   UpdateImGuiMousePosition(controller_hit_event.GetHit()->world_point);
+  UpdateImGuiMouseDown(is_left_click_down, is_right_click_down);
+}
+
+void WorldSpaceEditorUi::HandleSplitEngineInputEvent(
+    const android_xr::SplitEngineInputEvent& event) {
+  android_xr::SplitEngineInputEvent::PointerType pointer_type =
+      event.pointer_type;
+  // Only one pointer can control WorldSpaceEditorUi at once.
+  if (active_split_engine_pointer_.has_value() &&
+      pointer_type != active_split_engine_pointer_) {
+    return;
+  }
+
+  NodeHandle hit_node;
+  if (event.hit_node) {
+    hit_node = event.hit_node->target;
+  }
+
+  if (!hit_node) {
+    hit_canvas_ = ComponentHandle<SpatialUiCanvas>();
+  } else {
+    hit_canvas_ = ComponentHandle<SpatialUiCanvas>();
+    auto it = spatial_ui_canvases_.find(hit_node->GetName());
+    if (it != spatial_ui_canvases_.end() && it->second == hit_node) {
+      hit_canvas_ = it->second->GetComponent<SpatialUiCanvas>();
+    }
+  }
+
+  ImGuiIO* io = &ImGui::GetCurrentContext()->IO;
+  if (!hit_canvas_.IsValid()) {
+    io->MouseDown[0] = false;
+    io->MouseDown[1] = false;
+    io->MousePos = {-FLT_MAX, -FLT_MAX};
+    active_split_engine_pointer_ = std::nullopt;
+    return;
+  }
+  active_split_engine_pointer_ = pointer_type;
+
+  // Map "select" or "pinch" actions to left click.
+  bool is_left_click_down = (event.button_state != 0);
+  bool is_right_click_down = false;
+
+  if (event.hit_node->world_hit_position) {
+    UpdateImGuiMousePosition(*event.hit_node->world_hit_position);
+  } else {
+    UpdateImGuiMousePosition(event.hit_node->hit_position);
+  }
   UpdateImGuiMouseDown(is_left_click_down, is_right_click_down);
 }
 

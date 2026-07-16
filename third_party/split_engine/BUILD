@@ -16,6 +16,7 @@ load(
     "@com_google_impress//build_tools:imp.bzl",
     "IMP_FLATBUFFER_INCLUDE_PATHS",
     "IMP_FLATC_ARGS",
+    "if_dev_runtime",
     "if_non_android",
 )
 load(
@@ -148,6 +149,7 @@ cc_library(
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_impress//core:config",
         "@com_google_impress//core/async:executor",
         "@com_google_impress//core/async:future",
         "@com_google_impress//core/common:log",
@@ -158,7 +160,7 @@ cc_library(
         "@third_party//filament/libs:utils_hdrs",
         "@third_party//split_engine/input",
         "@third_party//split_engine/input:split_engine_input_event",
-    ],
+    ] + if_dev_runtime(["@com_google_impress//core/editor"]),
     alwayslink = 1,
 )
 

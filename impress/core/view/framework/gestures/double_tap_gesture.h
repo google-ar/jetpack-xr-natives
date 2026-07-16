@@ -17,6 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_GESTURES_DOUBLE_TAP_GESTURE_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_GESTURES_DOUBLE_TAP_GESTURE_H_
 
+#include <utility>
+
 #include "core/math/vec.h"
 #include "core/view/framework/gestures/gesture.h"
 #include "core/view/framework/gestures/gesture_pointer_utils.h"
@@ -39,11 +41,14 @@ class DoubleTapGesture : public Gesture {
 
   struct TapEvent : public Event {
     TapEvent() {}
-    TapEvent(Id id, PointerEventType type, NodeHandle target, float2 position)
+    TapEvent(Id id, PointerEventType type, NodeHandle target,
+             std::pair<float2, float2> position)
         : Event(id), type(type), target(target), position(position) {}
     PointerEventType type;
-    NodeHandle target;  // Invalid if nothing was targeted.
-    float2 position;
+    NodeHandle target;  // Invalid if nothing was targeted. The target of the
+                        // first tap is recorded.
+    // The position of the first tap (.first) and second tap (.second).
+    std::pair<float2, float2> position;
   };
 
  protected:

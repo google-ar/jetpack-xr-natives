@@ -263,7 +263,7 @@ Future<absl::Status> TextRenderer::SetupImpl(
     text_layout_provider_ = std::move(*layout_provider);
   }
 
-  ViewConfig view_config = GetView().GetConfig();
+  const ViewConfig& view_config = GetView().GetConfig();
   ExperimentalFeatureFlags experimental_feature_flags =
       *view_config.experimental_feature_flags;
   std::optional<ViewConfig::GlyphAtlasTextureSize> texture_size =

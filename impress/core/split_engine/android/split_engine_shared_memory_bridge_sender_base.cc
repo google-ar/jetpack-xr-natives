@@ -16,8 +16,10 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "absl/container/flat_hash_set.h"
@@ -36,19 +38,18 @@
 #include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/message_group_monitor.h"
 #include "core/split_engine/shared/split_engine_defines.h"
-#include "core/split_engine/split_engine_bridge_sender.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
 namespace {
 
-void* AllocateSharedMemoryBuffer(size_t size_in_bytes, void* user) {
+uint8_t* AllocateSharedMemoryBuffer(size_t size_in_bytes, void* user) {
   return reinterpret_cast<SplitEngineSharedMemoryBridgeSenderBase*>(user)
       ->CreateSharedMemoryBuffer(size_in_bytes);
 }
 
-void DeallocateSharedMemoryBuffer(void* ptr, void* user) {
+void DeallocateSharedMemoryBuffer(uint8_t* ptr, void* user) {
   reinterpret_cast<SplitEngineSharedMemoryBridgeSenderBase*>(user)
       ->DestroySharedMemoryBuffer(ptr);
 }
@@ -78,11 +79,11 @@ size_t GetEndMessageSize() {
 SplitEngineSharedMemoryBridgeSenderBase::
     SplitEngineSharedMemoryBridgeSenderBase() {}
 
-void* SplitEngineSharedMemoryBridgeSenderBase::CreateSharedMemoryBuffer(
+uint8_t* SplitEngineSharedMemoryBridgeSenderBase::CreateSharedMemoryBuffer(
     size_t size_in_bytes) {
   auto bridge_buffer = std::make_unique<BridgeBuffer>(GetBufferHandleFactory(),
                                                       size_in_bytes, *this);
-  void* buffer_head = bridge_buffer->Data();
+  uint8_t* buffer_head = bridge_buffer->DataAs<uint8_t>();
   {
     absl::MutexLock lock(bridge_buffers_mutex_);
     bridge_buffers_.emplace(buffer_head, std::move(bridge_buffer));
@@ -91,7 +92,7 @@ void* SplitEngineSharedMemoryBridgeSenderBase::CreateSharedMemoryBuffer(
 }
 
 void SplitEngineSharedMemoryBridgeSenderBase::DestroySharedMemoryBuffer(
-    void* head) {
+    uint8_t* head) {
   // Note that the map that we're erasing from holds unique_ptrs, so this
   // erase() doesn't just remove it from the map but also destroys the
   // BridgeBuffer object.
@@ -143,7 +144,7 @@ SplitEngineSharedMemoryBridgeSenderBase::BeginMessageGroup(
   }
 
   {
-    const void* arena_head = GetArenaAllocator().GetArenaHead(arena_handle);
+    const uint8_t* arena_head = GetArenaAllocator().GetArenaHead(arena_handle);
     absl::MutexLock lock(bridge_buffers_mutex_);
     if (bridge_buffers_.find(arena_head) == bridge_buffers_.end()) {
       return absl::InternalError("Failed to create shared memory buffer");
@@ -175,14 +176,20 @@ SplitEngineSharedMemoryBridgeSenderBase::CreateFlatBufferBuilder(
 flatbuffers::Allocator&
 SplitEngineSharedMemoryBridgeSenderBase::GetFlatbuffersAllocator(
     MessageGroupId group_id) {
-  ArenaAllocator::ArenaHandle arena_handle;
-  {
-    absl::MutexLock lock(arena_handles_mutex_);
-    const auto arena_handle_it = arena_handles_.find(group_id);
-    
-    arena_handle = arena_handle_it->second;
+  absl::MutexLock lock(arena_handles_mutex_);
+  const auto arena_handle_it = arena_handles_.find(group_id);
+  
+  const ArenaAllocator::ArenaHandle arena_handle = arena_handle_it->second;
+  const auto it = flatbuffer_allocators_.find(arena_handle);
+  if (it != flatbuffer_allocators_.end()) {
+    return *it->second;
   }
-  return GetArenaAllocator().GetFlatbufferAllocator(arena_handle);
+
+  const auto [result, _] = flatbuffer_allocators_.emplace(
+      arena_handle,
+      GetArenaAllocator().CreateFlatbufferAllocator(arena_handle));
+
+  return *result->second;
 }
 
 absl::Status SplitEngineSharedMemoryBridgeSenderBase::EndMessageGroup(
@@ -213,48 +220,85 @@ absl::Status SplitEngineSharedMemoryBridgeSenderBase::EndMessageGroup(
 void SplitEngineSharedMemoryBridgeSenderBase::ClearReleasedMessageGroups() {
   
 
-  // Get the set of active message groups from the bridge.
-  absl::Status status = MessageGroupMonitor::WithActiveMessageGroups(
-      GetClientId(),
-      [this](const absl::flat_hash_set<MessageGroupId>& active_message_groups) {
-        absl::MutexLock lock(arena_handles_mutex_);
-        // Iterate through all the active arenas and check if they are released.
-        for (auto it = arena_handles_.begin(), end = arena_handles_.end();
-             it != end;) {
-          // Note: this is the advised pattern for erasing an item from a map
-          // while iterating through it based on the documentation of
-          // flat_hash_map.
-          auto it_copy = it++;
-          const MessageGroupId message_group_id = it_copy->first;
-          const ArenaAllocator::ArenaHandle arena_handle = it_copy->second;
-          if (active_message_groups.contains(message_group_id)) {
-            // The message group is still active.
-            continue;
+  // There could be a race condition:
+  // 1. Background thread:
+  //    - EndMessageGroup is called ProcessRegion on background thread, but have
+  //    not deleted the flatbuffer builder yet.
+  //    - Execution is switched to other thread.
+  // 2. Renderer process processes the message group and `ReleaseMessageGroup`
+  // is called on the other thread.
+  //
+  // 3. `ClearReleasedMessageGroups` is called on the foreground thread.
+  //
+  // If we won't schedule the execution on the background thread, flatbuffer
+  // allocator will be destroyed before associated flatbuffer builder.
+  // And when background thread will continue its execution, it will crash on
+  // flatbuffer builder destruction.
+  //
+  Schedule([this]() {
+    // Get the set of active message groups from the bridge.
+    absl::Status status = MessageGroupMonitor::WithActiveMessageGroups(
+        GetClientId(),
+        [this](
+            const absl::flat_hash_set<MessageGroupId>& active_message_groups) {
+          absl::MutexLock lock(arena_handles_mutex_);
+          // Iterate through all the active arenas and check if they are
+          // released.
+          for (auto it = arena_handles_.begin(), end = arena_handles_.end();
+               it != end;) {
+            // Note: this is the advised pattern for erasing an item from a map
+            // while iterating through it based on the documentation of
+            // flat_hash_map.
+            auto it_copy = it++;
+            const MessageGroupId message_group_id = it_copy->first;
+            const ArenaAllocator::ArenaHandle arena_handle = it_copy->second;
+            if (active_message_groups.contains(message_group_id)) {
+              // The message group is still active.
+              continue;
+            }
+            const auto message_group_type_it =
+                message_group_types_.find(message_group_id);
+            
+            const bool recycle =
+                message_group_type_it->second == MessageType::kFrameUpdate;
+            flatbuffer_allocators_.erase(arena_handle);
+            GetArenaAllocator().DestroyArena(arena_handle, recycle);
+            arena_handles_.erase(it_copy);
+            message_group_types_.erase(message_group_type_it);
           }
-          const auto message_group_type_it =
-              message_group_types_.find(message_group_id);
-          
-          const bool recycle =
-              message_group_type_it->second == MessageType::kFrameUpdate;
-          GetArenaAllocator().DestroyArena(arena_handle, recycle);
-          arena_handles_.erase(it_copy);
-          message_group_types_.erase(message_group_type_it);
-        }
-      });
-  if (!status.ok()) {
-    IMP_LOG(imp::ERROR) << "Failed to clear released message groups: "
-               << status.ToString();
-  }
+        });
+    if (!status.ok()) {
+      IMP_LOG(imp::ERROR) << "Failed to clear released message groups: "
+                 << status.ToString();
+    }
+    return status;
+  });
 }
 
 absl::StatusOr<size_t>
-SplitEngineSharedMemoryBridgeSenderBase::GetActiveMessageGroupCount() const {
+SplitEngineSharedMemoryBridgeSenderBase::GetActiveMessageGroupCount(
+    std::optional<MessageType> message_type) const {
   size_t in_flight_frame_count = 0;
+
   MP_RETURN_IF_ERROR(MessageGroupMonitor::WithActiveMessageGroups(
       GetClientId(),
-      [&in_flight_frame_count](
+      [this, &message_type, &in_flight_frame_count](
           const absl::flat_hash_set<MessageGroupId>& active_message_groups) {
-        in_flight_frame_count = active_message_groups.size();
+        if (message_type.has_value()) {
+          const MessageType message_group_type = message_type.value();
+
+          absl::MutexLock lock(arena_handles_mutex_);
+          for (const auto& message_group_id : active_message_groups) {
+            const auto message_group_type_it =
+                message_group_types_.find(message_group_id);
+            
+            if (message_group_type_it->second == message_group_type) {
+              in_flight_frame_count++;
+            }
+          }
+        } else {
+          in_flight_frame_count = active_message_groups.size();
+        }
       }));
 
   return in_flight_frame_count;
@@ -269,7 +313,7 @@ const BridgeBuffer& SplitEngineSharedMemoryBridgeSenderBase::GetBridgeBuffer(
     
     arena_handle = arena_handle_it->second;
   }
-  const void* arena_head = GetArenaAllocator().GetArenaHead(arena_handle);
+  const uint8_t* arena_head = GetArenaAllocator().GetArenaHead(arena_handle);
 
   absl::MutexLock lock(bridge_buffers_mutex_);
   auto it = bridge_buffers_.find(arena_head);

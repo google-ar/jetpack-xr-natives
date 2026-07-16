@@ -28,6 +28,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "core/common/robin_map.h"
+#include "core/config.h"
 #include "core/math/mat.h"
 #include "core/render/android/android_defines.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -46,6 +47,7 @@ Image::Image(AImage* aimage, AHardwareBuffer* ahardware_buffer)
       is_left_primary_(true) {}
 
 absl::StatusOr<std::unique_ptr<Image>> Image::Create(AImage& aimage) {
+#if IMP_PLATFORM(ANDROID_API26)
   AHardwareBuffer* ahardware_buffer = nullptr;
   if (AImage_getHardwareBuffer(&aimage, &ahardware_buffer) != AMEDIA_OK) {
     return absl::InternalError("Unable to get hardware buffer from AImage");
@@ -55,8 +57,14 @@ absl::StatusOr<std::unique_ptr<Image>> Image::Create(AImage& aimage) {
   }
 
   auto image = absl::WrapUnique<Image>(new Image(&aimage, ahardware_buffer));
-  MP_RETURN_IF_ERROR(image->UpdateMultivewInfoUsingImageAPIProvider());
+  absl::Status status = image->UpdateMultivewInfoUsingImageAPIProvider();
+  if (!status.ok() && !absl::IsUnavailable(status)) {
+    return status;
+  }
   return image;
+#else
+  return absl::UnimplementedError("Requires Android API 26 or higher.");
+#endif  // IMP_PLATFORM(ANDROID_API26)
 }
 
 absl::Status Image::UpdateMultivewInfoUsingImageAPIProvider() {
@@ -66,7 +74,7 @@ absl::Status Image::UpdateMultivewInfoUsingImageAPIProvider() {
     is_multiview_ = false;
     is_left_primary_ = true;
     auxiliary_view_ahardware_buffer_ = nullptr;
-    return absl::OkStatus();
+    return absl::UnavailableError("ImageAPIProvider is not set.");
   }
 
   uint32_t base_view_mask = 0;
@@ -91,10 +99,12 @@ absl::Status Image::UpdateMultivewInfoUsingImageAPIProvider() {
 Image::~Image() {
   // Deleting the native image triggers the return of the buffer to the buffer
   // queue.
+#if IMP_PLATFORM(ANDROID_API26)
   if (auxiliary_view_ahardware_buffer_ != nullptr) {
     AHardwareBuffer_release(auxiliary_view_ahardware_buffer_);
   }
   AImage_delete(aimage_);
+#endif  // IMP_PLATFORM(ANDROID_API26)
 }
 
 bool Image::IsValid() const {
@@ -102,19 +112,27 @@ bool Image::IsValid() const {
 }
 
 absl::StatusOr<int32_t> Image::GetWidth() const {
+#if IMP_PLATFORM(ANDROID_API24)
   int32_t width = 0;
   if (AImage_getWidth(aimage_, &width) != AMEDIA_OK) {
     return absl::InternalError("Unable to query the width of AImage");
   }
   return width;
+#else   // IMP_PLATFORM(ANDROID_API24)
+  return absl::UnimplementedError("Requires Android API 24 or higher.");
+#endif  // IMP_PLATFORM(ANDROID_API24)
 }
 
 absl::StatusOr<int32_t> Image::GetHeight() const {
+#if IMP_PLATFORM(ANDROID_API24)
   int32_t height = 0;
   if (AImage_getHeight(aimage_, &height) != AMEDIA_OK) {
     return absl::InternalError("Unable to query the height of AImage");
   }
   return height;
+#else   // IMP_PLATFORM(ANDROID_API24)
+  return absl::UnimplementedError("Requires Android API 24 or higher.");
+#endif  // IMP_PLATFORM(ANDROID_API24)
 }
 
 const AHardwareBuffer* Image::GetHardwareBuffer() const {
@@ -123,10 +141,8 @@ const AHardwareBuffer* Image::GetHardwareBuffer() const {
 
 absl::StatusOr<ADataSpace> Image::GetBufferDataSpace() const {
   ImageAPIProvider* api_provider = GetImageAPIProvider().get();
-  if (!api_provider) {
-    IMP_LOG(imp::WARNING)
-        << "ImageAPIProvider is not set. Returning ADATASPACE_UNKNOWN.";
-    return ADATASPACE_UNKNOWN;
+  if (api_provider == nullptr) {
+    return absl::UnavailableError("ImageAPIProvider is not set.");
   }
   int32_t data_space = ADATASPACE_UNKNOWN;
   MP_RETURN_IF_ERROR(

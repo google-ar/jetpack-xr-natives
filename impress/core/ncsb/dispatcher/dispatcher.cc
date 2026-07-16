@@ -47,9 +47,15 @@ namespace imp {
 //
 // This class is not thread-safe.  All calls to an instance of this class must
 // be done synchronously.
-class Dispatcher::EventHandlerMap : public ConnectionHolder {
+class DispatcherEventHandlerMap : public ConnectionHolder {
  public:
-  EventHandlerMap();
+  using EventHandlerVariant = Dispatcher::EventHandlerVariant;
+  using PropagationResult = Dispatcher::PropagationResult;
+  using EventHandlerPropagationResult =
+      Dispatcher::EventHandlerPropagationResult;
+  using EventHandlerVoid = Dispatcher::EventHandlerVoid;
+
+  DispatcherEventHandlerMap();
 
   // Associates an EventHandler with the specified event |type|.
   void Connect(NodeHandle node, HashValue type, ConnectionId id,
@@ -275,15 +281,15 @@ size_t Dispatcher::GetHandlerCount(NodeHandle node, HashValue type) const {
   return handlers_->GetHandlerCount(node, type);
 }
 
-Dispatcher::Connection::Connection()
+DispatcherConnection::DispatcherConnection()
     : type_(0), id_(kNullConnectionId), handlers_() {}
 
-Dispatcher::Connection::Connection(const EventHandlerMapPtr& handlers,
-                                   NodeHandle node, HashValue type,
-                                   ConnectionId id)
+DispatcherConnection::DispatcherConnection(
+    const DispatcherEventHandlerMapPtr& handlers, NodeHandle node,
+    HashValue type, ConnectionId id)
     : node_(node), type_(type), id_(id), handlers_(handlers) {}
 
-void Dispatcher::Connection::Disconnect() {
+void DispatcherConnection::Disconnect() {
   // type_ is allowed to be null if this is the ConnectToAll connection.
   if (id_ == kNullConnectionId) {
     return;
@@ -294,9 +300,9 @@ void Dispatcher::Connection::Disconnect() {
   }
 }
 
-ConnectionId Dispatcher::Connection::GetId() const { return id_; }
-HashValue Dispatcher::Connection::GetTypeHash() const { return type_; }
-NodeHandle Dispatcher::Connection::GetNode() const { return node_; }
+ConnectionId DispatcherConnection::GetId() const { return id_; }
+HashValue DispatcherConnection::GetTypeHash() const { return type_; }
+NodeHandle DispatcherConnection::GetNode() const { return node_; }
 
 void Dispatcher::SetForgetter(const Dispatcher::Connection& conn,
                               Invocable<void()> forgetter) {
@@ -325,13 +331,13 @@ Dispatcher::ScopedConnection::~ScopedConnection() { Disconnect(); }
 
 void Dispatcher::ScopedConnection::Disconnect() { connection_.Disconnect(); }
 
-Dispatcher::EventHandlerMap::EventHandlerMap()
+DispatcherEventHandlerMap::DispatcherEventHandlerMap()
     : dispatch_count_(0), disconnect_count_(0) {}
 
-void Dispatcher::EventHandlerMap::Connect(NodeHandle node, HashValue type,
-                                          ConnectionId id,
-                                          const ConnectionOwner& owner,
-                                          EventHandlerVariant fn) {
+void DispatcherEventHandlerMap::Connect(NodeHandle node, HashValue type,
+                                        ConnectionId id,
+                                        const ConnectionOwner& owner,
+                                        EventHandlerVariant fn) {
   TaggedEventHandler handler(id, owner, std::move(fn));
   if (dispatch_count_ > 0) {
     dispatch_command_queue_.emplace_back(node, type, std::move(handler));
@@ -342,9 +348,9 @@ void Dispatcher::EventHandlerMap::Connect(NodeHandle node, HashValue type,
   }
 }
 
-void Dispatcher::EventHandlerMap::Disconnect(NodeHandle node, HashValue type,
-                                             ConnectionId id,
-                                             const ConnectionOwner& owner) {
+void DispatcherEventHandlerMap::Disconnect(NodeHandle node, HashValue type,
+                                           ConnectionId id,
+                                           const ConnectionOwner& owner) {
   TaggedEventHandler handler(id, owner, absl::nullopt);
   if (dispatch_count_ > 0) {
     // This marks the handler as queued for disconnection so that it will not
@@ -371,22 +377,22 @@ void Dispatcher::EventHandlerMap::Disconnect(NodeHandle node, HashValue type,
   }
 }
 
-void Dispatcher::EventHandlerMap::Disconnect(ConnectionId id) {
+void DispatcherEventHandlerMap::Disconnect(ConnectionId id) {
   auto iter = connections_by_id_.find(id);
   if (iter != connections_by_id_.end()) {
     Disconnect(iter->second.first, iter->second.second, id, ConnectionOwner());
   }
 }
 
-void Dispatcher::EventHandlerMap::ConnectImpl(NodeHandle node, HashValue type,
-                                              TaggedEventHandler&& handler) {
+void DispatcherEventHandlerMap::ConnectImpl(NodeHandle node, HashValue type,
+                                            TaggedEventHandler&& handler) {
   assert(handler.id != kNullConnectionId);
   assert(handler);
   connections_by_id_[handler.id] = {node, type};
   map_[node].emplace(type, std::move(handler));
 }
 
-bool Dispatcher::EventHandlerMap::DisconnectByType(
+bool DispatcherEventHandlerMap::DisconnectByType(
     std::unordered_multimap<HashValue, TaggedEventHandler>* map, HashValue type,
     const TaggedEventHandler& handler, bool mark_queued_for_disconnection) {
   // If DisconnectAll, check all nodes.
@@ -425,7 +431,7 @@ bool Dispatcher::EventHandlerMap::DisconnectByType(
   return map->empty();
 }
 
-void Dispatcher::EventHandlerMap::DisconnectImpl(
+void DispatcherEventHandlerMap::DisconnectImpl(
     NodeHandle node, HashValue type, TaggedEventHandler&& handler,
     bool mark_queued_for_disconnection) {
   assert(!handler);
@@ -463,8 +469,7 @@ void Dispatcher::EventHandlerMap::DisconnectImpl(
   }
 }
 
-void Dispatcher::EventHandlerMap::DrainCommandQueue(
-    CommandQueue& command_queue) {
+void DispatcherEventHandlerMap::DrainCommandQueue(CommandQueue& command_queue) {
   if (command_queue.empty()) {
     return;
   }
@@ -484,8 +489,8 @@ void Dispatcher::EventHandlerMap::DrainCommandQueue(
   }
 }
 
-NodeHandle Dispatcher::EventHandlerMap::Dispatch(NodeHandle node,
-                                                 HashValue type, Event& event) {
+NodeHandle DispatcherEventHandlerMap::Dispatch(NodeHandle node, HashValue type,
+                                               Event& event) {
   // If sent to a dead node, discard the event.
   if (!node.IsDefaultValue() && !node.IsValid()) {
     return node;
@@ -498,7 +503,7 @@ NodeHandle Dispatcher::EventHandlerMap::Dispatch(NodeHandle node,
     PropagationResult result = DispatchImpl(node, type, event);
 
     // Only dispatch once if kNone, at global scope, or kAccepted.
-    if (mode == Event::kNone || !node || result != kContinue) {
+    if (mode == Event::kNone || !node || result != Dispatcher::kContinue) {
       break;
     }
     // Keep propagating.
@@ -510,9 +515,9 @@ NodeHandle Dispatcher::EventHandlerMap::Dispatch(NodeHandle node,
   return node;
 }
 
-Dispatcher::PropagationResult Dispatcher::EventHandlerMap::DispatchImpl(
+Dispatcher::PropagationResult DispatcherEventHandlerMap::DispatchImpl(
     NodeHandle node, HashValue type, Event& event) {
-  PropagationResult result = kContinue;
+  PropagationResult result = Dispatcher::kContinue;
   // NOTE: if you crash in this function, it may be because you destroyed an
   // an Entity from inside an event handler.
   // TODO: Implement View::QueueForDestruction or make default.
@@ -523,8 +528,8 @@ Dispatcher::PropagationResult Dispatcher::EventHandlerMap::DispatchImpl(
     for (auto it = range.first; it != range.second; ++it) {
       const TaggedEventHandler& tagged_event_handler = it->second;
       event.SetConnectionInfo(this, tagged_event_handler.id);
-      if (tagged_event_handler(event) == kAccept) {
-        result = kAccept;
+      if (tagged_event_handler(event) == Dispatcher::kAccept) {
+        result = Dispatcher::kAccept;
       }
     }
   }
@@ -536,7 +541,7 @@ Dispatcher::PropagationResult Dispatcher::EventHandlerMap::DispatchImpl(
   return result;
 }
 
-size_t Dispatcher::EventHandlerMap::Size() const {
+size_t DispatcherEventHandlerMap::Size() const {
   size_t sum = 0;
   for (const auto& map : map_) {
     sum += map.second.size();
@@ -544,8 +549,8 @@ size_t Dispatcher::EventHandlerMap::Size() const {
   return sum;
 }
 
-size_t Dispatcher::EventHandlerMap::GetHandlerCount(NodeHandle node,
-                                                    HashValue type) const {
+size_t DispatcherEventHandlerMap::GetHandlerCount(NodeHandle node,
+                                                  HashValue type) const {
   auto iter = map_.find(node);
   if (iter != map_.end()) {
     return iter->second.count(type);
@@ -553,9 +558,9 @@ size_t Dispatcher::EventHandlerMap::GetHandlerCount(NodeHandle node,
   return 0;
 }
 
-void Dispatcher::EventHandlerMap::SetForgetter(NodeHandle node, HashValue type,
-                                               ConnectionId id,
-                                               Invocable<void()> forgetter) {
+void DispatcherEventHandlerMap::SetForgetter(NodeHandle node, HashValue type,
+                                             ConnectionId id,
+                                             Invocable<void()> forgetter) {
   if (!id) {
     return;
   }

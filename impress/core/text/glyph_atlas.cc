@@ -121,7 +121,10 @@ GlyphAtlas::GlyphAtlas(BaseView& view, Config config)
           AsyncCanvasSourceFactory::Create(
               view.GetContext(), config.use_hardware_rendering,
               config.force_auto_method_rendering,
-              config.force_individual_glyph_source_instances),
+              config.force_individual_glyph_source_instances,
+              view.GetConfig()
+                  .experimental_feature_flags->enable_label_prep_profile_logging
+                  .Value()),
           config) {}
 
 GlyphAtlas::GlyphAtlas(BaseView& view,

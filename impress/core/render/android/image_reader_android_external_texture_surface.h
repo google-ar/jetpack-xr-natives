@@ -77,7 +77,10 @@ class ImageReaderAndroidExternalTextureSurface
   static absl::StatusOr<
       std::unique_ptr<ImageReaderAndroidExternalTextureSurface>>
   Create(BaseView& view, ContentSecurityLevel security_level,
-         absl::Span<const SurfaceViewType> view_types);
+         absl::Span<const SurfaceViewType> view_types,
+         int2 initial_size = kImageReaderDefaultSize,
+         mat4f additional_transform = kIdentityMat4f,
+         ADataSpace default_data_space = ADATASPACE_SRGB);
 
   ImageReaderAndroidExternalTextureSurface(
       ImageReaderAndroidExternalTextureSurface&& other) = default;
@@ -124,9 +127,15 @@ class ImageReaderAndroidExternalTextureSurface
   ContentSecurityLevel GetContentSecurityLevel() const override;
 
  private:
-  ImageReaderAndroidExternalTextureSurface(
+  explicit ImageReaderAndroidExternalTextureSurface(
       BaseView& view,
-      ContentSecurityLevel security_level = ContentSecurityLevel::kNone);
+      ContentSecurityLevel security_level = ContentSecurityLevel::kNone,
+      int2 initial_size = kImageReaderDefaultSize,
+      mat4f additional_transform = kIdentityMat4f,
+      ADataSpace default_data_space = ADATASPACE_SRGB);
+
+  ADataSpace last_dataspace_ ABSL_GUARDED_BY(image_acquire_mutex_) =
+      ADATASPACE_UNKNOWN;
 
   // A texture that can be bound to multiple hardware buffers.
   // This is used to update the underlying hardware buffer of the texture
@@ -214,6 +223,11 @@ class ImageReaderAndroidExternalTextureSurface
   // Acquires the latest Image from the ImageReader and processes it.
   absl::Status AcquireAndProcessLatestImage();
 
+  // Resizes the ImageReader if the latest Image is RGBA and has different
+  // dimensions than the current ImageReader.
+  void MaybeResizeImageReader()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(image_acquire_mutex_);
+
   BaseView& view_;
   std::unique_ptr<android::Surface> surface_{nullptr};
 
@@ -243,6 +257,10 @@ class ImageReaderAndroidExternalTextureSurface
 
   absl::StatusOr<mat4f> latest_acquired_image_transform_matrix_ =
       absl::UnavailableError("No transform matrix available.");
+
+  int2 latest_size_;
+  mat4f additional_transform_;
+  ADataSpace default_data_space_;
 
   // Test accessor.
   friend class ImageReaderAndroidExternalTextureSurfaceTestPeer;

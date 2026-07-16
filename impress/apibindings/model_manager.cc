@@ -40,18 +40,17 @@
 #include "apibindings/model_interaction_ux/scene_viewer_component.h"
 #include "core/animation/gltf_animation.h"
 #include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/framework/animation/gltf_animator.h"
-#include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_collider.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/view/utils/frame_time.h"
-#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
 
@@ -72,8 +71,7 @@ class ModelManagerImpl : public ModelManager {
   void LoadGltfAsset(absl::Cord data, absl::string_view key,
                      std::unique_ptr<BaseAssetLoader> asset_loader) override;
   absl::Status ReleaseGltfAsset(std::intptr_t gltf_token) override;
-  absl::StatusOr<int32_t> InstanceGltfModel(std::intptr_t gltf_token,
-                                            bool enable_collider) override;
+  absl::StatusOr<int32_t> InstanceGltfModel(std::intptr_t gltf_token) override;
   absl::Status SetGltfModelColliderEnabled(int32_t node,
                                            bool enable_collider) override;
   absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,
@@ -143,7 +141,7 @@ absl::Status ModelManagerImpl::ReleaseGltfAsset(std::intptr_t gltf_token) {
 }
 
 absl::StatusOr<int32_t> ModelManagerImpl::InstanceGltfModel(
-    std::intptr_t gltf_token, bool enable_collider) {
+    std::intptr_t gltf_token) {
   absl::StatusOr<AssetPtr<GltfAsset>> gltf_asset_ptr =
       view_.GetAssetPtrMap().GetStoredGltfAsset(gltf_token);
 
@@ -151,17 +149,10 @@ absl::StatusOr<int32_t> ModelManagerImpl::InstanceGltfModel(
     return absl::InvalidArgumentError(absl::StrFormat(
         "Gltf asset is not cached: %s.", gltf_asset_ptr.status().message()));
   }
-
   NodeHandle node = view_.CreateNode();
-
-  if (!enable_collider) {
-    auto render_options = GltfAsset::LoadOptions(
-        {.collider_mode = GltfState::ColliderMode::NONE});
-    node->AddComponent<GltfRenderer>(gltf_asset_ptr.value(), render_options);
-  } else {
-    node->AddComponent<GltfRenderer>(gltf_asset_ptr.value());
-  }
-
+  auto load_options =
+      GltfAsset::LoadOptions({.collider_mode = GltfState::ColliderMode::NONE});
+  node->AddComponent<GltfRenderer>(gltf_asset_ptr.value(), load_options);
   return node.GetEntity().getId();
 }
 
@@ -178,7 +169,8 @@ absl::Status ModelManagerImpl::SetGltfModelColliderEnabled(
 
   for (ComponentHandle<GltfMesh> gltf_mesh : gltf_meshes) {
     if (enable_collider) {
-      gltf_mesh->GetNode()->AddComponent<GltfCollider>(gltf_mesh);
+      gltf_mesh->GetNode()->AddComponent<GltfCollider>(
+          gltf_mesh, imp::GltfCollider::CollisionMode::kTriangles);
     } else {
       gltf_mesh->GetNode()->RemoveComponent<GltfCollider>();
     }

@@ -99,6 +99,7 @@ cc_library(
         "//core/common:registry",
         "//core/common:trace",
         "//core/editor",
+        "//core/editor:editor_info",
         "//core/editor/xr:xr_editor_ui",
         "//core/math",
         "//core/ncsb",
@@ -120,10 +121,7 @@ proto_library(
     srcs = [
         "pointer_event.proto",
     ],
-    deps = [
-        "//core/math:math_proto",
-        "//core/proto:imp_proto",
-    ],
+    deps = ["//core/math:math_proto"],
 )
 
 cc_library(

@@ -17,6 +17,7 @@ load("//build_tools:assets.bzl", "imp_assets")
 
 # IMGUI UI Widgets for Impress Previewer.
 load("//build_tools:imp.bzl", "imp_google3_copts")
+load("//build_tools:imp_material.bzl", "imp_material")
 load("//core/proto:imp_isf_data.bzl", "imp_isf_data")
 
 package(
@@ -44,6 +45,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":camera_visualizer_assets",
+        "//core/async:future",
         "//core/camera",
         "//core/common:invocable",
         "//core/common:registry",
@@ -52,6 +54,8 @@ cc_library(
         "//core/editor/visualizers/light_assets:light_visualizer_assets",
         "//core/lighting:light_component",
         "//core/lighting:light_state_proto_cc_imp",
+        "//core/materials",
+        "//core/math",
         "//core/ncsb",
         "//core/view:base_view",
         "//core/view/framework",
@@ -59,16 +63,28 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
-        "@third_party//filament/libs:math_hdrs",
+        "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
+)
+
+imp_material(
+    name = "gizmo_visualizer_opaque_material",
+    src = "gizmo_visualizer_opaque.mat",
+)
+
+imp_material(
+    name = "gizmo_visualizer_overlay_material",
+    src = "gizmo_visualizer_overlay.mat",
 )
 
 imp_assets(
     name = "camera_visualizer_assets",
     srcs = [
         ":camera_isf",
-        "//core/editor/visualizers:camera_visualizer.gltf",
+        ":camera_visualizer.gltf",
+        ":gizmo_visualizer_opaque_material",
+        ":gizmo_visualizer_overlay_material",
     ],
     namespace = "imp::editor::camera_visualizer_assets",
 )

@@ -141,9 +141,7 @@ BaseComponentPool::BaseComponentPool(BaseView& view,
 BaseComponentPool::~BaseComponentPool() {
   // RemoveAll should be called prior to getting here.
   assert(components_.Empty());
-  if (base_allocator_) {
-    
-  }
+  
 }
 
 bool BaseComponentPool::Has(utils::Entity entity) const noexcept {

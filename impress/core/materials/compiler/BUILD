@@ -71,12 +71,23 @@ cc_library(
 )
 
 cc_library(
+    name = "material_compiler_config",
+    hdrs = ["material_compiler_config.h"],
+    copts = imp_copts(),
+    deps = [
+        ":fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "material_compiler_client",
     srcs = ["material_compiler_client.cc"],
     hdrs = ["material_compiler_client.h"],
     copts = imp_copts(),
     deps = [
         ":fbs",
+        ":material_compiler_config",
         "//core/common:buffer_access",
         "//core/common:flatbuffer_helpers",
         "//core/ipc:common",
@@ -172,6 +183,7 @@ cc_library(
         ":fbs",
         ":material_cache",
         ":material_compiler_client",
+        ":material_compiler_config",
         "//core/assets/material:material_asset",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:executor",

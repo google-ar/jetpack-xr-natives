@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@
 #include <cstdint>
 #include <vector>
 
+#include "common/namespace_util.h"
 #include "openxr/jobject_converter.h"
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
-#include "common/namespace_util.h"
 
 extern "C" {
 JNIEXPORT jlong JNICALL
@@ -221,5 +221,39 @@ Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetEyesInfo(
     return nullptr;
   }
   return androidx::xr::openxr::CreateJavaEyesInfo(env, eyes_info);
+}
+
+JNIEXPORT jlongArray JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetAugmentedImages(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  std::vector<XrTrackableANDROID> trackables = xr_manager.GetAugmentedImages();
+  jlongArray trackables_array = env->NewLongArray(trackables.size());
+  jlong* array_elements =
+      env->GetLongArrayElements(trackables_array, /*isCopy=*/JNI_FALSE);
+  for (int i = 0; i < trackables.size(); i++) {
+    array_elements[i] = static_cast<jlong>(trackables[i]);
+  }
+  env->ReleaseLongArrayElements(trackables_array, array_elements, /*mode=*/0);
+  return trackables_array;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeIsPhysicalSizeEstimationSupported(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  return xr_manager.SupportsPhysicalSizeEstimation();
+}
+
+JNIEXPORT jint JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetImageDatabaseMaxLoadedImageCount(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  return static_cast<jint>(xr_manager.GetMaxLoadedImageCount());
 }
 }  // extern "C"

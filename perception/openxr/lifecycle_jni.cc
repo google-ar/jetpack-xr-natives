@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,14 @@
 #include <jni.h>
 
 #include <functional>
+#include <utility>
 #include <vector>
 
 #include "openxr/openxr.h"
 #include "openxr/public/all_extensions.h"
 #include "absl/log/log.h"
 #include "common/pointer_util.h"
+#include "openxr/jobject_converter.h"
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
 
@@ -45,7 +47,7 @@ void HandleAuthCompletion(const XrFutureCompletionEXT& completion) {
 extern "C" {
 JNIEXPORT jlong JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrManager_nativeGetXrSessionHandle(
-  JNIEnv* env, jclass /*clazz*/) {
+    JNIEnv* env, jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrSession xr_session = xr_manager.GetXrSession();
@@ -64,7 +66,7 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetXrSessionHandle(
 
 JNIEXPORT jlong JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrManager_nativeGetXrInstanceHandle(
-JNIEnv* env, jclass /*clazz*/) {
+    JNIEnv* env, jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrInstance xr_instance = xr_manager.GetXrInstance();
@@ -123,7 +125,7 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeInit(
 
 JNIEXPORT void JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrManager_nativeDeInit(JNIEnv* env,
-                                                           jclass /*clazz*/) {
+                                                          jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   xr_manager.DeInit(/*stop_polling_thread=*/true);
@@ -139,7 +141,7 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeDeInit(JNIEnv* env,
 
 JNIEXPORT jboolean JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrManager_nativePause(JNIEnv* env,
-                                                          jclass /*clazz*/) {
+                                                         jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   return xr_manager.PauseSession();
@@ -155,6 +157,86 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativePause(JNIEnv* env,
 
 JNIEXPORT jlong JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrManager_nativeConfigureSession(
+    JNIEnv* env, jclass /*clazz*/, jint plane_tracking, jint hand_tracking,
+    jint head_tracking, jint depth_estimation, jint anchor_persistence,
+    jint face_tracking, jint eye_tracking, jint object_tracking,
+    jlongArray object_tracking_labels, jint geospatial_tracking,
+    jobject augmented_image_database) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  bool image_tracking_enabled =
+      !env->IsSameObject(augmented_image_database, nullptr);
+  if (image_tracking_enabled) {
+    auto db_buffers =
+        androidx::xr::openxr::ConvertToAugmentedImageDatabaseEntryBufferPair(
+            env, augmented_image_database);
+    image_tracking_enabled = !db_buffers.entries.empty();
+    if (XR_FAILED(xr_manager.StageAugmentedImageDatabase(
+            std::move(db_buffers.entries), std::move(db_buffers.buffers)))) {
+      image_tracking_enabled = false;
+    }
+  }
+
+  androidx::xr::openxr::OpenXrManager::ConfigSettings xr_config = {
+      .plane_tracking_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::PlaneTrackingMode>(
+              plane_tracking),
+      .hand_tracking_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::HandTrackingMode>(
+              hand_tracking),
+      .head_tracking_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::HeadTrackingMode>(
+              head_tracking),
+      .depth_estimation_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::DepthEstimationMode>(
+              depth_estimation),
+      .anchor_persistence_mode = static_cast<
+          androidx::xr::openxr::OpenXrManager::AnchorPersistenceMode>(
+          anchor_persistence),
+      .face_tracking_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::FaceTrackingMode>(
+              face_tracking),
+      .object_tracking_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::ObjectTrackingMode>(
+              object_tracking),
+      .eye_tracking_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::EyeTrackingMode>(
+              eye_tracking),
+      .object_tracking_labels = {},
+      .geospatial_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::GeospatialMode>(
+              geospatial_tracking),
+      .augmented_image_tracking_mode = static_cast<
+          androidx::xr::openxr::OpenXrManager::AugmentedImageTrackingMode>(
+          image_tracking_enabled),
+  };
+
+  if (object_tracking_labels == nullptr) {
+    xr_config.object_tracking_mode =
+        androidx::xr::openxr::OpenXrManager::ObjectTrackingMode::kDisabled;
+  } else {
+    const auto labels_length = env->GetArrayLength(object_tracking_labels);
+    if (labels_length > 0) {
+      xr_config.object_tracking_labels.reserve(labels_length);
+      const auto labels = env->GetLongArrayElements(object_tracking_labels,
+                                                    /*isCopy=*/nullptr);
+      for (auto i = 0u; i < labels_length; ++i) {
+        xr_config.object_tracking_labels.push_back(
+            static_cast<XrObjectLabelANDROID>(labels[i]));
+      }
+      env->ReleaseLongArrayElements(object_tracking_labels, labels, JNI_ABORT);
+    } else {
+      xr_config.object_tracking_mode =
+          androidx::xr::openxr::OpenXrManager::ObjectTrackingMode::kDisabled;
+    }
+  }
+
+  return xr_manager.ConfigureSession(xr_config);
+}
+
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeConfigureSession__IIIIIIII_3JI(
     JNIEnv* env, jclass /*clazz*/, jint plane_tracking, jint hand_tracking,
     jint head_tracking, jint depth_estimation, jint anchor_persistence,
     jint face_tracking, jint eye_tracking, jint object_tracking,
@@ -217,13 +299,27 @@ Java_androidx_xr_arcore_openxr_OpenXrManager_nativeConfigureSession(
 }
 
 JNIEXPORT jlong JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeConfigureSession(
+Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeConfigureSession__IIIIIIII_3JILandroidx_xr_arcore_openxr_OpenXrAugmentedImageDatabase_2(
     JNIEnv* env, jclass /*clazz*/, jint plane_tracking, jint hand_tracking,
     jint head_tracking, jint depth_estimation, jint anchor_persistence,
     jint face_tracking, jint eye_tracking, jint object_tracking,
-    jlongArray object_tracking_labels, jint geospatial_tracking) {
+    jlongArray object_tracking_labels, jint geospatial_tracking,
+    jobject augmented_image_database) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  bool image_tracking_enabled =
+      !env->IsSameObject(augmented_image_database, nullptr);
+  if (image_tracking_enabled) {
+    auto db_buffers =
+        androidx::xr::openxr::ConvertToAugmentedImageDatabaseEntryBufferPair(
+            env, augmented_image_database);
+    image_tracking_enabled = !db_buffers.entries.empty();
+    if (XR_FAILED(xr_manager.StageAugmentedImageDatabase(
+            std::move(db_buffers.entries), std::move(db_buffers.buffers)))) {
+      image_tracking_enabled = false;
+    }
+  }
 
   androidx::xr::openxr::OpenXrManager::ConfigSettings xr_config = {
       .plane_tracking_mode =
@@ -254,6 +350,9 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeConfigureSession(
       .geospatial_mode =
           static_cast<androidx::xr::openxr::OpenXrManager::GeospatialMode>(
               geospatial_tracking),
+      .augmented_image_tracking_mode = static_cast<
+          androidx::xr::openxr::OpenXrManager::AugmentedImageTrackingMode>(
+          image_tracking_enabled),
   };
 
   if (object_tracking_labels == nullptr) {

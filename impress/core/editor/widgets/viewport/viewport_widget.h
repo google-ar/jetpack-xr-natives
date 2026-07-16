@@ -33,13 +33,14 @@ class ViewportWidget : public Widget {
  public:
   static constexpr absl::string_view kViewportWindowName = "Viewport";
 
-  explicit ViewportWidget(BaseView& view,
+  explicit ViewportWidget(Editor& editor, BaseView& view,
                           ViewportRenderTarget* viewport_render_target);
 
   absl::string_view GetName() const override;
   void DrawImGui() override;
 
  private:
+  Editor& editor_;
   BaseView& view_;
   ViewportRenderTarget* viewport_render_target_;
 };

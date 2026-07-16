@@ -84,4 +84,13 @@ BorrowedMeshPtr BindingsCustomMesh::BorrowSubMeshAt(size_t index) const {
 
 size_t BindingsCustomMesh::GetSubMeshCount() const { return submeshes_.size(); }
 
+Box BindingsCustomMesh::GetAabb() const {
+  if (submeshes_.empty()) {
+    IMP_LOG(imp::ERROR) << "No submeshes available.";
+    return Box{};
+  }
+  // All submeshes are created with the same bounding box.
+  return submeshes_[0]->GetAabb();
+}
+
 }  // namespace imp

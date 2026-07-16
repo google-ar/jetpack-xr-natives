@@ -30,6 +30,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/common/flatbuffer_helpers.h"
 #include "core/ipc/message_pipe.h"
+#include "core/materials/compiler/material_compiler_config.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
 
 namespace imp {
@@ -62,7 +63,7 @@ class MaterialCompilerClient {
   // shader output.
   absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
   CompileMaterial(absl::string_view source_material_string,
-                  schemas::Platform platformm, schemas::TargetApi target_api);
+                  const MaterialCompilerConfig& config);
 
   // Initiates close by the client. This sends a CloseRequest to the service,
   // ask the service to close the pipe. This closes the pipe itself if it fails

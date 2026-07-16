@@ -331,6 +331,9 @@ py_test(
     ],
 )
 
+# Benchmarks of OwnedPtr vs std::unique_ptr
+# blaze run -c opt //core/common:owned_ptr_benchmark_test -- --benchmark_filter=all --benchmark_memory_usage
+
 cc_library(
     name = "owned_or_borrowed_ptr",
     hdrs = [
@@ -963,6 +966,27 @@ cc_library(
         "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/numeric:bits",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "one_of",
+    hdrs = ["one_of.h"],
+    copts = imp_copts(),
+    deps = [
+        ":optional_with_default",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "compact_bitset",
+    hdrs = ["compact_bitset.h"],
+    copts = imp_copts(),
+    linkstatic = True,
+    deps = [
         "@com_google_absl//absl/numeric:bits",
     ],
     alwayslink = 1,

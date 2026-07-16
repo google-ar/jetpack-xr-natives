@@ -30,11 +30,13 @@
 #include "core/actions/action_config.h"
 #include "core/actions/controller_events.h"
 #include "core/async/future.h"
+#include "core/collision/ray.h"
 #include "core/common/jni_helpers.h"
 #include "core/geometry/shapes/box.h"
 #include "core/input/pointer_event.h"
 #include "core/input/pointer_event_processor.h"
 #include "core/materials/material.h"
+#include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
@@ -76,6 +78,21 @@ inline jlong ToJava(T* p) {
 template <class T>
 inline T* FromJava(jlong n) {
   return JniAllowlist<T, RenderViewToSurfaceTextureWrapper>::FromJava(n);
+}
+
+std::optional<float3> IntersectRayWithRendererPlane(const mat4& world_trs,
+                                                    const Ray& ray) {
+  const float3 normal = float3(world_trs[2].xyz);
+  const float3 origin = float3(world_trs[3].xyz);
+
+  float dot_val = dot(normal, ray.direction);
+  if (std::abs(dot_val) > 1e-6f) {
+    float t = dot(origin - ray.origin, normal) / dot_val;
+    if (t >= 0) {
+      return ray.origin + t * ray.direction;
+    }
+  }
+  return std::nullopt;
 }
 
 }  // namespace
@@ -354,8 +371,11 @@ jobject AndroidViewRenderer::GetAndroidView() { return android_view_; }
 void AndroidViewRenderer::ForwardHoverInputs(const PointerHitEvent& event) {
   // Only consider this event if we are the front-most node hit.
   std::optional<RayHit> hit = event.GetTruncatedRayHit();
+  const Pointer& pointer = event.event.GetChangedPointer(0);
+  bool is_dragging = dragging_pointers_.contains(pointer.id);
+
   if (!hit.has_value() || hit->node != renderer_node_) {
-    if (was_hovering_) {
+    if (was_hovering_ && !is_dragging) {
       was_hovering_ = false;
       MotionEvent motion_event(GetView().GetContext().GetJniEnv(), {0, 0},
                                MotionEvent::Action::kHoverExit);
@@ -376,16 +396,53 @@ void AndroidViewRenderer::ForwardHoverInputs(const PointerHitEvent& event) {
 }
 
 void AndroidViewRenderer::ForwardTouchInputs(const PointerHitEvent& event) {
+  const Pointer& pointer = event.event.GetChangedPointer(0);
+  bool is_dragging = dragging_pointers_.contains(pointer.id);
+
   // Only consider this event if we are the front-most node hit.
   std::optional<RayHit> hit = event.GetTruncatedRayHit();
-  if (!hit.has_value() || hit->node != renderer_node_) {
+  bool hit_renderer = hit.has_value() && hit->node == renderer_node_;
+
+  if (event.event.Type() == PointerEventType::kDown) {
+    if (hit_renderer) {
+      dragging_pointers_.insert(pointer.id);
+      is_dragging = true;
+    }
+  } else if (event.event.Type() == PointerEventType::kUp ||
+             event.event.Type() == PointerEventType::kCancel) {
+    dragging_pointers_.erase(pointer.id);
+  }
+
+  if (!hit_renderer && !is_dragging) {
     return;
   }
-  float2 surface_coordinates =
-      GetSurfaceCoordinatesFromWorldPoint(hit->world_point);
+
+  float2 surface_coordinates;
+  std::optional<float3> plane_hit;
+  if (hit_renderer) {
+    surface_coordinates = GetSurfaceCoordinatesFromWorldPoint(hit->world_point);
+  } else {
+    Ray world_ray =
+        GetView().GetCameraManager().GetCamera()->WorldRayFromPixelPoint(
+            pointer.point);
+    plane_hit = IntersectRayWithRendererPlane(
+        renderer_node_->GetWorldTrsPrecise(), world_ray);
+    // The pointer is likely pointing away from the renderer so we pick a
+    // typical android error coordinate.
+    if (!plane_hit) {
+      surface_coordinates = {-1.0f, -1.0f};
+    }
+    surface_coordinates = GetSurfaceCoordinatesFromWorldPoint(*plane_hit);
+  }
+
   MotionEvent motion_event(GetView().GetContext().GetJniEnv(),
                            surface_coordinates, event.event.Type());
-  DispatchTouchEventToView(motion_event);
+  // Always send up events and send any event while pointing toward the
+  // renderer.
+  if (event.event.Type() == PointerEventType::kUp ||
+      (hit_renderer || plane_hit)) {
+    DispatchTouchEventToView(motion_event);
+  }
 }
 
 // LINT.ThenChange(
@@ -450,31 +507,11 @@ void AndroidViewRenderer::ForwardControllerInputs(
 
   // Get previous hover state for this hand.
   bool& was_hovering = controller_was_hovering_[event.GetHand()];
+  bool is_dragging = dragging_controllers_.contains(event.GetHand());
 
-  if (event.GetHitNode() != renderer_node_) {
-    // If the hit node is not the renderer node and we were previously hovering,
-    // send a hover exit event.
-    if (was_hovering) {
-      was_hovering = false;
-      MotionEvent motion_event(GetView().GetContext().GetJniEnv(), {0, 0},
-                               MotionEvent::Action::kHoverExit);
-      DispatchGenericMotionEventToView(motion_event);
-    }
-    // Always return if the hit node is not the renderer node.
-    return;
-  }
+  std::optional<RayHit> hit = event.GetHit();
+  bool is_renderer_hit = hit.has_value() && hit->node == renderer_node_;
 
-  // Check for hover enter event.
-  if (!was_hovering) {
-    was_hovering = true;
-    MotionEvent motion_event(GetView().GetContext().GetJniEnv(), {0, 0},
-                             MotionEvent::Action::kHoverEnter);
-    DispatchGenericMotionEventToView(motion_event);
-    return;
-  }
-
-  float2 surface_coordinates =
-      GetSurfaceCoordinatesFromWorldPoint(event.GetHit()->world_point);
   auto select_button_state =
       event.GetInputActionStateVariant(kDefaultSelectActionName);
 
@@ -497,8 +534,56 @@ void AndroidViewRenderer::ForwardControllerInputs(
       std::visit([](auto&& state) { return state.has_changed_since_last_sync; },
                  select_button_state);
 
-  // If we are tap down, tap up, or moving, send a touch event.
+  if (select_changed) {
+    if (is_select) {
+      if (is_renderer_hit) {
+        dragging_controllers_.insert(event.GetHand());
+        is_dragging = true;
+      }
+    } else {
+      dragging_controllers_.erase(event.GetHand());
+    }
+  }
+
+  if (!is_renderer_hit && !is_dragging) {
+    // If the hit node is not the renderer node and we were previously hovering,
+    // send a hover exit event.
+    if (was_hovering) {
+      was_hovering = false;
+      MotionEvent motion_event(GetView().GetContext().GetJniEnv(), {0, 0},
+                               MotionEvent::Action::kHoverExit);
+      DispatchGenericMotionEventToView(motion_event);
+    }
+    // Always return if the hit node is not the renderer node.
+    return;
+  }
+
+  float2 surface_coordinates;
+  std::optional<float3> plane_hit;
+  if (is_renderer_hit) {
+    surface_coordinates =
+        GetSurfaceCoordinatesFromWorldPoint(event.GetHit()->world_point);
+  } else {
+    Ray ray = event.GetControllerRay();
+    plane_hit = IntersectRayWithRendererPlane(
+        renderer_node_->GetWorldTrsPrecise(), ray);
+    if (!plane_hit) {
+      surface_coordinates = {-1.0f, -1.0f};
+    } else {
+      surface_coordinates = GetSurfaceCoordinatesFromWorldPoint(*plane_hit);
+    }
+  }
+
+  // Check for hover enter event.
+  if (is_renderer_hit && !was_hovering) {
+    was_hovering = true;
+    MotionEvent motion_event(GetView().GetContext().GetJniEnv(), {0, 0},
+                             MotionEvent::Action::kHoverEnter);
+    DispatchGenericMotionEventToView(motion_event);
+  }
+
   if (is_select || select_changed) {
+    // If we are tap down, tap up, or moving, send a touch event.
     MotionEvent::Action action;
     if (select_changed) {
       action =
@@ -508,13 +593,20 @@ void AndroidViewRenderer::ForwardControllerInputs(
     }
     MotionEvent motion_event(GetView().GetContext().GetJniEnv(),
                              surface_coordinates, action);
-    DispatchTouchEventToView(motion_event);
+
+    // Always send up events and send any event while pointing toward the
+    // renderer.
+    if (action == MotionEvent::Action::kUp || (is_renderer_hit || plane_hit)) {
+      DispatchTouchEventToView(motion_event);
+    }
   } else {
     // Otherwise send a generic motion event with kHoverMove action.
-    MotionEvent motion_event(GetView().GetContext().GetJniEnv(),
-                             surface_coordinates,
-                             MotionEvent::Action::kHoverMove);
-    DispatchGenericMotionEventToView(motion_event);
+    if (is_renderer_hit || plane_hit) {
+      MotionEvent motion_event(GetView().GetContext().GetJniEnv(),
+                               surface_coordinates,
+                               MotionEvent::Action::kHoverMove);
+      DispatchGenericMotionEventToView(motion_event);
+    }
   }
 
   std::optional<imp::float2> scroll_value =
@@ -524,9 +616,6 @@ void AndroidViewRenderer::ForwardControllerInputs(
       scroll_value.has_value() &&
       (std::abs(scroll_value->x) > 0.0f || std::abs(scroll_value->y) > 0.0f);
   if (is_scrolling) {
-    imp::float2 surface_coordinates =
-        this->GetSurfaceCoordinatesFromWorldPoint(event.GetHit()->world_point);
-
     float2 scaled_scroll_value = {scroll_value->x * scroll_factor_.x,
                                   scroll_value->y * scroll_factor_.y};
     MotionEvent motion_event(GetView().GetContext().GetJniEnv(),
@@ -535,6 +624,10 @@ void AndroidViewRenderer::ForwardControllerInputs(
                              scaled_scroll_value);
     DispatchGenericMotionEventToView(motion_event);
   }
+}
+
+imp::float2 AndroidViewRenderer::GetQuadNodeLocalScale() {
+  return renderer_node_->GetLocalScale().xy;
 }
 
 }  // namespace imp::android

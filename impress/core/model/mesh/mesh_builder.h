@@ -126,6 +126,8 @@ class MorphTargetBufferBuilder : public BaseMorphTargetBufferBuilder {
  public:
   MorphTargetBufferBuilder& VertexCount(size_t vertexCount) noexcept override;
   MorphTargetBufferBuilder& Count(size_t count) noexcept override;
+  MorphTargetBufferBuilder& EnableCustomMorphing(
+      bool enabled) noexcept override;
   MorphTargetBufferBuilder& PositionsAt(size_t target_index,
                                         const float3* positions, size_t count,
                                         size_t offset = 0) noexcept override;

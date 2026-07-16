@@ -16,7 +16,9 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_ANDROID_SPLIT_ENGINE_SHARED_MEMORY_BRIDGE_SENDER_BASE_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <optional>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
@@ -57,8 +59,8 @@ class SplitEngineSharedMemoryBridgeSenderBase
   SplitEngineSharedMemoryBridgeSenderBase& operator=(
       SplitEngineSharedMemoryBridgeSenderBase&&) = delete;
 
-  void* CreateSharedMemoryBuffer(size_t size_in_bytes);
-  void DestroySharedMemoryBuffer(void*);
+  uint8_t* CreateSharedMemoryBuffer(size_t size_in_bytes);
+  void DestroySharedMemoryBuffer(uint8_t*);
 
   absl::StatusOr<MessageGroupId> BeginMessageGroup(
       size_t size_bytes, MessageType message_type) override;
@@ -67,7 +69,8 @@ class SplitEngineSharedMemoryBridgeSenderBase
   imp::OwnedPtr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
       MessageGroupId group_id, size_t size_bytes) override;
 
-  absl::StatusOr<size_t> GetActiveMessageGroupCount() const override;
+  absl::StatusOr<size_t> GetActiveMessageGroupCount(
+      std::optional<MessageType> message_type) const override;
 
   void ClearReleasedMessageGroups() override;
 
@@ -92,14 +95,17 @@ class SplitEngineSharedMemoryBridgeSenderBase
 
  private:
   absl::Mutex bridge_buffers_mutex_;
-  imp::RobinMap<const void*, std::unique_ptr<BridgeBuffer>> bridge_buffers_
+  imp::RobinMap<const uint8_t*, std::unique_ptr<BridgeBuffer>> bridge_buffers_
       ABSL_GUARDED_BY(bridge_buffers_mutex_);
 
-  absl::Mutex arena_handles_mutex_;
+  mutable absl::Mutex arena_handles_mutex_;
   absl::flat_hash_map<MessageGroupId, ArenaAllocator::ArenaHandle>
       arena_handles_ ABSL_GUARDED_BY(arena_handles_mutex_);
   absl::flat_hash_map<MessageGroupId, MessageType> message_group_types_
       ABSL_GUARDED_BY(arena_handles_mutex_);
+  absl::flat_hash_map<ArenaAllocator::ArenaHandle,
+                      std::unique_ptr<flatbuffers::Allocator>>
+      flatbuffer_allocators_ ABSL_GUARDED_BY(arena_handles_mutex_);
 
   mutable absl::Mutex message_sizes_mutex_;
   absl::flat_hash_map<MessageGroupId, size_t> message_group_id_to_size_bytes_

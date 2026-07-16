@@ -94,6 +94,16 @@ NodeParticleEmitter::NodeParticleEmitter(
           emitter_state.emitter_config->particles_per_second.Value()),
       particle_delay_(0.0f) {}
 
+NodeParticleEmitter::~NodeParticleEmitter() {
+  // Destroy all active particles.
+  for (const NodeParticle& particle : active_particles_) {
+    if (particle.node.IsValid()) {
+      particle.node->GetView().DestroyNode(particle.node);
+    }
+  }
+  active_particles_.clear();
+}
+
 void NodeParticleEmitter::UpdateParticleSystem(const FrameTime& frame_time) {
   // Prepare the emitter info.
   imp::ParticleEmitterInfo emitter_info = GetParticleEmitterInfo();

@@ -97,7 +97,10 @@ MaterialPtr MaterialFactory::CreateMaterial(
   }
 
   auto material = absl::WrapUnique(new CustomMaterial(
-      material_asset->GetFilamentMaterial()->createInstance(), material_asset));
+      material_asset->GetFilamentMaterial()->createInstance(), material_asset,
+      view_->GetConfig()
+          .experimental_feature_flags
+          ->enable_filament_material_instance_destruction_check.Value()));
 
   if (auto serializer = view_->GetSplitEngineSerializer();
       serializer && !IsPlaceholderSplitEngineMaterial(
@@ -130,7 +133,11 @@ MaterialPtr MaterialFactory::WrapMaterial(
     IMP_LOG(imp::FATAL) << "Cannot create material from invalid filament material";
   }
 
-  auto material = absl::WrapUnique(new CustomMaterial(material_instance, {}));
+  auto material = absl::WrapUnique(new CustomMaterial(
+      material_instance, {},
+      view_->GetConfig()
+          .experimental_feature_flags
+          ->enable_filament_material_instance_destruction_check.Value()));
 
   if (auto serializer = view_->GetSplitEngineSerializer();
       serializer &&

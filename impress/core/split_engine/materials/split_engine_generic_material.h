@@ -306,6 +306,9 @@ class SplitEngineGenericMaterial : public SplitEngineBuiltinMaterial,
       flatbuffers::FlatBufferBuilder& fbb,
       BuiltInTextureParameterCreator& texture_parameter_creator) const override;
 
+  // Generic material always disregards local mode.
+  bool IsAlwaysRemote() const override { return true; }
+
  private:
   SplitEngineGenericMaterial(BaseView& view,
                              OwnedMaterialPtr placeholder_material);

@@ -16,13 +16,14 @@
 
 #include <cstdint>
 
-#include "absl/cleanup/cleanup.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/editor/editor.h"
+#include "core/editor/widgets/viewport/viewport_helpers.h"
 #include "core/editor/widgets/viewport/viewport_render_target.h"
+#include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
 #include "core/view/base_view.h"
-#include "core/view/utils/device.h"
 
 namespace imp::editor {
 
@@ -33,34 +34,43 @@ constexpr ImVec2 kUv1 = ImVec2(1.0f, 0.0f);
 
 }  // namespace
 
-ViewportWidget::ViewportWidget(BaseView& view,
+ViewportWidget::ViewportWidget(Editor& editor, BaseView& view,
                                ViewportRenderTarget* viewport_render_target)
-    : view_(view), viewport_render_target_(viewport_render_target) {}
+    : editor_(editor),
+      view_(view),
+      viewport_render_target_(viewport_render_target) {}
 
 absl::string_view ViewportWidget::GetName() const {
   return kViewportWindowName;
 }
 
 void ViewportWidget::DrawImGui() {
-  // Setting padding to 0 to use full window space for image.
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-  const absl::Cleanup pop_window_padding = ([] { ImGui::PopStyleVar(); });
+  if (!viewport_render_target_) return;
 
   const ImVec2 viewport_panel_size = ImGui::GetContentRegionAvail();
 
-  if (!viewport_render_target_ || viewport_panel_size.x <= 0 ||
-      viewport_panel_size.y <= 0) {
-    return;
-  }
+  if (viewport_panel_size.x <= 0 || viewport_panel_size.y <= 0) return;
 
-  const float2 pixel_ratio = view_.GetDevice().GetPhysicalPixelRatio();
+  const float2 pixel_ratio = editor::GetPhysicalPixelRatio(view_);
 
   viewport_render_target_->SetSize(
       {static_cast<uint32_t>(viewport_panel_size.x * pixel_ratio.x),
        static_cast<uint32_t>(viewport_panel_size.y * pixel_ratio.y)});
 
+  // Must get this value BEFORE drawing the image or it will be incorrect.
+  // If this value is incorrect, input coords will not be transformed properly.
+  const ImVec2 screen_pos = ImGui::GetCursorScreenPos();
+
   ImGui::Image(viewport_render_target_->GetColorTexture(), viewport_panel_size,
                kUv0, kUv1);
+
+  // Update the viewport rect in the editor so input can be correctly
+  // transformed.
+  const float2 center = {screen_pos.x + viewport_panel_size.x * 0.5f,
+                         screen_pos.y + viewport_panel_size.y * 0.5f};
+  const float2 half_extent = {viewport_panel_size.x * 0.5f,
+                              viewport_panel_size.y * 0.5f};
+  editor_.SetViewportRect(Rect{center, half_extent});
 }
 
 }  // namespace imp::editor

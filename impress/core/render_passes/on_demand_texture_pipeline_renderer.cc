@@ -14,6 +14,7 @@
 
 #include "core/render_passes/on_demand_texture_pipeline_renderer.h"
 
+#include <cstdint>
 #include <optional>
 #include <utility>
 #include <variant>
@@ -114,10 +115,14 @@ OnDemandTexturePipelineRenderer::SetupColorTexture(
     filament::Texture::InternalFormat color_format =
         FormatFromTexture(color_texture_proto.format, TextureConfig::RGBA8);
 
-    TexturePtr color_texture = view_->GetTextureFactory().CreateTexture(
-        texture_size.x, texture_size.y, color_format,
-        filament::Texture::Usage::COLOR_ATTACHMENT |
-            filament::Texture::Usage::SAMPLEABLE);
+    OwnedTexturePtr color_texture = view_->GetTextureFactory().CreateTexture(
+        imp::TextureFactory::TextureCreationSettings{
+            .width = static_cast<uint32_t>(texture_size.x),
+            .height = static_cast<uint32_t>(texture_size.y),
+            .format = color_format,
+            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                     filament::Texture::Usage::SAMPLEABLE,
+        });
 
     color_texture_variant = view_->GetTextureRegistry().RegisterTexture(
         color_texture_proto.name, std::move(color_texture));
@@ -183,13 +188,18 @@ OnDemandTexturePipelineRenderer::CreateRuntimePass(
     filament::Texture::InternalFormat depth_format =
         FormatFromTexture(texture_proto.format, TextureConfig::DEPTH24);
 
-    TexturePtr texture = view_->GetTextureFactory().CreateTexture(
-        render_region_size.x, render_region_size.y, depth_format,
-        filament::Texture::Usage::DEPTH_ATTACHMENT |
-            filament::Texture::Usage::SAMPLEABLE,
-        TextureSamplerOptions{
-            .mag_filter = TextureSamplerOptions::MagFilter::NEAREST,
-            .min_filter = TextureSamplerOptions::MinFilter::NEAREST,
+    OwnedTexturePtr texture = view_->GetTextureFactory().CreateTexture(
+        imp::TextureFactory::TextureCreationSettings{
+            .width = static_cast<uint32_t>(render_region_size.x),
+            .height = static_cast<uint32_t>(render_region_size.y),
+            .format = depth_format,
+            .usage = filament::Texture::Usage::DEPTH_ATTACHMENT |
+                     filament::Texture::Usage::SAMPLEABLE,
+            .sampler_options =
+                TextureSamplerOptions{
+                    .mag_filter = TextureSamplerOptions::MagFilter::NEAREST,
+                    .min_filter = TextureSamplerOptions::MinFilter::NEAREST,
+                },
         });
 
     depth_texture_registration.emplace(

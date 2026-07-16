@@ -27,11 +27,7 @@ material{
   featureLevel : 0
 } fragment {
   vec4 getSliceSample(highp vec2 uv) {
-#if FILAMENT_EFFECTIVE_VERSION == 100
-    return texture2D(materialParams_Slice, uv);
-#else
     return texture(materialParams_Slice, uv);
-#endif
   }
 
   void material(inout MaterialInputs material) {

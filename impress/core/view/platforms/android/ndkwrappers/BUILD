@@ -14,7 +14,7 @@
 
 load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android_min_sdk_at_least_26", "imp_google3_copts")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -37,22 +37,23 @@ selects.config_setting_group(
 cc_library(
     name = "image",
     srcs = select({
-        ":mvhevc_on_android": ["image.cc"],
+        "//core:android": ["image.cc"],
         "//conditions:default": [],
     }),
     hdrs = select({
-        ":mvhevc_on_android": ["image.h"],
+        "//core:android": ["image.h"],
         "//conditions:default": [],
     }),
     copts = imp_google3_copts(),
-    linkopts = [
+    linkopts = if_android_min_sdk_at_least_26([
         "-lmediandk",
         "-lnativewindow",
-    ],
+    ]),
     deps = [
         "@mediapipe//mediapipe/framework/port:status",
     ] + select({
-        ":mvhevc_on_android": [
+        "//core:android": [
+            "//core:config",
             "//core/common:robin_map",
             "//core/math",
             "//core/render/android:definitions",
@@ -71,20 +72,20 @@ cc_library(
 cc_library(
     name = "image_reader",
     srcs = select({
-        ":mvhevc_on_android": ["image_reader.cc"],
+        "//core:android": ["image_reader.cc"],
         "//conditions:default": [],
     }),
     hdrs = select({
-        ":mvhevc_on_android": ["image_reader.h"],
+        "//core:android": ["image_reader.h"],
         "//conditions:default": [],
     }),
     copts = imp_google3_copts(),
-    linkopts = [
+    linkopts = if_android_min_sdk_at_least_26([
         "-lmediandk",
         "-lnativewindow",
-    ],
+    ]),
     deps = select({
-        ":mvhevc_on_android": [
+        "//core:android": [
             ":image",
             "//core:config",
             "//core/common:context",

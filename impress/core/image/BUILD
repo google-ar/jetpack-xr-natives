@@ -202,6 +202,7 @@ cc_library(
         ":wasm_texture_contents",
         "//base:atomic_sequence_num",
         "//core/async:background_delete",
+        "//core/async:executor",
         "//core/async:future",
         "//core/resources",
         "//javascript/core/wasm/decode_image:decode_image.js.lds",

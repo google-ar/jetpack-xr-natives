@@ -18,16 +18,19 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/common/jni_helpers.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/message_group_monitor.h"
@@ -38,23 +41,27 @@ namespace imp::split_engine {
 class SplitEngineRequestCallback : public JavaWrapper {
  public:
   explicit SplitEngineRequestCallback(
-      JNIEnv* env, std::function<void(const std::vector<uint8_t>&)> callback)
+      JNIEnv* env, imp::Invocable<void(absl::Span<const uint8_t>)> callback)
       : JavaWrapper(env,
                     "com/google/imp/splitengine/extensions/RequestCallback",
                     "(J)V", reinterpret_cast<int64_t>(this)) {
-    native_on_result_ = callback;
+    
+    native_on_result_ = std::move(callback);
   }
 
   void OnResult(const std::vector<uint8_t>& response) {
+    
     native_on_result_(response);
+    native_on_result_ = {};
   }
 
-  std::function<void(const std::vector<uint8_t>&)> GetNativeCallback() {
-    return native_on_result_;
+  imp::Invocable<void(absl::Span<const uint8_t>)> ExtractNativeCallback() {
+    
+    return std::move(native_on_result_);
   }
 
  private:
-  std::function<void(const std::vector<uint8_t>&)> native_on_result_;
+  imp::Invocable<void(absl::Span<const uint8_t>)> native_on_result_;
 };
 
 // A wrapper around the Java MessageGroupCallback type. This is used by the
@@ -181,8 +188,8 @@ class SplitEngineBridge : public JavaWrapper,
   // Sends a flatbuffer request to the backend with a handler for a flatbuffer
   // response.
   absl::Status SendRequest(
-      const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback) override;
+      absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) override;
 
  private:
   const JniHandle get_bridge_id_;

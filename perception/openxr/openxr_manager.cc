@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,7 +82,8 @@ const std::array<std::string, 13> kRequiredExtensions = {
 };
 
 // Extensions must be listed after their dependencies.
-const std::array<OpenXrExtension, 7> kOptionalExtensions = {{
+// LINT.IfChange
+const std::array<OpenXrExtension, 8> kOptionalExtensions = {{
     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -97,7 +98,10 @@ const std::array<OpenXrExtension, 7> kOptionalExtensions = {{
      {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
     {XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME,
      {XR_EXT_FUTURE_EXTENSION_NAME}},
+    {XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME,
+     {XR_EXT_FUTURE_EXTENSION_NAME}},
 }};
+// LINT.ThenChange(//depot/google3/third_party/jetpack_xr_natives/openxr_runtime/openxr_instance_manager.cc)
 
 const std::array<std::string, 7> kGeospatialExtensions = {
     XR_ANDROID_GEOSPATIAL_EXTENSION_NAME,
@@ -275,9 +279,8 @@ bool OpenXrManager::InitOpenXrFunctions() {
                            (PFN_xrVoidFunction*)(&get_trackable_plane_)));
   XR_RETURN_IF_FAILED(gipa(instance_, "xrGetTrackableObjectANDROID",
                            (PFN_xrVoidFunction*)(&get_trackable_object_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrDestroyTrackableTrackerANDROID",
-      (PFN_xrVoidFunction*)(&destroy_trackable_tracker_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrDestroyTrackableTrackerANDROID",
+                           (PFN_xrVoidFunction*)(&destroy_trackable_tracker_)));
   XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateAnchorSpaceANDROID",
                            (PFN_xrVoidFunction*)(&create_anchor_space_)));
   XR_RETURN_IF_FAILED(gipa(instance_, "xrShareAnchorANDROID",
@@ -286,22 +289,21 @@ bool OpenXrManager::InitOpenXrFunctions() {
   XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateDeviceAnchorPersistenceANDROID",
                            reinterpret_cast<PFN_xrVoidFunction*>(
                                &create_device_anchor_persistence_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrDestroyDeviceAnchorPersistenceANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(
-          &destroy_device_anchor_persistence_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrPersistAnchorANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&persist_anchor_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrDestroyDeviceAnchorPersistenceANDROID",
+                           reinterpret_cast<PFN_xrVoidFunction*>(
+                               &destroy_device_anchor_persistence_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrPersistAnchorANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&persist_anchor_)));
   XR_RETURN_IF_FAILED(gipa(
       instance_, "xrEnumeratePersistedAnchorsANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&enumerate_persisted_anchors_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrGetAnchorPersistStateANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&get_anchor_persist_state_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrUnpersistAnchorANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&unpersist_anchor_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrGetAnchorPersistStateANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&get_anchor_persist_state_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrUnpersistAnchorANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&unpersist_anchor_)));
   XR_RETURN_IF_FAILED(gipa(
       instance_, "xrCreatePersistedAnchorSpaceANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&create_persisted_anchor_space_)));
@@ -309,12 +311,12 @@ bool OpenXrManager::InitOpenXrFunctions() {
   XR_RETURN_IF_FAILED(gipa(instance_, "xrRaycastANDROID",
                            reinterpret_cast<PFN_xrVoidFunction*>(&raycast_)));
   // Depth functions.
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrCreateDepthSwapchainANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&create_depth_swapchain_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrDestroyDepthSwapchainANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&destroy_depth_swapchain_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrCreateDepthSwapchainANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&create_depth_swapchain_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrDestroyDepthSwapchainANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&destroy_depth_swapchain_)));
   XR_RETURN_IF_FAILED(gipa(instance_, "xrEnumerateDepthSwapchainImagesANDROID",
                            reinterpret_cast<PFN_xrVoidFunction*>(
                                &enumerate_depth_swapchain_images_)));
@@ -325,37 +327,37 @@ bool OpenXrManager::InitOpenXrFunctions() {
       instance_, "xrAcquireDepthSwapchainImagesANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&acquire_depth_swapchain_images_)));
   // Hand functions.
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrCreateHandTrackerEXT",
-      reinterpret_cast<PFN_xrVoidFunction*>(&create_hand_tracker_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrDestroyHandTrackerEXT",
-      reinterpret_cast<PFN_xrVoidFunction*>(&destroy_hand_tracker_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrLocateHandJointsEXT",
-      reinterpret_cast<PFN_xrVoidFunction*>(&locate_hand_joints_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrCreateHandTrackerEXT",
+           reinterpret_cast<PFN_xrVoidFunction*>(&create_hand_tracker_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrDestroyHandTrackerEXT",
+           reinterpret_cast<PFN_xrVoidFunction*>(&destroy_hand_tracker_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrLocateHandJointsEXT",
+           reinterpret_cast<PFN_xrVoidFunction*>(&locate_hand_joints_)));
 
   // Face functions.
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrCreateFaceTrackerANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&create_face_tracker_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrDestroyFaceTrackerANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&destroy_face_tracker_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrCreateFaceTrackerANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&create_face_tracker_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrDestroyFaceTrackerANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&destroy_face_tracker_)));
   XR_RETURN_IF_FAILED(gipa(
       instance_, "xrGetFaceCalibrationStateANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_face_calibration_state_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrGetFaceStateANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&get_face_state_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrGetFaceStateANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&get_face_state_)));
 
   // Eye functions.
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrCreateEyeTrackerANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&create_eye_tracker_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrDestroyEyeTrackerANDROID",
-      reinterpret_cast<PFN_xrVoidFunction*>(&destroy_eye_tracker_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrCreateEyeTrackerANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&create_eye_tracker_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrDestroyEyeTrackerANDROID",
+           reinterpret_cast<PFN_xrVoidFunction*>(&destroy_eye_tracker_)));
   XR_RETURN_IF_FAILED(gipa(
       instance_, "xrGetFineTrackingEyesInfoANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_fine_tracking_eyes_info_)));
@@ -363,16 +365,50 @@ bool OpenXrManager::InitOpenXrFunctions() {
       instance_, "xrGetCoarseTrackingEyesInfoANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_coarse_tracking_eyes_info_)));
 
+  // System Properties
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrGetSystemProperties",
+           reinterpret_cast<PFN_xrVoidFunction*>(&get_system_properties_)));
+
   // Future functions.
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrCancelFutureEXT",
-      reinterpret_cast<PFN_xrVoidFunction*>(&cancel_future_)));
-  XR_RETURN_IF_FAILED(gipa(
-      instance_, "xrPollFutureEXT",
-      reinterpret_cast<PFN_xrVoidFunction*>(&poll_future_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrCancelFutureEXT",
+           reinterpret_cast<PFN_xrVoidFunction*>(&cancel_future_)));
+  XR_RETURN_IF_FAILED(
+      gipa(instance_, "xrPollFutureEXT",
+           reinterpret_cast<PFN_xrVoidFunction*>(&poll_future_)));
 
   std::vector<std::string> enabled_exts;
   GetEnabledExtensions(enabled_exts);
+
+  // Image functions.
+  if (std::find(enabled_exts.begin(), enabled_exts.end(),
+                XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME) !=
+      enabled_exts.end()) {
+    LOG(INFO) << "XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME is enabled!";
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrGetTrackableImageANDROID",
+             reinterpret_cast<PFN_xrVoidFunction*>(&get_trackable_image_)));
+    XR_RETURN_IF_FAILED(gipa(
+        instance_, "xrAddTrackableImageDatabaseANDROID",
+        reinterpret_cast<PFN_xrVoidFunction*>(&add_trackable_image_database_)));
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrRemoveTrackableImageDatabaseANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &remove_trackable_image_database_)));
+    XR_RETURN_IF_FAILED(gipa(instance_,
+                             "xrCreateTrackableImageDatabaseAsyncANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &create_trackable_image_database_async_)));
+    XR_RETURN_IF_FAILED(gipa(instance_,
+                             "xrCreateTrackableImageDatabaseCompleteANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &create_trackable_image_database_complete_)));
+    XR_RETURN_IF_FAILED(gipa(instance_,
+                             "xrDestroyTrackableImageDatabaseANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &destroy_trackable_image_database_)));
+    image_tracking_exts_loaded_ = true;
+  }
 
   auto all_geospatial_present =
       std::all_of(kGeospatialExtensions.begin(), kGeospatialExtensions.end(),
@@ -389,10 +425,9 @@ bool OpenXrManager::InitOpenXrFunctions() {
     XR_RETURN_IF_FAILED(gipa(
         instance_, "xrSetGoogleCloudAuthAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&set_google_cloud_auth_async_)));
-    XR_RETURN_IF_FAILED(
-        gipa(instance_, "xrSetGoogleCloudAuthCompleteANDROID",
-             reinterpret_cast<PFN_xrVoidFunction*>(
-                 &set_google_cloud_auth_complete_)));
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrSetGoogleCloudAuthCompleteANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &set_google_cloud_auth_complete_)));
   }
 
   if (all_geospatial_present) {
@@ -400,31 +435,31 @@ bool OpenXrManager::InitOpenXrFunctions() {
     XR_RETURN_IF_FAILED(gipa(instance_, "xrEnumerateSpatialCapabilitiesEXT",
                              reinterpret_cast<PFN_xrVoidFunction*>(
                                  &enumerate_spatial_capabilities_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrEnumerateSpatialCapabilityComponentTypesEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &enumerate_spatial_capability_component_types_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrEnumerateSpatialCapabilityFeaturesEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &enumerate_spatial_capability_features_)));
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrEnumerateSpatialCapabilityComponentTypesEXT",
+             reinterpret_cast<PFN_xrVoidFunction*>(
+                 &enumerate_spatial_capability_component_types_)));
+    XR_RETURN_IF_FAILED(gipa(instance_,
+                             "xrEnumerateSpatialCapabilityFeaturesEXT",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &enumerate_spatial_capability_features_)));
     XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateSpatialContextAsyncEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_spatial_context_async_)));
     XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateSpatialContextCompleteEXT",
                              reinterpret_cast<PFN_xrVoidFunction*>(
                                  &create_spatial_context_complete_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrDestroySpatialContextEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(&destroy_spatial_context_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrCreateSpatialDiscoverySnapshotAsyncEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &create_spatial_discovery_snapshot_async_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrCreateSpatialDiscoverySnapshotCompleteEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &create_spatial_discovery_snapshot_complete_)));
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrDestroySpatialContextEXT",
+             reinterpret_cast<PFN_xrVoidFunction*>(&destroy_spatial_context_)));
+    XR_RETURN_IF_FAILED(gipa(instance_,
+                             "xrCreateSpatialDiscoverySnapshotAsyncEXT",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &create_spatial_discovery_snapshot_async_)));
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrCreateSpatialDiscoverySnapshotCompleteEXT",
+             reinterpret_cast<PFN_xrVoidFunction*>(
+                 &create_spatial_discovery_snapshot_complete_)));
     XR_RETURN_IF_FAILED(gipa(
         instance_, "xrQuerySpatialComponentDataEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(&query_spatial_component_data_)));
@@ -434,23 +469,23 @@ bool OpenXrManager::InitOpenXrFunctions() {
     XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateSpatialEntityFromIdEXT",
                              reinterpret_cast<PFN_xrVoidFunction*>(
                                  &create_spatial_entity_from_id_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrDestroySpatialEntityEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(&destroy_spatial_entity_)));
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrDestroySpatialEntityEXT",
+             reinterpret_cast<PFN_xrVoidFunction*>(&destroy_spatial_entity_)));
     XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateSpatialUpdateSnapshotEXT",
                              reinterpret_cast<PFN_xrVoidFunction*>(
                                  &create_spatial_update_snapshot_)));
 
     // Spatial Anchors functions.
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrCreateSpatialAnchorEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(&create_spatial_anchor_)));
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrCreateSpatialAnchorEXT",
+             reinterpret_cast<PFN_xrVoidFunction*>(&create_spatial_anchor_)));
 
     // Spatial Anchor Space functions.
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrCreateSpatialAnchorSpaceFromIdANDROID",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &create_spatial_anchor_space_from_id_)));
+    XR_RETURN_IF_FAILED(gipa(instance_,
+                             "xrCreateSpatialAnchorSpaceFromIdANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &create_spatial_anchor_space_from_id_)));
 
     // Geospatial functions.
     XR_RETURN_IF_FAILED(gipa(
@@ -459,30 +494,27 @@ bool OpenXrManager::InitOpenXrFunctions() {
     XR_RETURN_IF_FAILED(gipa(
         instance_, "xrDestroyGeospatialTrackerANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&destroy_geospatial_tracker_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrLocateGeospatialPoseFromPoseANDROID",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &locate_geospatial_pose_from_pose_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrLocateGeospatialPoseANDROID",
-        reinterpret_cast<PFN_xrVoidFunction*>(&locate_geospatial_pose_)));
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrLocateGeospatialPoseFromPoseANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &locate_geospatial_pose_from_pose_)));
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrLocateGeospatialPoseANDROID",
+             reinterpret_cast<PFN_xrVoidFunction*>(&locate_geospatial_pose_)));
     XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateGeospatialAnchorANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_geospatial_anchor_)));
     XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateSurfaceAnchorAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_surface_anchor_async_)));
-    XR_RETURN_IF_FAILED(
-        gipa(instance_, "xrCreateSurfaceAnchorCompleteANDROID",
-             reinterpret_cast<PFN_xrVoidFunction*>(
-                 &create_surface_anchor_complete_)));
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateSurfaceAnchorCompleteANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &create_surface_anchor_complete_)));
     XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCheckVpsAvailabilityAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&check_vps_availability_async_)));
-    XR_RETURN_IF_FAILED(gipa(
-        instance_, "xrCheckVpsAvailabilityCompleteANDROID",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &check_vps_availability_complete_)));
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrCheckVpsAvailabilityCompleteANDROID",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &check_vps_availability_complete_)));
 
     geospatial_exts_loaded_ = true;
   }
@@ -1082,7 +1114,8 @@ OpenXrManager::GeospatialPoseResult OpenXrManager::LocatePoseFromGeospatialPose(
     case XR_SUCCESS:
       if (!((out_location->locationFlags &
              XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) &&
-            (out_location->locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT))) {
+            (out_location->locationFlags &
+             XR_SPACE_LOCATION_POSITION_VALID_BIT))) {
         return GeospatialPoseResult::kErrorNotTracking;
       }
       return GeospatialPoseResult::kSuccess;
@@ -1206,9 +1239,8 @@ bool OpenXrManager::Init(JNIEnv* env, jobject context, XrInstance xr_instance,
   {
     absl::MutexLock lock(mutex_);
 
-    xr_get_instance_proc_addr_ =
-        reinterpret_cast<PFN_xrGetInstanceProcAddr>(
-            static_cast<intptr_t>(get_instance_proc_address_ptr));
+    xr_get_instance_proc_addr_ = reinterpret_cast<PFN_xrGetInstanceProcAddr>(
+        static_cast<intptr_t>(get_instance_proc_address_ptr));
 
     if (open_xr_state_ == OpenXrState::kResumed) {
       LOG(INFO) << "Returning existing OpenXR session.";
@@ -1297,12 +1329,7 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
       return;
     }
     open_xr_state_ = OpenXrState::kUninitializing;
-
-    XrResult session_result = xr_destroy_session_(session_);
-    if (XR_FAILED(session_result)) {
-      LOG(ERROR) << "Failed to destroy session with error: "
-                 << XrEnumStr(session_result);
-    }
+    image_tracking_properties_ = {};
 
     // Destroy planes tracker.
     if (planes_trackable_tracker_ != XR_NULL_HANDLE) {
@@ -1320,6 +1347,42 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
       object_trackable_tracker_ = XR_NULL_HANDLE;
       if (XR_FAILED(result)) {
         LOG(ERROR) << "Failed to destroy object tracker with error: "
+                   << XrEnumStr(result);
+      }
+    }
+
+    // Destroy image tracker.
+    if (image_trackable_tracker_ != XR_NULL_HANDLE) {
+      XrResult result = destroy_trackable_tracker_(image_trackable_tracker_);
+      image_trackable_tracker_ = XR_NULL_HANDLE;
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to destroy image tracker with error: "
+                   << XrEnumStr(result);
+      }
+    }
+
+    // Destroy image database.
+    if (image_database_handle_ != XR_NULL_HANDLE) {
+      XrResult result =
+          destroy_trackable_image_database_(image_database_handle_);
+      // Check if we need to invalidate the rollback database handle as well.
+      if (image_database_handle_ == rollback_database_handle_) {
+        rollback_database_handle_ = XR_NULL_HANDLE;
+      }
+      image_database_handle_ = XR_NULL_HANDLE;
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to destroy image database with error: "
+                   << XrEnumStr(result);
+      }
+    }
+
+    // Destroy rollback image database.
+    if (rollback_database_handle_ != XR_NULL_HANDLE) {
+      XrResult result =
+          destroy_trackable_image_database_(rollback_database_handle_);
+      rollback_database_handle_ = XR_NULL_HANDLE;
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to destroy rollback image database with error: "
                    << XrEnumStr(result);
       }
     }
@@ -1398,6 +1461,15 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
     // Cancel any pending futures.
     CancelPendingFutures();
 
+    // Destroy session - all handles scoped to session should be destroyed
+    // first. This includes image trackers and databases created via
+    // session-dependent extension functions.
+    XrResult session_result = xr_destroy_session_(session_);
+    if (XR_FAILED(session_result)) {
+      LOG(ERROR) << "Failed to destroy session with error: "
+                 << XrEnumStr(session_result);
+    }
+
     instance_ = XR_NULL_HANDLE;
     system_id_ = XR_NULL_SYSTEM_ID;
     session_ = XR_NULL_HANDLE;
@@ -1406,6 +1478,7 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
     face_tracker_calibration_state_ = FaceTrackingCalibrationState::kUnknown;
     geospatial_exts_loaded_ = false;
     cloud_auth_exts_loaded_ = false;
+    image_tracking_exts_loaded_ = false;
   }
   if (stop_polling_thread) {
     JoinPollingThread();
@@ -1441,9 +1514,9 @@ bool OpenXrManager::LoadOpenXr(jobject context) {
   // Gets a function pointer to the OpenXR loader.
   {
     absl::MutexLock lock(mutex_);
-    PFN_xrGetInstanceProcAddr gipa =
-        xr_get_instance_proc_addr_ != nullptr ? xr_get_instance_proc_addr_
-                                   : xrGetInstanceProcAddr;
+    PFN_xrGetInstanceProcAddr gipa = xr_get_instance_proc_addr_ != nullptr
+                                         ? xr_get_instance_proc_addr_
+                                         : xrGetInstanceProcAddr;
 
     XR_RETURN_IF_FAILED(gipa(
         XR_NULL_HANDLE, "xrEnumerateInstanceExtensionProperties",
@@ -1452,13 +1525,12 @@ bool OpenXrManager::LoadOpenXr(jobject context) {
     if (instance_ != XR_NULL_HANDLE && xr_get_instance_proc_addr_ != nullptr) {
       LOG(INFO)
           << "OpenXR loader is already initialized (instance exists and GIPA "
-             "provided). skipping re-initialization.";
+             "provided). Skipping re-initialization.";
       return true;
     }
 
-    XR_RETURN_IF_FAILED(
-        gipa(XR_NULL_HANDLE, "xrInitializeLoaderKHR",
-             (PFN_xrVoidFunction*)(&initialize_loader)));
+    XR_RETURN_IF_FAILED(gipa(XR_NULL_HANDLE, "xrInitializeLoaderKHR",
+                             (PFN_xrVoidFunction*)(&initialize_loader)));
     if (initialize_loader == nullptr) {
       LOG(ERROR) << "Failure loading OpenXR. Loader is null.";
       return false;
@@ -1596,6 +1668,8 @@ XrResult OpenXrManager::ConfigureFeatures(
       ConfigureGeospatialTracking(new_config_settings.geospatial_mode));
   XR_RETURN_RESULT_IF_FAILED(
       ConfigureEyeTracking(new_config_settings.eye_tracking_mode));
+  XR_RETURN_RESULT_IF_FAILED(ConfigureAugmentedImageTracking(
+      new_config_settings.augmented_image_tracking_mode));
   return XR_SUCCESS;
 }
 
@@ -1609,6 +1683,8 @@ void OpenXrManager::AbortConfigureSession() {
   ConfigureObjectTracking(config_settings_.object_tracking_mode,
                           config_settings_.object_tracking_labels);
   ConfigureGeospatialTracking(config_settings_.geospatial_mode);
+  ConfigureAugmentedImageTracking(
+      config_settings_.augmented_image_tracking_mode);
 }
 
 XrResult OpenXrManager::ConfigurePlaneTracking(PlaneTrackingMode mode) {
@@ -1627,6 +1703,86 @@ XrResult OpenXrManager::ConfigurePlaneTracking(PlaneTrackingMode mode) {
       break;
     }
   }
+}
+
+XrResult OpenXrManager::ConfigureAugmentedImageTracking(
+    AugmentedImageTrackingMode mode) {
+  if (mode == AugmentedImageTrackingMode::kEnabled &&
+      !image_tracking_exts_loaded_) {
+    return XR_ERROR_FEATURE_UNSUPPORTED;
+  }
+
+  switch (mode) {
+    case AugmentedImageTrackingMode::kDisabled: {
+      if (image_trackable_tracker_ != XR_NULL_HANDLE) {
+        XR_RETURN_RESULT_IF_FAILED(
+            destroy_trackable_tracker_(image_trackable_tracker_));
+        image_trackable_tracker_ = XR_NULL_HANDLE;
+      }
+      if (image_database_handle_ != XR_NULL_HANDLE) {
+        XR_RETURN_RESULT_IF_FAILED(
+            destroy_trackable_image_database_(image_database_handle_));
+        // Check if we need to invalidate the rollback database handle as well.
+        if (image_database_handle_ == rollback_database_handle_) {
+          rollback_database_handle_ = XR_NULL_HANDLE;
+        }
+        image_database_handle_ = XR_NULL_HANDLE;
+      }
+      if (rollback_database_handle_ != XR_NULL_HANDLE) {
+        XR_RETURN_RESULT_IF_FAILED(
+            destroy_trackable_image_database_(rollback_database_handle_));
+        rollback_database_handle_ = XR_NULL_HANDLE;
+      }
+      return XR_SUCCESS;
+    }
+    case AugmentedImageTrackingMode::kEnabled: {
+      // Check if this should attempt to roll back
+      // as part of an aborted configuration.
+      XrResult result;
+      if (image_database_handle_ != XR_NULL_HANDLE &&
+          image_database_handle_ == rollback_database_handle_) {
+        // In case of abort simply add the last successful database handle
+        // back into the tracker.
+        result = add_trackable_image_database_(image_trackable_tracker_,
+                                               rollback_database_handle_);
+        rollback_database_handle_ = XR_NULL_HANDLE;
+        if (XR_FAILED(result)) {
+          LOG(ERROR) << "Attempted to rollback to previous image database "
+                     << "but failed with: " << XrEnumStr(result);
+        }
+        return result;
+      }
+
+      // Not aborting, attempt to create an image database normally.
+      result = CreateAugmentedImageDatabase(augmented_image_database_);
+      if (XR_FAILED(result) && rollback_database_handle_ != XR_NULL_HANDLE) {
+        LOG(INFO) << "Failed to create augmented image database "
+                  << "but rollback database available";
+        // On failure to create:
+        // When abort configure is called, this will exit above.
+        image_database_handle_ = rollback_database_handle_;
+      }
+      XR_RETURN_RESULT_IF_FAILED(result);
+
+      // After successfully creating a new image database,
+      // destroy rollback database
+      if (rollback_database_handle_ != XR_NULL_HANDLE) {
+        result = destroy_trackable_image_database_(rollback_database_handle_);
+        rollback_database_handle_ = XR_NULL_HANDLE;
+        if (XR_FAILED(result)) {
+          LOG(ERROR) << "When configuring new augmented image database, "
+                     << "failed to destroy the handle for "
+                     << "the rollback database with: " << XrEnumStr(result);
+          return result;
+        }
+      }
+
+      return XR_SUCCESS;
+    }
+  }
+
+  // Fallback.
+  return XR_ERROR_VALIDATION_FAILURE;
 }
 
 XrResult OpenXrManager::ConfigureObjectTracking(
@@ -1833,6 +1989,54 @@ XrResult OpenXrManager::ConfigureEyeTracking(EyeTrackingMode mode) {
   return MaybeCreateEyeTracker();
 }
 
+XrResult OpenXrManager::StageAugmentedImageDatabase(
+    std::vector<XrTrackableImageDatabaseEntryANDROID>&& entries,
+    std::vector<std::unique_ptr<uint8_t[]>>&& buffers) {
+  absl::MutexLock lock(mutex_);
+  if (rollback_database_handle_ != XR_NULL_HANDLE) {
+    LOG(WARNING) << "Attempting to stage an augmented image database, "
+                    "but existing rollback data was discovered. "
+                    "This may indicate an attempt to configure a session "
+                    "before the previous configuration was completed.";
+    if (rollback_database_handle_ != image_database_handle_) {
+      XR_RETURN_RESULT_IF_FAILED(
+          destroy_trackable_image_database_(rollback_database_handle_));
+    }
+    rollback_database_handle_ = XR_NULL_HANDLE;
+  }
+
+  if (image_database_creation_future_ != XR_NULL_FUTURE_EXT) {
+    LOG(WARNING) << "Should not attempt to stage new image database "
+                    "while async creation is in progress. "
+                    "The ongoing async creation will be cancelled "
+                    "in favor of the staging operation.";
+
+    XR_RETURN_RESULT_IF_FAILED(
+        CancelPendingFuture(image_database_creation_future_));
+  }
+
+  // If there is an active handle, store it in case configuration is aborted.
+  if (image_database_handle_ != XR_NULL_HANDLE) {
+    rollback_database_handle_ = image_database_handle_;
+    image_database_handle_ = XR_NULL_HANDLE;
+
+    // Remove the database from the tracker without destroying it.
+    XrResult result = remove_trackable_image_database_(
+        image_trackable_tracker_, rollback_database_handle_);
+    if (XR_FAILED(result)) {
+      LOG(ERROR)
+          << "Failed to remove old image database from the tracker with: "
+          << XrEnumStr(result);
+      return result;
+    }
+  }
+
+  augmented_image_database_.entries = std::move(entries);
+  augmented_image_database_.buffers = std::move(buffers);
+
+  return XR_SUCCESS;
+}
+
 XrResult OpenXrManager::MaybeCreatePlanesTracker() {
   if (planes_trackable_tracker_ != XR_NULL_HANDLE) {
     return XR_SUCCESS;
@@ -1842,6 +2046,31 @@ XrResult OpenXrManager::MaybeCreatePlanesTracker() {
       .trackableType = XR_TRACKABLE_TYPE_PLANE_ANDROID};
   XR_RETURN_RESULT_IF_FAILED(create_trackable_tracker_(
       session_, &createInfo, &planes_trackable_tracker_));
+  return XR_SUCCESS;
+}
+
+XrResult OpenXrManager::MaybeCreateAugmentedImageTracker() {
+  if (image_trackable_tracker_ != XR_NULL_HANDLE) {
+    return XR_SUCCESS;
+  }
+
+  if (!SupportsImageTracking()) {
+    return XR_ERROR_FEATURE_UNSUPPORTED;
+  }
+
+  XrTrackableImageConfigurationANDROID image_config{
+      .type = XR_TYPE_TRACKABLE_IMAGE_CONFIGURATION_ANDROID,
+      .next = nullptr,
+      .databaseCount = 1,
+      .databases = &image_database_handle_};
+
+  XrTrackableTrackerCreateInfoANDROID createInfo = {
+      .type = XR_TYPE_TRACKABLE_TRACKER_CREATE_INFO_ANDROID,
+      .next = &image_config,
+      .trackableType = XR_TRACKABLE_TYPE_IMAGE_ANDROID};
+  XR_RETURN_RESULT_IF_FAILED(create_trackable_tracker_(
+      session_, &createInfo, &image_trackable_tracker_));
+
   return XR_SUCCESS;
 }
 
@@ -2232,6 +2461,38 @@ bool OpenXrManager::GetTrackableObjectState(
   return true;
 }
 
+bool OpenXrManager::SupportsImageTracking() {
+  const XrResult result = FetchSystemImageTrackingPropertiesIfNecessary();
+  if (XR_FAILED(result)) {
+    LOG(ERROR) << "Could not determine "
+               << "if image tracking is supported.";
+    return false;
+  }
+  return (image_tracking_properties_.supportsImageTracking == XR_TRUE);
+}
+
+XrResult OpenXrManager::FetchSystemImageTrackingPropertiesIfNecessary() {
+  if (image_tracking_properties_.type !=
+      XR_TYPE_SYSTEM_IMAGE_TRACKING_PROPERTIES_ANDROID) {
+    image_tracking_properties_ = {
+        .type = XR_TYPE_SYSTEM_IMAGE_TRACKING_PROPERTIES_ANDROID,
+        .next = nullptr};
+
+    XrSystemProperties system_properties{.type = XR_TYPE_SYSTEM_PROPERTIES,
+                                         .next = &image_tracking_properties_};
+    XrResult result =
+        get_system_properties_(instance_, system_id_, &system_properties);
+    if (XR_FAILED(result)) {
+      LOG(ERROR) << "Failed to get system properties with: "
+                 << XrEnumStr(result);
+      image_tracking_properties_.type = XR_TYPE_UNKNOWN;
+      return result;
+    }
+  }
+
+  return XR_SUCCESS;
+}
+
 std::vector<XrTrackableANDROID> OpenXrManager::GetPlanes() {
   uint32_t trackableCountOutput = 0;
 
@@ -2294,6 +2555,11 @@ bool OpenXrManager::GetPlaneState(XrTrackableANDROID plane_id,
   if (XR_FAILED(result)) {
     LOG(ERROR) << "Failed to get plane vertex count with error: "
                << XrEnumStr(result);
+    return false;
+  }
+  // TODO: Remove this check once xrGetTrackablePlaneANDROID is
+  // guaranteed to return a non-zero vertex count on success.
+  if (*(out_plane.vertexCountOutput) == 0) {
     return false;
   }
   out_plane.vertexCapacityInput = *out_plane.vertexCountOutput;
@@ -2368,6 +2634,108 @@ bool OpenXrManager::ChoosePlane(const PlaneConstraints& plane_constraints,
   }
   LOG(WARNING) << "Failed to locate a suitable plane.";
   return false;
+}
+
+std::vector<XrTrackableANDROID> OpenXrManager::GetAugmentedImages() {
+  {
+    absl::MutexLock lock(mutex_);
+    if (image_trackable_tracker_ == XR_NULL_HANDLE) {
+      return {};
+    }
+  }
+
+  uint32_t trackableCountOutput = 0;
+
+  // Query the number of trackables available.
+  XrResult result;
+  {
+    absl::MutexLock lock(mutex_);
+    result = get_all_trackables_(image_trackable_tracker_, 0,
+                                 &trackableCountOutput, nullptr);
+  }
+
+  if (result != XR_SUCCESS) {
+    LOG(ERROR) << "Unable to query trackables with error: "
+               << XrEnumStr(result);
+    return {};
+  }
+
+  if (trackableCountOutput == 0) {
+    return {};
+  }
+  all_image_trackables_.resize(trackableCountOutput);
+
+  // Fetch the actual trackable handles in the appropriately resized array.
+  {
+    absl::MutexLock lock(mutex_);
+    result = get_all_trackables_(image_trackable_tracker_, trackableCountOutput,
+                                 &trackableCountOutput,
+                                 all_image_trackables_.data());
+  }
+
+  if (result != XR_SUCCESS) {
+    LOG(ERROR) << "Unable to get trackables with error: " << XrEnumStr(result);
+    return {};
+  }
+  return all_image_trackables_;
+}
+
+bool OpenXrManager::GetAugmentedImageState(
+    XrTrackableANDROID trackable_id, XrReferenceSpaceType reference_space_type,
+    XrTime time, XrTrackableImageANDROID& out_image) {
+  XrSpace base_space = GetSpaceInReferenceSpace(reference_space_type);
+  if (base_space == XR_NULL_HANDLE) {
+    return false;
+  }
+  {
+    absl::MutexLock lock(mutex_);
+    if (image_trackable_tracker_ == XR_NULL_HANDLE) {
+      return false;
+    }
+  }
+
+  XrTrackableGetInfoANDROID trackable_get_info = {
+      .type = XR_TYPE_TRACKABLE_GET_INFO_ANDROID,
+      .next = nullptr,
+      .trackable = trackable_id,
+      .baseSpace = base_space,
+      .time = time,
+  };
+
+  XrResult result;
+  {
+    absl::ReaderMutexLock lock(mutex_);
+    result = get_trackable_image_(image_trackable_tracker_, &trackable_get_info,
+                                  &out_image);
+  }
+
+  if (XR_FAILED(result)) {
+    LOG(ERROR) << "Failed to get image with error: " << XrEnumStr(result);
+    return false;
+  }
+
+  return true;
+}
+
+bool OpenXrManager::SupportsPhysicalSizeEstimation() {
+  absl::MutexLock lock(mutex_);
+  const XrResult result = FetchSystemImageTrackingPropertiesIfNecessary();
+  if (XR_FAILED(result)) {
+    LOG(ERROR) << "Could not determine "
+               << "if physical size estimation is supported.";
+    return false;
+  }
+  return (image_tracking_properties_.supportsPhysicalSizeEstimation == XR_TRUE);
+}
+
+uint32_t OpenXrManager::GetMaxLoadedImageCount() {
+  absl::MutexLock lock(mutex_);
+  const XrResult result = FetchSystemImageTrackingPropertiesIfNecessary();
+  if (XR_FAILED(result)) {
+    LOG(ERROR) << "Could not determine max loaded image count.";
+    return 0;
+  }
+  return image_tracking_properties_.maxLoadedImageCount;
 }
 
 OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchor(
@@ -2497,37 +2865,37 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateGeospatialAnchor(
     return CreateAnchorResult::kErrorGeospatialTrackerNotRunning;
   }
 
-    XrResult result;
-    XrSpatialEntityIdEXT anchor_entity_id;
+  XrResult result;
+  XrSpatialEntityIdEXT anchor_entity_id;
 
-    {
-      absl::MutexLock lock(mutex_);
-      XrGeospatialAnchorCreateInfoANDROID create_info = {
-          .type = XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROID,
-          .next = nullptr,
-          .geospatialTracker = geospatial_tracker_,
+  {
+    absl::MutexLock lock(mutex_);
+    XrGeospatialAnchorCreateInfoANDROID create_info = {
+        .type = XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROID,
+        .next = nullptr,
+        .geospatialTracker = geospatial_tracker_,
 
-          .geospatialPose =
-              {
-                  .eastUpSouthOrientation = east_up_south_quaternion,
-                  .latitude = latitude,
-                  .longitude = longitude,
-                  .altitude = altitude,
-              },
-      };
+        .geospatialPose =
+            {
+                .eastUpSouthOrientation = east_up_south_quaternion,
+                .latitude = latitude,
+                .longitude = longitude,
+                .altitude = altitude,
+            },
+    };
 
-      result = create_geospatial_anchor_(geospatial_anchors_spatial_context_,
-                                         &create_info, &anchor_entity_id);
-    }
+    result = create_geospatial_anchor_(geospatial_anchors_spatial_context_,
+                                       &create_info, &anchor_entity_id);
+  }
 
-    if (XR_FAILED(result)) {
-      LOG(ERROR) << "Failed to create geospatial anchor with: "
-                 << XrEnumStr(result);
-      // TODO: Handle more specific error translation.
-      return MapAnchorCreateResult(result);
-    }
+  if (XR_FAILED(result)) {
+    LOG(ERROR) << "Failed to create geospatial anchor with: "
+               << XrEnumStr(result);
+    // TODO: Handle more specific error translation.
+    return MapAnchorCreateResult(result);
+  }
 
-    return CreateAnchorSpaceFromEntityId(anchor_entity_id, out_anchor_space);
+  return CreateAnchorSpaceFromEntityId(anchor_entity_id, out_anchor_space);
 }
 
 OpenXrManager::CreateAnchorResult OpenXrManager::CreateSurfaceAnchorAsync(
@@ -2879,6 +3247,65 @@ void OpenXrManager::PollOpenXR() {
         LOG(INFO) << "Received events lost event";
         break;
       }
+      case XR_TYPE_EVENT_DATA_IMAGE_TRACKING_LOST_ANDROID: {
+        absl::MutexLock lock(mutex_);
+        const XrEventDataImageTrackingLostANDROID image_tracking_lost_event =
+            *reinterpret_cast<const XrEventDataImageTrackingLostANDROID*>(
+                &event);
+        LOG(INFO) << "Received image tracking lost event, "
+                  << "image tracking will end at: "
+                  << image_tracking_lost_event.time
+                  << " and will not resume unless reconfigured.";
+
+        // Destroy the tracker.
+        if (image_trackable_tracker_ != XR_NULL_HANDLE) {
+          XrResult result =
+              destroy_trackable_tracker_(image_trackable_tracker_);
+          image_trackable_tracker_ = XR_NULL_HANDLE;
+          if (XR_FAILED(result)) {
+            LOG(ERROR) << "Failed to destroy trackable tracker with: "
+                       << XrEnumStr(result);
+          }
+        }
+
+        // Destroy any databases which exist
+        if (image_database_handle_ != XR_NULL_HANDLE) {
+          XrResult result =
+              destroy_trackable_image_database_(image_database_handle_);
+          // Check if we need to invalidate the rollback database handle as
+          // well.
+          if (image_database_handle_ == rollback_database_handle_) {
+            rollback_database_handle_ = XR_NULL_HANDLE;
+          }
+          image_database_handle_ = XR_NULL_HANDLE;
+          if (XR_FAILED(result)) {
+            LOG(ERROR) << "Failed to destroy image database with: "
+                       << XrEnumStr(result);
+          }
+        }
+
+        if (rollback_database_handle_ != XR_NULL_HANDLE) {
+          XrResult result =
+              destroy_trackable_image_database_(rollback_database_handle_);
+          rollback_database_handle_ = XR_NULL_HANDLE;
+          if (XR_FAILED(result)) {
+            LOG(ERROR) << "Failed to destroy rollback image database with: "
+                       << XrEnumStr(result);
+          }
+        }
+
+        // Destroy any databases which are pending creation
+        if (image_database_creation_future_ != XR_NULL_FUTURE_EXT) {
+          XrResult result =
+              CancelPendingFuture(image_database_creation_future_);
+          if (XR_FAILED(result)) {
+            LOG(ERROR) << "Failed to cancel "
+                       << "image database creation future with: "
+                       << XrEnumStr(result);
+          }
+        }
+        break;
+      }
       default: {
         LOG(INFO) << "Received unexpected event of type: " << event.type;
         break;
@@ -2934,11 +3361,51 @@ void OpenXrManager::CancelPendingFutures() {
       LOG(ERROR) << "Failed to cancel future with error: "
                  << XrEnumStr(cancel_result);
     }
-    if (callback_info.on_cancel) {
+    // Explicitly clear the image database creation future to avoid
+    // deadlocking by its "on_cancel" callback since it holds a lock on
+    // the mutex (and this method can only be called when holding it).
+    if (future == image_database_creation_future_) {
+      image_database_creation_future_ = XR_NULL_FUTURE_EXT;
+    } else if (callback_info.on_cancel) {
       callback_info.on_cancel();
     }
   }
   pending_futures_.clear();
+}
+
+XrResult OpenXrManager::CancelPendingFuture(
+    const XrFutureEXT& future_to_cancel) {
+  auto it = pending_futures_.begin();
+  while (it != pending_futures_.end()) {
+    const auto& [future, callback_info] = *it;
+    if (future_to_cancel != future) {
+      ++it;
+      continue;
+    }
+    XrFutureCancelInfoEXT cancel_info = {
+        .type = XR_TYPE_FUTURE_CANCEL_INFO_EXT,
+        .future = future,
+    };
+    XrResult cancel_result = cancel_future_(instance_, &cancel_info);
+    if (XR_FAILED(cancel_result)) {
+      LOG(ERROR) << "Failed to cancel future with error: "
+                 << XrEnumStr(cancel_result);
+    }
+    // Explicitly clear the image database creation future to avoid
+    // deadlocking by its "on_cancel" callback since it holds a lock on
+    // the mutex (and this method can only be called when holding it).
+    if (future == image_database_creation_future_) {
+      image_database_creation_future_ = XR_NULL_FUTURE_EXT;
+    } else if (callback_info.on_cancel) {
+      callback_info.on_cancel();
+    }
+    pending_futures_.erase(it);
+
+    return cancel_result;
+  }
+
+  // Assume that if the future is not found, it is cancelled already.
+  return XR_SUCCESS;
 }
 
 void OpenXrManager::JoinPollingThread() {
@@ -2946,6 +3413,158 @@ void OpenXrManager::JoinPollingThread() {
     polling_thread_->join();
     polling_thread_.reset();
   }
+}
+
+XrResult OpenXrManager::ValidateAugmentedImageDatabaseCreation(
+    const AugmentedImageDatabase& new_image_database) const {
+  const size_t size_entries = new_image_database.entries.size();
+  if (size_entries >
+      static_cast<size_t>(image_tracking_properties_.maxLoadedImageCount)) {
+    LOG(ERROR) << "Attempting to create image database of size: "
+               << size_entries << " but max loaded image count is: "
+               << image_tracking_properties_.maxLoadedImageCount;
+
+    return XrResult::XR_ERROR_LIMIT_REACHED;
+  }
+  if (image_database_handle_ != XR_NULL_HANDLE) {
+    LOG(ERROR) << "Attempting to create image database, but one already exists";
+    return XrResult::XR_ERROR_RUNTIME_FAILURE;
+  }
+
+  const bool properties_supports_physical_width_estimation =
+      image_tracking_properties_.supportsPhysicalSizeEstimation;
+  bool unsupported_physical_width = false;
+  bool invalid_buffers = false;
+  bool invalid_tracking_mode = false;
+  for (size_t i = 0; i < size_entries; ++i) {
+    if (new_image_database.entries[i].buffer == nullptr) {
+      LOG(ERROR) << "Attempting to create image database entry "
+                 << "with no buffer at index: " << i;
+      invalid_buffers = true;
+    }
+
+    if (!properties_supports_physical_width_estimation) {
+      if (new_image_database.entries[i].physicalWidth <= 0) {
+        LOG(ERROR) << "Physical size estimation is "
+                   << "not supported for image tracking. "
+                   << "Physical width of: "
+                   << new_image_database.entries[i].physicalWidth
+                   << " was give for entry at index: " << i;
+        unsupported_physical_width = true;
+      }
+    }
+
+    if (new_image_database.entries[i].trackingMode >=
+        XrTrackableImageTrackingModeANDROID::
+            XR_TRACKABLE_IMAGE_TRACKING_MODE_MAX_ENUM_ANDROID) {
+      LOG(ERROR) << "Invalid image tracking mode: "
+                 << new_image_database.entries[i].trackingMode
+                 << " for entry at index: " << i;
+      invalid_tracking_mode = true;
+    }
+  }
+  if (invalid_buffers || unsupported_physical_width || invalid_tracking_mode) {
+    return XrResult::XR_ERROR_VALIDATION_FAILURE;
+  }
+
+  return XrResult::XR_SUCCESS;
+}
+
+XrResult OpenXrManager::CreateAugmentedImageDatabase(
+    AugmentedImageDatabase& new_image_database) {
+  XR_RETURN_RESULT_IF_FAILED(FetchSystemImageTrackingPropertiesIfNecessary());
+
+  for (size_t i = 0; i < new_image_database.entries.size(); ++i) {
+    new_image_database.entries[i].buffer = new_image_database.buffers[i].get();
+  }
+
+  const XrResult validate_result =
+      ValidateAugmentedImageDatabaseCreation(new_image_database);
+  if (validate_result != XrResult::XR_SUCCESS) {
+    return validate_result;
+  }
+
+  // If already creating an image database, cancel it.
+  if (image_database_creation_future_ != XR_NULL_FUTURE_EXT) {
+    const XrResult cancel_result =
+        CancelPendingFuture(image_database_creation_future_);
+    XR_RETURN_RESULT_IF_FAILED(cancel_result);
+  }
+
+  XrTrackableImageDatabaseCreateInfoANDROID create_info = {
+      .type =
+          XrStructureType::XR_TYPE_TRACKABLE_IMAGE_DATABASE_CREATE_INFO_ANDROID,
+      .next = nullptr,
+      .entryCount = static_cast<uint32_t>(new_image_database.entries.size()),
+      .entries = new_image_database.entries.data()};
+
+  const XrResult xr_result = create_trackable_image_database_async_(
+      session_, &create_info, &image_database_creation_future_);
+  if (XR_FAILED(xr_result)) {
+    LOG(ERROR) << "Failed to create trackable image database async with: "
+               << XrEnumStr(xr_result);
+    return xr_result;
+  }
+
+  pending_futures_.push_back(
+      {image_database_creation_future_,
+       {/*on_complete =*/[this](XrFutureEXT future) {
+          absl::MutexLock lock(mutex_);
+          XrCreateTrackableImageDatabaseCompletionANDROID
+              image_database_completion{
+                  .type =
+                      XR_TYPE_CREATE_TRACKABLE_IMAGE_DATABASE_COMPLETION_ANDROID,
+                  .next = nullptr};
+          XrResult result = create_trackable_image_database_complete_(
+              session_, image_database_creation_future_,
+              &image_database_completion);
+          if (XR_FAILED(result)) {
+            LOG(ERROR)
+                << "Failed to complete creating trackable image database with: "
+                << XrEnumStr(result);
+            return;
+          }
+
+          result = image_database_completion.futureResult;
+          if (XR_FAILED(result)) {
+            LOG(ERROR) << "Failed to create trackable image database with: "
+                       << XrEnumStr(result);
+            return;
+          }
+
+          image_database_handle_ = image_database_completion.database;
+          // Future has been handled correctly
+          // and for sanity ensure the future handle is unassigned.
+          image_database_creation_future_ = XR_NULL_FUTURE_EXT;
+          augmented_image_database_.entries.clear();
+          augmented_image_database_.buffers.clear();
+
+          if (image_trackable_tracker_ == XR_NULL_HANDLE) {
+            result = MaybeCreateAugmentedImageTracker();
+            if (XR_FAILED(result)) {
+              LOG(ERROR)
+                  << "Failed to create image tracker when database completed."
+                  << XrEnumStr(result);
+              return;
+            }
+          } else {
+            result = add_trackable_image_database_(image_trackable_tracker_,
+                                                   image_database_handle_);
+            if (XR_FAILED(result)) {
+              LOG(ERROR)
+                  << "Failed to add image database to image tracker with: "
+                  << XrEnumStr(result);
+              return;
+            }
+          }
+        },
+        /*on_cancel =*/
+        [this] {
+          absl::MutexLock lock(mutex_);
+          image_database_creation_future_ = XR_NULL_FUTURE_EXT;
+        }}});
+
+  return XrResult::XR_SUCCESS;
 }
 
 XrSession OpenXrManager::GetXrSession() {

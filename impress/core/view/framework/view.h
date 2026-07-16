@@ -359,8 +359,8 @@ class View : public BaseView {
   // Called after the frame is complete.
   virtual void OnPostFrame() {}
 
-  ViewConfig GetConfig() const override { return view_config_; }
-  void SetConfig(ViewConfig view_config) { view_config_ = view_config; }
+  const ViewConfig& GetConfig() const override { return view_config_; }
+  void SetConfig(const ViewConfig& view_config) { view_config_ = view_config; }
 
  private:
   using RenderResultFlags = window::FilamentHost::RenderResultFlags;

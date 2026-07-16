@@ -90,10 +90,9 @@ JNI_METHOD_AOSP(void, nativeSetExpectedReleaseGltfAsset)
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedInstanceGltfModel)
-(JNIEnv* env, jclass /*clazz*/, jlong token, jboolean enable_collider) {
+(JNIEnv* env, jclass /*clazz*/, jlong token) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.instance_gltf_model.expected_token = token;
-  context.instance_gltf_model.expected_collider = enable_collider;
 }
 
 JNI_METHOD_AOSP(void, nativeSetInstanceGltfModelSuccess)

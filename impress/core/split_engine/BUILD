@@ -22,6 +22,7 @@ load(
     "IMP_FLATBUFFER_INCLUDE_PATHS",
     "IMP_FLATC_ARGS",
     "if_android",
+    "if_dev_runtime",
     "if_non_android",
     "imp_copts",
     "imp_defines",
@@ -85,13 +86,8 @@ cc_library(
         ":split_engine_shared",
         "//core/async:background_scheduler",
         "//core/common:owned_ptr",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/base:no_destructor",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/synchronization",
         "@flatbuffers",
     ],
     alwayslink = 1,
@@ -279,8 +275,11 @@ cc_library(
     copts = imp_copts(),
     defines = imp_defines(),
     deps = [
+        "//core:config",
         "//core/ncsb",
-    ],
+    ] + if_dev_runtime([
+        "@dear_imgui",
+    ]),
     alwayslink = 1,
 )
 
@@ -325,6 +324,48 @@ cc_library(
         "//core/render/android:definitions",
         "//core/render/android:platform_android_external_texture_surface",
     ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_serializer_transport",
+    hdrs = ["split_engine_serializer_transport.h"],
+    copts = imp_copts(),
+    deps = [
+        ":split_engine_shared",
+        "//core/async:background_scheduler",
+        "//core/common:invocable",
+        "//core/common:owned_ptr",
+        "//core/common:pass_key",
+        "//core/split_engine/android:split_engine_android_bridge",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@flatbuffers",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_serializer_transport_legacy_impl",
+    srcs = ["split_engine_serializer_transport_legacy_impl.cc"],
+    hdrs = ["split_engine_serializer_transport_legacy_impl.h"],
+    copts = imp_copts(),
+    deps = [
+        ":split_engine_bridge_sender",
+        ":split_engine_serializer_transport",
+        ":split_engine_shared",
+        "//core/common:invocable",
+        "//core/common:owned_ptr",
+        "//core/common:pass_key",
+        "//core/split_engine/android:split_engine_android_bridge",
+        "@com_google_absl//absl/base:nullability",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@flatbuffers",
+        "@third_party//split_engine:fbs",
+    ],
     alwayslink = 1,
 )
 
@@ -382,8 +423,18 @@ cc_library(
 
 cc_library(
     name = "split_engine_serializer_impl",
-    srcs = ["split_engine_serializer_impl.cc"],
-    hdrs = ["split_engine_serializer_impl.h"],
+    srcs = [
+        "split_engine_renderable_builder.cc",
+        "split_engine_serializer_batch_manager.cc",
+        "split_engine_serializer_data_types.cc",
+        "split_engine_serializer_impl.cc",
+    ],
+    hdrs = [
+        "split_engine_renderable_builder.h",
+        "split_engine_serializer_batch_manager.h",
+        "split_engine_serializer_data_types.h",
+        "split_engine_serializer_impl.h",
+    ],
     copts = imp_copts(),
     defines = imp_defines(),
     linkstatic = True,
@@ -396,6 +447,7 @@ cc_library(
         ":split_engine_mesh_builder",
         ":split_engine_mesh_serializer",
         ":split_engine_serializer",
+        ":split_engine_serializer_transport",
         ":split_engine_shared",
         ":split_engine_texture_builder",
         ":split_engine_texture_serializer",
@@ -433,6 +485,7 @@ cc_library(
         "//core/render:base_renderable_manager",
         "//core/render:base_texture_builder",
         "//core/render_passes:texture_pipeline_renderer",
+        "//core/render_passes:texture_pipeline_renderer_projection_quad",
         "//core/render_passes:texture_pipeline_renderer_proto_cc_imp",
         "//core/split_engine/android:split_engine_android_bridge",
         "//core/split_engine/materials:builtin_texture_parameter_creator",
@@ -450,6 +503,8 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
@@ -625,7 +680,6 @@ cc_library(
     linkstatic = 1,
     deps = [
         "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
@@ -647,6 +701,7 @@ cc_library(
         ":skinning_helpers",
         ":split_engine_filament_resource_ptrs",
         ":split_engine_shared",
+        "//core:config",
         "//core/common:small_source_location",
         "//core/materials",
         "//core/math",
@@ -657,7 +712,10 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@third_party//filament/filament:filament_hdrs",
-    ],
+    ] + if_dev_runtime([
+        "@dear_imgui",
+        "//core/render",
+    ]),
     alwayslink = 1,
 )
 
@@ -740,12 +798,14 @@ cc_library(
         ":split_engine_renderer_impl",
         ":split_engine_serializer",
         ":split_engine_serializer_impl",
+        ":split_engine_serializer_transport_legacy_impl",
         ":split_engine_shared",
         ":split_engine_test_bridge",
         "//:testing_api",
         "//core/async:executor",
         "//core/common:enum_flags",
         "//core/common:invocable",
+        "//core/common:owned_ptr",
         "//core/lighting:environment_light",
         "//core/material_library:generic_materials",
         "//core/material_library:generic_materials_always_embedded",
@@ -842,6 +902,7 @@ cc_library(
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:gtest",
@@ -947,6 +1008,7 @@ cc_library(
     deps = [
         ":renderer_policy_handler",
         ":split_engine_filament_resource_ptrs",
+        ":split_engine_renderable_info",
         ":split_engine_shared",
         ":user_id_holder",
         "//core/assets",

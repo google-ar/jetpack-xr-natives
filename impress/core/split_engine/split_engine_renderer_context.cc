@@ -24,6 +24,7 @@
 #include "core/math/mat.h"
 #include "core/ncsb/node.h"
 #include "core/split_engine/shared/split_engine_defines.h"
+#include "core/split_engine/split_engine_renderable_info.h"
 #include "core/split_engine/user_id_holder.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
@@ -95,13 +96,22 @@ AppContext::AppContext(BaseView& view,
       bridge_id(bridge_id) {}
 
 AppContext::~AppContext() {
+  // Remove all SplitEngineRenderableInfo from the nodes in the entity map. This
+  // will release the borrowed material instances.
+  ComponentManager& component_manager = view.GetComponentManager();
   for (const auto& [entity_id, node] : entity_map) {
-    view.DestroyNode(node);
+    component_manager.Remove<SplitEngineRenderableInfo>(node.GetEntity());
   }
 
   // Material instances are type MaterialPtr, which have auto-delete
   // semantics.
   material_instances.clear();
+
+  // Delete the nodes and their remaining components which may own textures that
+  // were borrowed by the material instances.
+  for (const auto& [entity_id, node] : entity_map) {
+    view.DestroyNode(node);
+  }
 
   // Materials are type OwnedFilamentMaterialPtr, which have auto-delete
   // semantics.

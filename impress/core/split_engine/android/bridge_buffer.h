@@ -43,6 +43,12 @@ class BridgeBuffer {
   ~BridgeBuffer();
 
   void* Data() { return mmapped_ptr_; }
+
+  template <typename T>
+  T* DataAs() {
+    return reinterpret_cast<T*>(mmapped_ptr_);
+  }
+
   template <typename T>
   const T* DataAs() const {
     return reinterpret_cast<const T*>(mmapped_ptr_);

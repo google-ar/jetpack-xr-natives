@@ -31,6 +31,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import org.java_websocket.WebSocket;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -107,7 +108,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
   }
 
   @Override
-  public void onConnected(org.java_websocket.WebSocket conn) {
+  public void onConnected(WebSocket conn) {
     if (config.length() > 0) {
       conn.send(config.toString());
       requestKeyFrame();
@@ -115,7 +116,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
   }
 
   @Override
-  public void onDisconnected() {}
+  public void onDisconnected(WebSocket conn) {}
 
   @Override
   public void onStringMessage(String message) {

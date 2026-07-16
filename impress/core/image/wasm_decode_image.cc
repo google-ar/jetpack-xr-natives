@@ -40,6 +40,7 @@
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "core/async/background_delete.h"
+#include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
 #include "core/image/image_contents.h"
@@ -117,6 +118,14 @@ class WasmDecodeImageManager {
   void OnDecodeImage(uint future_id, intptr_t image, int width, int height);
   void OnDecodeTexture(uint future_id, GLuint texture, int width, int height);
   void OnDecodeError(uint future_id, int decodeTarget, emscripten::val error);
+
+  // TODO: Remove this when removing the
+  // enable_label_prep_profile_logging flag.
+  void SetLabelPrepProfileLogging(bool enabled) {
+    MAIN_THREAD_EM_ASM(
+        { Module['wasmDecodeImageManager'].setLabelPrepProfileLogging($0); },
+        enabled);
+  }
 
  private:
   // LINT.IfChange
@@ -275,6 +284,10 @@ EMSCRIPTEN_BINDINGS(decode_image_bindings) {
 };
 }  // namespace
 
+void SetLabelPrepProfileLogging(bool enabled) {
+  return GetDecodeImageManager()->SetLabelPrepProfileLogging(enabled);
+}
+
 Future<std::unique_ptr<ImageContents>> WasmDecodeImage(
     absl::string_view name, resources::Resource resource) {
   return GetDecodeImageManager()->DecodeImage(name, resource);
@@ -283,6 +296,10 @@ Future<std::unique_ptr<ImageContents>> WasmDecodeImage(
 Future<WasmTextureContents> WasmDecodeImageToTexture(
     absl::string_view name, resources::Resource resource,
     filament::backend::TextureFormat format) {
+  if (!Executor::IsOnForegroundExecutor()) {
+    IMP_LOG(imp::FATAL)
+        << "WasmDecodeImageToTexture must be called on the foreground thread.";
+  }
   return GetDecodeImageManager()->DecodeImageToTexture(name, resource, format);
 }
 

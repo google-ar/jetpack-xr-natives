@@ -36,7 +36,7 @@ fragment {
     void material(inout MaterialInputs material) {
         prepareMaterial(material);
 
-        vec4 color = texture2D(materialParams_cameraTexture, getUV0());
+        vec4 color = texture(materialParams_cameraTexture, getUV0());
         material.baseColor.rgb = inverseTonemapSRGB(color.rgb);
     }
 }

@@ -32,11 +32,26 @@ struct Rect {
   // Computes the largest coordinates corner of the rectangle.
   constexpr float2 GetMax() const { return center + half_extent; }
 
+  // Returns true if the given point is inside the rectangle.
+  constexpr inline bool Contains(const float2& point) const {
+    return point.x >= GetMin().x && point.x <= GetMax().x &&
+           point.y >= GetMin().y && point.y <= GetMax().y;
+  }
+
+  // Returns the ratio of the rectangle's width to its height.
+  constexpr inline float GetAspect() const {
+    return half_extent.x / half_extent.y;
+  }
+
   // Center of the 2D rectangle.
   float2 center;
 
   // Half extent from the center both axes.
   float2 half_extent;
+
+  friend bool operator==(const Rect& a, const Rect& b) {
+    return a.center == b.center && a.half_extent == b.half_extent;
+  }
 
   template <typename Sink>
   friend void AbslStringify(Sink& sink, const Rect& rect) {

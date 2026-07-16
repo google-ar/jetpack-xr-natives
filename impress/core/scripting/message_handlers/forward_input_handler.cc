@@ -30,6 +30,7 @@
 #include "core/input/pointer_event.proto.imp.h"
 #include "core/input/pointer_event_processor.h"
 #include "core/input/wheel_event.proto.imp.h"
+#include "core/math/vec.h"
 #include "core/scripting/web/web_key_codes.h"
 
 namespace imp::scripting {
@@ -39,6 +40,14 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
   if (message.pointers.empty()) {
     return Future<absl::Status>(absl::InvalidArgumentError(kNoPointersError));
   }
+  // If view size is 0 (e.g. if the view has not yet been initialized with a
+  // valid size or is currently hidden/minimized), input cannot be processed
+  // meaningfully, so ignore it.
+  const uint2 view_size = view_.GetSize();
+  if (view_size.x == 0 || view_size.y == 0) {
+    return Future<absl::Status>(absl::OkStatus());
+  }
+
   auto& input_manager = view_.GetInputManager();
   std::vector<Pointer::Id> ids(message.pointers.size());
   std::vector<float2> points(message.pointers.size());
@@ -48,8 +57,18 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
     points[i].x = pointer.point.x;
     points[i].y = pointer.point.y;
   }
+
+  // Map Proto enum to Native enum to account for mismatches (e.g. WHEEL).
+  // Proto: CANCEL=0, DOWN=1, UP=2, MOVE=3, WHEEL=4
+  // Native: kCancel=0, kDown=1, kUp=2, kMove=3, kHover=4, kWheel=5
+  PointerEventType native_type = static_cast<PointerEventType>(message.type);
+  if (message.type == PointerEventTypeMessage::WHEEL) {
+    native_type = PointerEventType::kWheel;
+  }
+
   if (auto status = input_manager.ProcessPointerInput(
-          message.type, ids, points, absl::Milliseconds(message.elapsed_time));
+          static_cast<uint8_t>(native_type), ids, points,
+          absl::Milliseconds(message.elapsed_time));
       !status.ok()) {
     return Future<absl::Status>(absl::InvalidArgumentError(kProcessError));
   }
@@ -81,6 +100,14 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
 
 Future<absl::Status> ForwardInputHandler::HandleMessage(
     const WheelEventMessage& message) {
+  // If view size is 0 (e.g. if the view has not yet been initialized with a
+  // valid size or is currently hidden/minimized), input cannot be processed
+  // meaningfully, so ignore it.
+  const uint2 view_size = view_.GetSize();
+  if (view_size.x == 0 || view_size.y == 0) {
+    return Future<absl::Status>(absl::OkStatus());
+  }
+
   auto& input_manager = view_.GetInputManager();
   if (auto status = input_manager.ProcessWheelInput(
           message.delta, message.point,

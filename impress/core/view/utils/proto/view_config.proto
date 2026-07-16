@@ -149,6 +149,33 @@ message ExperimentalFeatureFlags {
   // WASM that are logged in the performance bootstrap flow in tactile.
   // go/tactile-safari-label-prep-instrumentation.
   bool enable_label_prep_profile_logging = 12 [default = false];
+
+  // If true, we will add a check in CustomMaterial's destructor to ensure
+  // that it is destroyed on the foreground executor.
+  // OWNERS: doriswu
+  // BUG: b/489257213
+  // PLATFORMS: AUTOMOTIVE
+  // ACTION: Clean up by 2026-05-31
+  bool enable_filament_material_instance_destruction_check = 13
+      [default = false];
+
+  // If true, we will call getImageData immediately in the WASM GlyphAtlas when
+  // performing drawing operations, rather than waiting to the end of the list
+  // of drawing operations.
+  // OWNERS: faaland
+  // BUG: b/495503496
+  // PLATFORMS: WASM
+  // ACTION: Clean up by 2026-06-10
+  bool enable_immediate_get_image_data = 14 [default = false];
+
+  // Guards against using the TexturePipelineRenderer before rendering has
+  // started.
+  // OWNERS: malikcoates
+  // BUG: b/466395468
+  // PLATFORMS: ANDROID
+  // ACTION: Clean up by 2026-07-01
+  bool enable_texture_pipeline_renderer_first_frame_fence = 15
+      [default = false];
 }
 
 message ViewConfig {

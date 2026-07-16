@@ -28,6 +28,8 @@ enum class PanelId {
   kSceneWindow,
   // The Details panel contains the node details and component editor.
   kDetailsWindow,
+  // The Viewport panel contains the rendered scene.
+  kViewport,
   // The left panel contains the widgets that are pinned to the left side of the
   // screen, along with the scene window.
   kLeftPanel,
@@ -51,6 +53,8 @@ inline std::string PanelIdToString(PanelId panel_id) {
       return "Scene";
     case PanelId::kDetailsWindow:
       return "Details";
+    case PanelId::kViewport:
+      return "Viewport";
     case PanelId::kLeftPanel:
       return "Left Panel";
     case PanelId::kRightPanel:

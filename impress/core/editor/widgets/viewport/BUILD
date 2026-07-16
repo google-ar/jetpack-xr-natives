@@ -42,14 +42,26 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
+        ":viewport_helpers",
         ":viewport_render_target",
+        "//core/editor",
         "//core/editor:widget",
+        "//core/geometry/shapes",
         "//core/math",
         "//core/view:base_view",
-        "//core/view/utils:device",
-        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/strings:string_view",
         "@dear_imgui",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "viewport_helpers",
+    hdrs = ["viewport_helpers.h"],
+    deps = [
+        "//core/math",
+        "//core/ncsb",
+        "//core/view/utils:device",
     ],
     alwayslink = 1,
 )

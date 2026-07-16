@@ -260,7 +260,8 @@ VulkanDriver::VulkanDriver(VulkanPlatform* platform, VulkanContext& context,
       mPipelineCache(*this, mPlatform->getDevice(), mContext),
       mStagePool(mAllocator, &mResourceManager, &mCommands, &mContext.getPhysicalDeviceLimits()),
       mBufferCache(mContext, mResourceManager, mAllocator),
-      mFramebufferCache(mPlatform->getDevice()),
+      mFramebufferCache(mPlatform->getDevice(),
+              mPlatform->getCustomization().timeBeforeEvictionFbo),
       mYcbcrConversionCache(mPlatform->getDevice()),
       mSamplerCache(mPlatform->getDevice()),
       mBlitter(mPlatform->getPhysicalDevice(), &mCommands),
@@ -1547,6 +1548,16 @@ bool VulkanDriver::isTextureFormatMipmappable(TextureFormat format) {
     }
 }
 
+bool VulkanDriver::isTextureFormatFilterable(TextureFormat format) {
+    VkFormat vkformat = fvkutils::getVkFormat(format);
+    if (vkformat == VK_FORMAT_UNDEFINED) {
+        return false;
+    }
+    VkFormatProperties info;
+    vkGetPhysicalDeviceFormatProperties(mPlatform->getPhysicalDevice(), vkformat, &info);
+    return (info.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
+}
+
 bool VulkanDriver::isRenderTargetFormatSupported(TextureFormat format) {
     VkFormat vkformat = fvkutils::getVkFormat(format);
     if (vkformat == VK_FORMAT_UNDEFINED) {
@@ -1989,7 +2000,7 @@ void VulkanDriver::beginRenderPass(Handle<HwRenderTarget> rth, const RenderPassP
     rt->emitBarriersBeginRenderPass(*commandBuffer);
 
     fvkmemory::resource_ptr<VulkanFramebuffer> vkfb =
-            mFramebufferCache.getFramebuffer(fbkey, &mResourceManager);
+            mFramebufferCache.getFramebuffer(fbkey, &mResourceManager, rt);
 
 // Assign a label to the framebuffer for debugging purposes.
 #if FVK_ENABLED(FVK_DEBUG_GROUP_MARKERS | FVK_DEBUG_DEBUG_UTILS)

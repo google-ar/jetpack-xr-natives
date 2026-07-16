@@ -66,10 +66,13 @@ using android::ImageReader;
 absl::StatusOr<std::unique_ptr<ImageReaderAndroidExternalTextureSurface>>
 ImageReaderAndroidExternalTextureSurface::Create(
     BaseView& view, ContentSecurityLevel security_level,
-    absl::Span<const SurfaceViewType> view_types) {
+    absl::Span<const SurfaceViewType> view_types, int2 initial_size,
+    mat4f additional_transform, ADataSpace default_data_space) {
   std::unique_ptr<ImageReaderAndroidExternalTextureSurface>
-      external_texture_surface = absl::WrapUnique(
-          new ImageReaderAndroidExternalTextureSurface(view, security_level));
+      external_texture_surface =
+          absl::WrapUnique(new ImageReaderAndroidExternalTextureSurface(
+              view, security_level, initial_size, additional_transform,
+              default_data_space));
 
   MP_RETURN_IF_ERROR(external_texture_surface->Initialize(view_types));
   return external_texture_surface;
@@ -77,8 +80,13 @@ ImageReaderAndroidExternalTextureSurface::Create(
 
 ImageReaderAndroidExternalTextureSurface::
     ImageReaderAndroidExternalTextureSurface(
-        BaseView& view, ContentSecurityLevel security_level)
-    : view_(view), security_level_(security_level) {
+        BaseView& view, ContentSecurityLevel security_level, int2 initial_size,
+        mat4f additional_transform, ADataSpace default_data_space)
+    : view_(view),
+      security_level_(security_level),
+      latest_size_(initial_size),
+      additional_transform_(additional_transform),
+      default_data_space_(default_data_space) {
   ImageReaderAndroidExternalTextureSurfaceUpdater& updater =
       view_.GetRegistry()
           .GetOrCreate<ImageReaderAndroidExternalTextureSurfaceUpdater>(view_);
@@ -100,11 +108,10 @@ absl::Status ImageReaderAndroidExternalTextureSurface::Initialize(
   if (security_level_ == ContentSecurityLevel::kProtected) {
     usage_flags |= AHARDWAREBUFFER_USAGE_PROTECTED_CONTENT;
   }
-  MP_ASSIGN_OR_RETURN(
-      image_reader_,
-      ImageReader::Create(view_, 1, 1, AIMAGE_FORMAT_PRIVATE, usage_flags,
-                          imp::kImageReaderBufferSize));
-
+  MP_ASSIGN_OR_RETURN(image_reader_,
+                   ImageReader::Create(view_, latest_size_.x, latest_size_.y,
+                                       AIMAGE_FORMAT_PRIVATE, usage_flags,
+                                       imp::kImageReaderBufferSize));
   MP_RETURN_IF_ERROR(image_reader_->SetImageListenerCallback(
       this, ImageReaderAndroidExternalTextureSurface::OnNewImageAvailable));
 
@@ -114,8 +121,8 @@ absl::Status ImageReaderAndroidExternalTextureSurface::Initialize(
                                  image_reader_->GetSurface(), security_level_));
 
   for (SurfaceViewType surface_view_type : view_types) {
-    if (OwnedImageReaderTexturePtr texture =
-            ImageReaderTexture::Create(view_, {1, 1}, security_level_);
+    if (OwnedImageReaderTexturePtr texture = ImageReaderTexture::Create(
+            view_, {latest_size_.x, latest_size_.y}, security_level_);
         texture) {
       external_textures_.insert({surface_view_type, std::move(texture)});
     } else {
@@ -200,14 +207,31 @@ ImageReaderAndroidExternalTextureSurface::AcquireAndProcessLatestImage() {
   // Get the data space of the latest image.
   absl::StatusOr<ADataSpace> data_space = (*latest_image)->GetBufferDataSpace();
   if (!data_space.ok()) {
-    IMP_LOG(imp::ERROR) << "Failed to get data space from the latest image: "
-               << data_space.status().ToString() << ". Defaulting to SRGB.";
-    // Default to SRGB if we cannot get the data space.
-    data_space = ADATASPACE_SRGB;
+    if (!absl::IsUnavailable(data_space.status())) {
+      IMP_LOG(imp::ERROR) << "Failed to get data space from the latest image: "
+                 << data_space.status().ToString()
+                 << ". Using default data space instead: "
+                 << default_data_space_;
+    }
+    // Use the provided default if we cannot get the data space.
+    data_space = default_data_space_;
+  }
+
+  if (*data_space != last_dataspace_) {
+    MediaColorSpace color_space(data_space.value());
+    MediaColorSpace last_color_space(last_dataspace_);
+
+    IMP_LOG(imp::INFO) << "ImageReader: dataspace changed from " << last_dataspace_
+               << " (" << last_color_space.ToString() << ") to "
+               << data_space.value() << " (" << color_space.ToString() << ")";
+    last_dataspace_ = data_space.value();
   }
 
   // Add the new image to the front of the deque.
   latest_images_.push_front(std::move(*latest_image));
+
+  // Check if the ImageReader needs to be resized.
+  MaybeResizeImageReader();
 
   // Get the supported view types and their respective native hardware buffers
   // from the latest image.
@@ -223,22 +247,21 @@ ImageReaderAndroidExternalTextureSurface::AcquireAndProcessLatestImage() {
   latest_acquired_image_transform_matrix_ =
       latest_images_.front()->GetTransformMatrix();
 
+  mat4f accumulated_transform = kIdentityMat4f;
+  if (latest_acquired_image_transform_matrix_.ok()) {
+    accumulated_transform = latest_acquired_image_transform_matrix_.value();
+  }
+  accumulated_transform = accumulated_transform * additional_transform_;
+
   // Pass the transform matrix to Filament as a 3x3 matrix. Remove the
   // translation and scale components.
-  mat3f transform_matrix_3f = kIdentityMat3f;
-  if (latest_acquired_image_transform_matrix_.ok()) {
-    transform_matrix_3f = mat3f{
-        latest_acquired_image_transform_matrix_.value()[0][0],
-        latest_acquired_image_transform_matrix_.value()[0][1],
-        latest_acquired_image_transform_matrix_.value()[0][3],
-        latest_acquired_image_transform_matrix_.value()[1][0],
-        latest_acquired_image_transform_matrix_.value()[1][1],
-        latest_acquired_image_transform_matrix_.value()[1][3],
-        latest_acquired_image_transform_matrix_.value()[3][0],
-        latest_acquired_image_transform_matrix_.value()[3][1],
-        latest_acquired_image_transform_matrix_.value()[3][3],
-    };
-  }
+  mat3f transform_matrix_3f = mat3f{
+      accumulated_transform[0][0], accumulated_transform[0][1],
+      accumulated_transform[0][3], accumulated_transform[1][0],
+      accumulated_transform[1][1], accumulated_transform[1][3],
+      accumulated_transform[3][0], accumulated_transform[3][1],
+      accumulated_transform[3][3],
+  };
 
   // For each supported view, update the respective external stream by
   // setting that native hardware buffer as its underlying image.
@@ -275,6 +298,68 @@ void ImageReaderAndroidExternalTextureSurface::Update() {
   // to render the last successfully acquired image.
   if (absl::Status status = AcquireAndProcessLatestImage(); !status.ok()) {
     IMP_LOG(imp::ERROR) << "Failed to acquire and process the latest image: " << status;
+  }
+}
+
+void ImageReaderAndroidExternalTextureSurface::MaybeResizeImageReader() {
+  absl::StatusOr<int32_t> image_width = latest_images_.front()->GetWidth();
+  absl::StatusOr<int32_t> image_height = latest_images_.front()->GetHeight();
+
+  if (!image_width.ok() || !image_height.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to get Image dimensions. Width status: "
+               << image_width.status()
+               << ", Height status: " << image_height.status()
+               << ". Using previous size instead: " << latest_size_.x << "x"
+               << latest_size_.y;
+    return;
+  }
+
+  const int32_t new_width = *image_width;
+  const int32_t new_height = *image_height;
+  if (new_width == latest_size_.x && new_height == latest_size_.y) {
+    return;
+  }
+  if (new_width <= 0 || new_height <= 0) {
+    IMP_LOG(imp::ERROR) << "Invalid image dimensions: " << new_width << "x" << new_height
+               << ". Using previous size instead: " << latest_size_.x << "x"
+               << latest_size_.y;
+    return;
+  }
+
+  const AHardwareBuffer* buffer = latest_images_.front()->GetHardwareBuffer();
+  if (!buffer) {
+    IMP_LOG(imp::ERROR) << "Failed to get hardware buffer from the latest image.";
+    return;
+  }
+
+  // Resize the ImageReader to the new dimensions and update the external
+  // textures for RGBA images. We do not need to resize the ImageReader for
+  // video formats since MediaCodec has its own way of handling changing video
+  // dimensions.
+  AHardwareBuffer_Desc desc;
+  AHardwareBuffer_describe(buffer, &desc);
+  const uint32_t format = desc.format;
+  if (format != AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM &&
+      format != AHARDWAREBUFFER_FORMAT_R8G8B8X8_UNORM &&
+      format != AHARDWAREBUFFER_FORMAT_R16G16B16A16_FLOAT &&
+      format != AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM) {
+    return;
+  }
+
+  IMP_LOG(imp::INFO) << "Detected size change for format " << format
+             << ". Resizing ImageReader from " << latest_size_.x << "x"
+             << latest_size_.y << " to " << new_width << "x" << new_height;
+  absl::Status resize_status =
+      image_reader_->SetDefaultBufferSize({new_width, new_height});
+
+  if (resize_status.ok()) {
+    latest_size_ = {new_width, new_height};
+    IMP_LOG(imp::INFO) << "ImageReader resized successfully to " << latest_size_.x
+               << "x" << latest_size_.y;
+  } else {
+    IMP_LOG(imp::ERROR) << "Failed to resize ImageReader: " << resize_status << ". "
+               << "Using previous size instead: " << latest_size_.x << "x"
+               << latest_size_.y;
   }
 }
 

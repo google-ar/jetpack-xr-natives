@@ -218,9 +218,7 @@ RenderableManagerWrapper::NewBuilder(size_t count) {
 
 RenderableManagerWrapper::Builder::Builder(
     std::unique_ptr<BaseRenderableManager::Builder> spy, size_t count) noexcept
-    : spy_(std::move(spy)),
-      real_builder_(
-          std::make_unique<filament::RenderableManager::Builder>(count)) {}
+    : spy_(std::move(spy)), real_builder_(count) {}
 RenderableManagerWrapper::Builder::~Builder() noexcept = default;
 RenderableManagerWrapper::Builder::Builder(
     RenderableManagerWrapper::Builder&& rhs) noexcept
@@ -240,8 +238,8 @@ RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Geometry(
   if (spy_)
     spy_->Geometry(index, type, vertices, indices, offset, minIndex, maxIndex,
                    count);
-  real_builder_->geometry(index, type, vertices, indices, offset, minIndex,
-                          maxIndex, count);
+  real_builder_.geometry(index, type, vertices, indices, offset, minIndex,
+                         maxIndex, count);
   return *this;
 }
 
@@ -263,7 +261,7 @@ RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Material(
     size_t index,
     const filament::MaterialInstance* material_instance) noexcept {
   if (spy_) spy_->Material(index, material_instance);
-  real_builder_->material(index, material_instance);
+  real_builder_.material(index, material_instance);
   return *this;
 }
 
@@ -271,35 +269,35 @@ RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::BoundingBox(
     const Box& axisAlignedBoundingBox) noexcept {
   if (spy_) spy_->BoundingBox(axisAlignedBoundingBox);
-  real_builder_->boundingBox(axisAlignedBoundingBox);
+  real_builder_.boundingBox(axisAlignedBoundingBox);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::LayerMask(
     uint8_t select, uint8_t values) noexcept {
   if (spy_) spy_->LayerMask(select, values);
-  real_builder_->layerMask(select, values);
+  real_builder_.layerMask(select, values);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Priority(
     uint8_t priority) noexcept {
   if (spy_) spy_->Priority(priority);
-  real_builder_->priority(priority);
+  real_builder_.priority(priority);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Channel(
     uint8_t channel) noexcept {
   if (spy_) spy_->Channel(channel);
-  real_builder_->channel(channel);
+  real_builder_.channel(channel);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Culling(
     bool enable) noexcept {
   if (spy_) spy_->Culling(enable);
-  real_builder_->culling(enable);
+  real_builder_.culling(enable);
   return *this;
 }
 
@@ -307,21 +305,21 @@ RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::LightChannelInternal(unsigned int channel,
                                                         bool enable) noexcept {
   if (spy_) spy_->LightChannel(channel, enable);
-  real_builder_->lightChannel(channel, enable);
+  real_builder_.lightChannel(channel, enable);
   return *this;
 }
 
 RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::CastShadows(bool enable) noexcept {
   if (spy_) spy_->CastShadows(enable);
-  real_builder_->castShadows(enable);
+  real_builder_.castShadows(enable);
   return *this;
 }
 
 RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::ReceiveShadows(bool enable) noexcept {
   if (spy_) spy_->ReceiveShadows(enable);
-  real_builder_->receiveShadows(enable);
+  real_builder_.receiveShadows(enable);
   return *this;
 }
 
@@ -329,35 +327,35 @@ RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::ScreenSpaceContactShadows(
     bool enable) noexcept {
   if (spy_) spy_->ScreenSpaceContactShadows(enable);
-  real_builder_->screenSpaceContactShadows(enable);
+  real_builder_.screenSpaceContactShadows(enable);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Skinning(
     size_t boneCount) noexcept {
   if (spy_) spy_->Skinning(boneCount);
-  real_builder_->skinning(boneCount);
+  real_builder_.skinning(boneCount);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Skinning(
     size_t boneCount, filament::RenderableManager::Bone const* bones) noexcept {
   if (spy_) spy_->Skinning(boneCount, bones);
-  real_builder_->skinning(boneCount, bones);
+  real_builder_.skinning(boneCount, bones);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Skinning(
     size_t boneCount, mat4f const* transforms) noexcept {
   if (spy_) spy_->Skinning(boneCount, transforms);
-  real_builder_->skinning(boneCount, transforms);
+  real_builder_.skinning(boneCount, transforms);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Skinning(
     SkinningBuffer* skinningBuffer, size_t count, size_t offset) noexcept {
   if (spy_) spy_->Skinning(skinningBuffer, count, offset);
-  real_builder_->skinning(skinningBuffer, count, offset);
+  real_builder_.skinning(skinningBuffer, count, offset);
   return *this;
 }
 
@@ -365,7 +363,7 @@ RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::EnableSkinningBuffersInternal(
     bool enabled) noexcept {
   if (spy_) spy_->EnableSkinningBuffers(enabled);
-  real_builder_->enableSkinningBuffers(enabled);
+  real_builder_.enableSkinningBuffers(enabled);
   return *this;
 }
 
@@ -376,8 +374,8 @@ RenderableManagerWrapper::Builder::BoneIndicesAndWeights(
   if (spy_)
     spy_->BoneIndicesAndWeights(primitiveIndex, indicesAndWeights, count,
                                 bonesPerVertex);
-  real_builder_->boneIndicesAndWeights(primitiveIndex, indicesAndWeights, count,
-                                       bonesPerVertex);
+  real_builder_.boneIndicesAndWeights(primitiveIndex, indicesAndWeights, count,
+                                      bonesPerVertex);
   return *this;
 }
 
@@ -388,14 +386,14 @@ RenderableManagerWrapper::Builder::BoneIndicesAndWeights(
         indicesAndWeightsVector) noexcept {
   if (spy_)
     spy_->BoneIndicesAndWeights(primitiveIndex, indicesAndWeightsVector);
-  real_builder_->boneIndicesAndWeights(primitiveIndex, indicesAndWeightsVector);
+  real_builder_.boneIndicesAndWeights(primitiveIndex, indicesAndWeightsVector);
   return *this;
 }
 
 RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::FogInternal(bool enabled) noexcept {
   if (spy_) spy_->Fog(enabled);
-  real_builder_->fog(enabled);
+  real_builder_.fog(enabled);
   return *this;
 }
 
@@ -405,7 +403,7 @@ RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Morphing(
     spy_->Morphing(morphTargetBuffer);
   }
 
-  real_builder_->morphing(morphTargetBuffer);
+  real_builder_.morphing(morphTargetBuffer);
   return *this;
 }
 
@@ -418,7 +416,7 @@ RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Morphing(
 
   // TODO the count param is no longer needed by the Filament
   // builder, so it should also be removed from BaseRenderableManager::Builder.
-  real_builder_->morphing(level, primitiveIndex, offset);
+  real_builder_.morphing(level, primitiveIndex, offset);
   return *this;
 }
 
@@ -426,7 +424,7 @@ RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::BlendOrder(size_t index,
                                               uint16_t blendOrder) noexcept {
   if (spy_) spy_->BlendOrder(index, blendOrder);
-  real_builder_->blendOrder(index, blendOrder);
+  real_builder_.blendOrder(index, blendOrder);
   return *this;
 }
 
@@ -434,21 +432,21 @@ RenderableManagerWrapper::Builder&
 RenderableManagerWrapper::Builder::GlobalBlendOrderEnabled(
     size_t index, bool enabled) noexcept {
   if (spy_) spy_->GlobalBlendOrderEnabled(index, enabled);
-  real_builder_->globalBlendOrderEnabled(index, enabled);
+  real_builder_.globalBlendOrderEnabled(index, enabled);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Instances(
     size_t instanceCount) noexcept {
   if (spy_) spy_->Instances(instanceCount);
-  real_builder_->instances(instanceCount);
+  real_builder_.instances(instanceCount);
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Instances(
     size_t instanceCount, InstanceBuffer* instanceBuffer) noexcept {
   if (spy_) spy_->Instances(instanceCount, instanceBuffer);
-  real_builder_->instances(instanceCount, instanceBuffer);
+  real_builder_.instances(instanceCount, instanceBuffer);
   return *this;
 }
 
@@ -456,7 +454,7 @@ filament::RenderableManager::Builder::Result
 RenderableManagerWrapper::Builder::Build(filament::Engine& engine,
                                          utils::Entity entity) {
   if (spy_) spy_->Build(engine, entity);
-  return real_builder_->build(engine, entity);
+  return real_builder_.build(engine, entity);
 }
 
 }  // namespace imp

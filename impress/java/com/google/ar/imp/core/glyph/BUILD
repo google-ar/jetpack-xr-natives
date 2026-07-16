@@ -32,7 +32,7 @@ kt_android_library(
     deps = [
         "//java/com/google/android/libraries/performance/primes/flogger/logargs",
         "//third_party/java/androidx/graphics/path",
-        "//third_party/java/error_prone:annotations",
+        "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_flogger_flogger",
         "@third_party//filament/android:filament_android_no_jni",
     ],

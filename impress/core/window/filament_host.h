@@ -40,6 +40,7 @@
 #include "filament/filament/include/filament/Scene.h"
 #include "filament/filament/include/filament/SwapChain.h"
 #include "filament/filament/include/filament/View.h"
+#include "filament/filament/include/filament/Viewport.h"
 #include "core/common/buffer_access.h"
 #include "core/common/enum_flags.h"
 #include "core/common/invocable.h"
@@ -297,6 +298,8 @@ class FilamentHost {
     virtual void Cleanup() = 0;
     // Filters legacy MouseInput for FilamentHost.
     virtual bool TryConsumeMouseInput(const MouseInput& latest_input) = 0;
+    // Called before the begin/end render occurs
+    virtual void RerouteUiRendering() = 0;
     // Advances time ahead of rendering.
     virtual void PreRender(absl::Duration previous_vsync,
                            absl::Duration next_vsync, bool force) = 0;
@@ -312,12 +315,18 @@ class FilamentHost {
     virtual void UpdateCameraAndViewport(uint2 actual_size,
                                          float2 subpixel_ratio) = 0;
 
+    // Checks to see if there is an image writer extension and the client has
+    // enabled it.
+    virtual bool RemoteUiEnabled(FilamentHost* host) { return false; }
+
     // Queues an ImGui callback to be executed during RenderDev.
     virtual void QueueImGuiCommandBlock(ImGuiCommand cmd) = 0;
     // Renders dev mode UI.
     virtual void RenderDevModeUI() = 0;
     virtual void SetEnabled(bool is_enabled) = 0;
     virtual bool IsEnabled() = 0;
+
+    virtual detail::FilamentView* GetUiView() = 0;
 
     // Gets called when FilamentHost::SetClipboardHandler gets called.
     virtual void OnClipboardHandlerChanged(
@@ -351,7 +360,7 @@ class FilamentHost {
                       bool skip_color_grading = false);
   OptionalError Setup(filament::Engine* engine, filament::Renderer* renderer,
                       filament::View* view, filament::Scene* scene);
-  OptionalError Cleanup();
+  virtual OptionalError Cleanup();
   OptionalError Pause();
   OptionalError Resume();
 
@@ -490,6 +499,22 @@ class FilamentHost {
   void SetEditorCameraOverride(PassKey<editor::EditorImpl> key,
                                filament::Camera* camera);
 
+  // Sets a hidden override to use for the editor render target, which is
+  // applied last-minute (right before calling into
+  // filament::Renderer::render()).
+  void SetEditorRenderTargetOverride(PassKey<editor::EditorImpl> key,
+                                     filament::RenderTarget* render_target);
+
+  // Sets a hidden override to use for the editor viewport, which is applied
+  // last-minute (right before calling into filament::Renderer::render()).
+  void SetEditorViewportOverride(PassKey<editor::EditorImpl> key,
+                                 std::optional<filament::Viewport> viewport);
+
+  // Returns the hidden override for the editor viewport if one exists.
+  std::optional<filament::Viewport> GetEditorViewportOverride() const {
+    return editor_viewport_override_;
+  }
+
   void SetClipboardHandler(std::unique_ptr<ClipboardHandler> clipboard_handler);
 
   // Performs rendering by calling filament::Renderer::Render on the view using
@@ -574,7 +599,10 @@ class FilamentHost {
   std::vector<detail::MouseInput> pending_mouse_inputs_;
   std::unique_ptr<Monitor> monitor_;
   std::unique_ptr<DevModeExtension> dev_mode_extension_;
+  // TODO: Move these to an Editor-specific class.
   filament::Camera* editor_camera_override_ = nullptr;
+  filament::RenderTarget* editor_render_target_override_ = nullptr;
+  std::optional<filament::Viewport> editor_viewport_override_;
   // May or may not be valid depending on whether we have a custom handler for
   // the specific platform the app is running on.
   std::unique_ptr<ClipboardHandler> clipboard_handler_;

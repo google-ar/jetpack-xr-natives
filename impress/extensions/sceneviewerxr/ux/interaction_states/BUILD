@@ -73,7 +73,6 @@ cc_library(
     srcs = ["initial.cc"],
     hdrs = ["initial.h"],
     deps = [
-        ":idle",
         ":interaction_states",
         "//core/geometry/shapes",
         "//core/math",
@@ -92,14 +91,30 @@ cc_library(
         ":idle",
         ":interaction_states",
         "//core/camera",
+        "//core/collision:collision_helpers",
         "//core/collision:ray",
         "//core/common:enum_flags",
         "//core/math",
         "//core/ncsb",
+        "//core/view/framework",
         "//core/view/utils:frame_time",
+        "//extensions/sceneviewerxr/ux:gltf_bounds",
         "//extensions/sceneviewerxr/ux:input_flag",
         "//extensions/sceneviewerxr/ux:interaction_mode",
         "//extensions/sceneviewerxr/ux:state_machine",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "opening",
+    srcs = ["opening.cc"],
+    hdrs = ["opening.h"],
+    deps = [
+        ":idle",
+        ":interaction_states",
+        "//core/view/utils:frame_time",
+        "//extensions/sceneviewerxr/ux:constants",
     ],
     alwayslink = 1,
 )
@@ -133,6 +148,20 @@ cc_library(
         "//core/view/utils:frame_time",
         "//extensions/sceneviewerxr/ux:constants",
         "//extensions/sceneviewerxr/ux:interaction_mode",
+        "//extensions/sceneviewerxr/ux:state_machine",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "shutdown",
+    srcs = ["shutdown.cc"],
+    hdrs = ["shutdown.h"],
+    deps = [
+        ":interaction_states",
+        "//core/common:smooth",
+        "//core/view/utils:frame_time",
+        "//extensions/sceneviewerxr/ux:constants",
         "//extensions/sceneviewerxr/ux:state_machine",
     ],
     alwayslink = 1,

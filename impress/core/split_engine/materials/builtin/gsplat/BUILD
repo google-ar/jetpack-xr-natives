@@ -16,6 +16,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load(
     "//build_tools:imp.bzl",
+    "if_include_stereo_variant_by_default",
     "imp_defines",
     "imp_google3_copts",
 )
@@ -35,10 +36,11 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
-        ":gsplat_material_deserializer_assets",
+        ":precompute_material_assets",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
+        "//core/camera",
         "//core/common:small_source_location",
         "//core/geometry/shapes",
         "//core/materials",
@@ -48,8 +50,10 @@ cc_library(
         "//core/render",
         "//core/render:mesh_renderer",
         "//core/render_passes:texture_pipeline_renderer",
+        "//core/render_passes:texture_pipeline_renderer_projection_quad",
         "//core/render_passes:texture_pipeline_renderer_proto_cc_imp",
         "//core/resources",
+        "//core/scene_handles",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:render_settings_proto_cc_imp",
@@ -67,22 +71,27 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
-        ":gsplat_material_deserializer_assets",
+        ":gsplat_material_assets",
+        ":magic_window_panel_material_assets",
+        ":precompute_material_assets",
         ":precompute_texture_pipeline",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
-        "//core/common:log",
         "//core/common:registry",
         "//core/common:rememberer",
         "//core/common:small_source_location",
+        "//core/gsplat:gsplat_material_params",
         "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_package",
         "//core/materials",
         "//core/math",
         "//core/ncsb",
         "//core/render",
+        "//core/render_passes:texture_pipeline_renderer_projection_quad",
+        "//core/render_passes/group_to_projection_quad_texture_renderer:group_to_projection_quad_texture_renderer_component",
+        "//core/render_passes/group_to_projection_quad_texture_renderer:group_to_projection_quad_texture_renderer_state_proto_cc_imp",
         "//core/resources",
         "//core/split_engine:fbs",
         "//core/split_engine:fbs_deps",  # buildcleaner: keep
@@ -111,47 +120,30 @@ cc_library(
     alwayslink = 1,  # Required for registration.
 )
 
-cc_library(
-    name = "gsplat_background_material_deserializer",
-    srcs = ["gsplat_background_material_deserializer.cc"],
-    hdrs = ["gsplat_background_material_deserializer.h"],
-    copts = imp_google3_copts(),
-    defines = imp_defines(),
-    deps = [
-        ":gsplat_material_deserializer_assets",
-        "//core/assets",
-        "//core/assets/material:material_asset",
-        "//core/async:future",
-        "//core/material_library:material_package",
-        "//core/materials",
-        "//core/ncsb",
-        "//core/render",
-        "//core/split_engine:fbs",
-        "//core/split_engine:fbs_deps",  # buildcleaner: keep
-        "//core/split_engine:split_engine_shared",
-        "//core/split_engine/materials/builtin:builtin_custom_material",
-        "//core/split_engine/materials/builtin:builtin_material",
-        "//core/split_engine/materials/builtin:builtin_material_registry",
-        "//core/view:base_view",
-        "//core/view/framework",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
-        "@flatbuffers",
-        "@third_party//filament/filament:filament_hdrs",
-        "@third_party//split_engine:fbs",
-    ],
-    alwayslink = 1,  # Required for registration.
+imp_assets(
+    name = "gsplat_material_assets",
+    srcs = [
+        ":builtin_gsplat_mono_mat",
+    ] + if_include_stereo_variant_by_default([
+        ":builtin_gsplat_stereo_mat",
+    ]),
+    namespace = "imp::split_engine",
 )
 
 imp_assets(
-    name = "gsplat_material_deserializer_assets",
+    name = "magic_window_panel_material_assets",
     srcs = [
-        ":builtin_gsplat_background_mat",
+        ":builtin_magic_window_panel_mono_mat",
+    ] + if_include_stereo_variant_by_default([
+        ":builtin_magic_window_panel_stereo_mat",
+    ]),
+    namespace = "imp::split_engine",
+)
+
+imp_assets(
+    name = "precompute_material_assets",
+    srcs = [
         ":builtin_gsplat_data_precompute_mat",
-        ":builtin_gsplat_mono_mat",
-        ":builtin_gsplat_stereo_mat",
-        ":builtin_magic_window_mono_mat",
-        ":builtin_magic_window_stereo_mat",
     ],
     namespace = "imp::split_engine",
 )
@@ -181,42 +173,26 @@ imp_material(
 )
 
 imp_material(
-    name = "builtin_magic_window_mono_mat",
-    src = ":builtin_magic_window.mat",
-    enable_metal_postprocessing = True,
-    includes = [
-        "gsplat_common.glsl",
-    ],
-    replacements = {
-        "{PRECOMPUTE_SAMPLER}": "sampler2d",
-    },
-)
-
-imp_material(
-    name = "builtin_magic_window_stereo_mat",
-    src = ":builtin_magic_window.mat",
-    enable_metal_postprocessing = True,
-    includes = [
-        "gsplat_common.glsl",
-    ],
-    replacements = {
-        "{PRECOMPUTE_SAMPLER}": "sampler2dArray",
-    },
-)
-
-imp_material(
-    name = "builtin_gsplat_background_mat",
-    src = ":builtin_gsplat_background.mat",
-    enable_metal_postprocessing = True,
-    includes = [
-    ],
-)
-
-imp_material(
     name = "builtin_gsplat_data_precompute_mat",
     src = ":builtin_gsplat_data_precompute.mat",
     enable_metal_postprocessing = True,
     includes = [
         "gsplat_common.glsl",
     ],
+)
+
+imp_material(
+    name = "builtin_magic_window_panel_mono_mat",
+    src = "builtin_magic_window_panel.mat",
+    replacements = {
+        "{PRECOMPUTE_SAMPLER}": "sampler2d",
+    },
+)
+
+imp_material(
+    name = "builtin_magic_window_panel_stereo_mat",
+    src = "builtin_magic_window_panel.mat",
+    replacements = {
+        "{PRECOMPUTE_SAMPLER}": "sampler2dArray",
+    },
 )

@@ -41,6 +41,10 @@
 // (broken link) for details.
 #if IMP_TRACE_USE_PERFETTO
 
+#if defined(SYSTRACE_TAG) && SYSTRACE_TAG
+#error "Cannot enable both SYSTRACE and Perfetto tracing."
+#endif
+
 #include "perfetto/tracing/backend_type.h"
 #include "perfetto/tracing/string_helpers.h"
 #include "perfetto/tracing/tracing.h"

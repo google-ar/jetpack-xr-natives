@@ -98,12 +98,9 @@ class DragGesture : public Gesture {
   absl::optional<float2> TryUpdatePosition(const PointerHitEvent& pointer_hit);
   void UpdatePositionAndSendEvent(const PointerHitEvent& pointer_hit);
   static constexpr float kDragStartThresholdPixels = 16.0f;
-  static constexpr absl::Duration kDragStartThresholdDuration =
-      absl::Milliseconds(250);
   Pointer::Id pointer_id_;
   GesturePointerUtils::ScopedPointerRetainer pointer_retainer_;
   float2 start_position_;
-  absl::Duration start_elapsed_time_;
   absl::optional<RayHit> start_hit_;
   float2 position_;
 };

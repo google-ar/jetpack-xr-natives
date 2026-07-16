@@ -25,6 +25,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/assets/gltf/gltf_audio_extension.h"
 #include "core/assets/gltf/gltf_interactivity_extension.h"
 #include "core/async/future.h"
@@ -82,9 +83,11 @@
 #include "core/editor/widgets/visualize_colliders.h"
 #include "core/editor/widgets/visualize_origins.h"
 #include "core/editor/widgets/window/window_widget.h"
+#include "core/geometry/shapes/rect.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
 #include "core/input/pointer_event.h"
+#include "core/lighting/light_component.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
@@ -94,20 +97,21 @@
 #include "core/ncsb/scene_metadata.h"
 #include "core/ncsb/system.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/view/framework/display_layer/display_layer_manager.h"
 #include "core/view/framework/gestures/gesture_manager.h"
 #include "core/view/framework/gestures/tap_gesture.h"
 #include "core/view/framework/input/pointer_input_handler.h"
-#include "core/view/framework/lighting/light_component.h"
 #include "core/view/framework/lighting/light_manager.h"
 #include "core/view/framework/scene/scene_reference.h"
 #include "core/view/framework/scene/scene_system.h"
 
 #if IMP_PLATFORM(ANDROID)
+#include "core/editor/components/world_space_editor_ui.h"
 #include "core/view/platforms/android/wrappers/imp_lifecycle_callback.h"
+#include "core/view/utils/string_map.h"
+#include "split_engine/subspace_events.h"
 #endif
 
 #if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
@@ -187,6 +191,11 @@ class EditorImpl : public Editor {
   EventInjector& GetEventInjector() override;
   GltfAsset::LoadOptions GetGltfLoadOptions() const override;
 
+  // Sets the rect of the viewport in pixels.
+  void SetViewportRect(std::optional<Rect> rect) override {};
+  // Returns the rect of the viewport in pixels.
+  std::optional<Rect> GetViewportRect() const override { return std::nullopt; };
+
  private:
   // Used to provide access to EditorInformation without needing to access the
   // actual full Editor. This is useful to avoid circular dependencies with the
@@ -231,6 +240,12 @@ class EditorImpl : public Editor {
   // CameraConfiguration::kEditorAndAppCameraDefault, will switch InputMode as
   // well.
   void ToggleCameraMode();
+
+#if IMP_PLATFORM(ANDROID)
+  // TODO: Find a way to distinguish between SplitEngine app on
+  // mobile and Xr.
+  void SpawnWorldSpaceEditor();
+#endif  // IMP_PLATFORM(ANDROID)
 
   std::vector<NodeHandle> GetAllOverlappingNodes(Pointer p);
 
@@ -283,6 +298,7 @@ class EditorImpl : public Editor {
   std::vector<BackupNodeData> backup_node_data_;
   std::vector<NodeHandle> sandbox_nodes_;
   GltfAsset::LoadOptions gltf_load_options_;
+  EditorInfo::PlatformMode platform_mode_ = EditorInfo::PlatformMode::kDefault;
 };
 
 EditorImpl::EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
@@ -322,7 +338,6 @@ void EditorImpl::Initialize() {
     IMP_LOG(imp::INFO) << "Initialize() has already called. Ignoring this call...";
     return;
   }
-  visualizer_manager_ = std::make_unique<VisualizerManager>(&GetView());
   GetView().GetRegistry().Register<SelectionController>(
       std::make_unique<SelectionControllerImpl>(&GetView()));
   editor_root_node_ = GetView().CreateNode();
@@ -331,13 +346,23 @@ void EditorImpl::Initialize() {
   editor_root_node_->SetAsEditorStaging(true);
 #endif
 
+  // TODO: Find a way to distinguish between SplitEngine app on
+  // mobile and Xr.
+  if (GetView().GetSplitEngineSerializer()) {
+    platform_mode_ = EditorInfo::PlatformMode::kXrSplitEngineApp;
+  }
+
   InitializeWidgetUiSystem();
-  visualizer_manager_->RegisterVisualizer<LightComponent, LightVisualizer>();
-  if (GetCameraConfiguration() !=
-      EditorPlugin::CameraConfiguration::kEditorCameraOnly) {
-    // When the app camera presents, showing the camera visualization.
-    visualizer_manager_
-        ->RegisterVisualizer<CameraComponent, CameraVisualizer>();
+
+  if (platform_mode_ != EditorInfo::PlatformMode::kXrSplitEngineApp) {
+    visualizer_manager_ = std::make_unique<VisualizerManager>(&GetView());
+    visualizer_manager_->RegisterVisualizer<LightComponent, LightVisualizer>();
+    if (GetCameraConfiguration() !=
+        EditorPlugin::CameraConfiguration::kEditorCameraOnly) {
+      // When the app camera presents, showing the camera visualization.
+      visualizer_manager_
+          ->RegisterVisualizer<CameraComponent, CameraVisualizer>();
+    }
   }
 
   // TODO Declare the dependencies within each extensions instead
@@ -395,16 +420,19 @@ void EditorImpl::Initialize() {
   camera_node->AddComponent<CameraTranslate>(pivot);
   camera_node->AddComponent<CameraZoom>(pivot);
 
-  // An overlaying helper layer for 3d widgets and visualizers, e.g. transform
-  // widget shows here.
-  GetView().GetDisplayLayerManager().CreateLayer(kOverlayGroup, kOverlayGroup);
-  GetView().GetDisplayLayerManager().SetCamera(kOverlayGroup, camera_);
+  if (platform_mode_ != EditorInfo::PlatformMode::kXrSplitEngineApp) {
+    // An overlaying helper layer for 3d widgets and visualizers, e.g. transform
+    // widget shows here.
+    GetView().GetDisplayLayerManager().CreateLayer(kOverlayGroup,
+                                                   kOverlayGroup);
+    GetView().GetDisplayLayerManager().SetCamera(kOverlayGroup, camera_);
 
-  // Build the Editor grid.
-  grid_ = GetView().CreateNode();
-  grid_->SetName("grid");
-  grid_->AddComponent<Grid>().KeptBy(grid_);
-  AddNode(grid_);
+    // Build the Editor grid.
+    grid_ = GetView().CreateNode();
+    grid_->SetName("grid");
+    grid_->AddComponent<Grid>().KeptBy(grid_);
+    AddNode(grid_);
+  }
 
   Dispatcher& app_dispatcher = GetView().GetDispatcher();
 
@@ -437,6 +465,12 @@ void EditorImpl::Initialize() {
   // Forward UpdateSystem::PreComponentsUpdateEvent& and
   // UpdateSystem::PostComponentsUpdateEvent& to Editor dispatcher.
   EnableUpdateSystemEventForwarding();
+
+#if IMP_PLATFORM(ANDROID)
+  if (platform_mode_ == EditorInfo::PlatformMode::kXrSplitEngineApp) {
+    SpawnWorldSpaceEditor();
+  }
+#endif
 
   IMP_LOG(imp::INFO) << "Camera Controls:";
   IMP_LOG(imp::INFO) << "Left Click & Drag to rotate the camera.";
@@ -588,8 +622,12 @@ void EditorImpl::InitializeWidgetUiSystem() {
       /*component_widgets_panel_id=*/
       WidgetLayoutInfo(PanelId::kDetailsWindow));
 
-  widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(PanelId::kTabBar),
-                                       view);
+  // TODO: Console widget is not supported in SplitEngineApp yet,
+  // since it uses filament textures.
+  if (platform_mode_ != EditorInfo::PlatformMode::kXrSplitEngineApp) {
+    widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(PanelId::kTabBar),
+                                         view);
+  }
 
   asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
       WidgetLayoutInfo(PanelId::kTabBar, WidgetPresence::kOnlyIn2DLargeScreen),
@@ -828,6 +866,37 @@ void EditorImpl::EnableUpdateSystemEventForwarding() {
       },
       this);
 }
+
+// TODO: Make it so that EditorUI is not attached to the first
+// subspace root that is created so that the editor can select objects from
+// multiple subspaces.
+#if IMP_PLATFORM(ANDROID)
+void EditorImpl::SpawnWorldSpaceEditor() {
+  imp::editor::LayoutConfig world_layout = imp::editor::kDefaultXrLayoutConfig;
+  GetView()
+      .GetRegistry()
+      .Get<imp::editor::Editor>()
+      ->get()
+      .GetWidgetUiSystem()
+      .SetLayoutComposer(
+          std::make_unique<imp::editor::LayoutComposer>(world_layout));
+
+  StringMap<imp::float3> canvas_position_map = {
+      {imp::editor::PanelIdToString(imp::editor::PanelId::kSceneWindow),
+       kScenePanelSphericalLocation},
+      {imp::editor::PanelIdToString(imp::editor::PanelId::kDetailsWindow),
+       kDetailsPanelSphericalLocation},
+      {imp::editor::PanelIdToString(imp::editor::PanelId::kTabBar),
+       kTabBarSphericalLocation}};
+
+  imp::NodeHandle split_engine_ui_node = GetEditorRoot()->CreateChildNode();
+  split_engine_ui_node
+      ->AddComponent<imp::editor::WorldSpaceEditorUi>(
+          kDefaultWorldLayoutCanvasSize, canvas_position_map)
+      .KeptBy(this);
+  split_engine_ui_node->SetEnabled(true);
+}
+#endif  // IMP_PLATFORM(ANDROID)
 
 EditorInfo::RunMode EditorImpl::GetRunMode() const { return run_mode_; }
 

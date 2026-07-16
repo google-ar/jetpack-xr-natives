@@ -31,6 +31,7 @@
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "core/async/future.h"
+#include "core/common/paired_vector.h"
 #include "core/common/typed_set_vector.h"
 #include "core/common/typed_vector.h"
 #include "core/image/image_contents.h"
@@ -88,6 +89,8 @@ class ModelCreator {
   TypedVector<filament::VertexBuffer*> vertex_buffers_;
   TypedVector<filament::IndexBuffer*> index_buffers_;
   TypedVector<filament::MorphTargetBuffer*> morph_target_buffers_;
+  PairedVector<OwnedTexturePtr, filament::MorphTargetBuffer*>
+      morph_target_uv0_textures_;
   TypedVector<OwnedTexturePtr> textures_;
   TypedVector<GenericMaterialPtr> materials_;
   absl::flat_hash_map<uint16_t, model::ModelData::MaterialId>

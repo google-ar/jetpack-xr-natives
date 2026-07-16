@@ -33,12 +33,14 @@
 #include "apibindings/bindings_material.h"
 #include "apibindings/bindings_mesh_buffer.h"
 #include "apibindings/impress_api_view.h"
+#include "apibindings/model_interaction_ux/scene_viewer_component.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/box.h"
 #include "core/math/mat.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/mesh_renderer.h"
+#include "core/view/framework/collision/box_collider.h"
 
 namespace imp {
 
@@ -66,12 +68,14 @@ class MeshManagerImpl : public MeshManager {
       absl::Span<const BindingsCustomMesh::Subset> subsets,
       std::optional<Box> bounding_box = std::nullopt) override;
 
+  absl::StatusOr<Box> GetCustomMeshAabb(std::intptr_t handle) override;
+
   absl::Status DestroyCustomMesh(std::intptr_t handle) override;
 
   absl::StatusOr<int32_t> CreateCustomMeshNode(
       std::intptr_t custom_mesh_handle,
-      const std::vector<std::intptr_t>& material_handles,
-      int32_t bone_count) override;
+      const std::vector<std::intptr_t>& material_handles, int32_t bone_count,
+      bool enable_collider) override;
 
   absl::Status UpdateCustomMeshNodeBoneTransforms(
       int32_t impress_node, int32_t offset,
@@ -80,6 +84,13 @@ class MeshManagerImpl : public MeshManager {
   absl::Status SetCustomMeshNodeMaterial(
       int32_t node_entity_id, int32_t submesh_index,
       std::intptr_t material_handle) override;
+
+  absl::Status SetCustomMeshNodeColliderEnabled(int32_t node_entity_id,
+                                                bool enable_collider) override;
+
+  absl::Status SetCustomMeshReformAffordanceEnabled(
+      int32_t impress_node, bool enable_affordance,
+      bool system_movable) override;
 
   void DestroyAllResources() override;
 
@@ -144,6 +155,14 @@ absl::StatusOr<std::intptr_t> MeshManagerImpl::CreateCustomMesh(
   return handle;
 }
 
+absl::StatusOr<Box> MeshManagerImpl::GetCustomMeshAabb(std::intptr_t handle) {
+  auto it = custom_meshes_.find(handle);
+  if (it == custom_meshes_.end()) {
+    return absl::NotFoundError("CustomMesh not found.");
+  }
+  return it->second->GetAabb();
+}
+
 absl::Status MeshManagerImpl::DestroyCustomMesh(std::intptr_t handle) {
   if (custom_meshes_.erase(handle)) {
     return absl::OkStatus();
@@ -153,7 +172,8 @@ absl::Status MeshManagerImpl::DestroyCustomMesh(std::intptr_t handle) {
 
 absl::StatusOr<int32_t> MeshManagerImpl::CreateCustomMeshNode(
     std::intptr_t custom_mesh_handle,
-    const std::vector<std::intptr_t>& material_handles, int32_t bone_count) {
+    const std::vector<std::intptr_t>& material_handles, int32_t bone_count,
+    bool enable_collider) {
   auto it = custom_meshes_.find(custom_mesh_handle);
   if (it == custom_meshes_.end()) {
     return absl::NotFoundError("CustomMesh not found.");
@@ -190,6 +210,13 @@ absl::StatusOr<int32_t> MeshManagerImpl::CreateCustomMeshNode(
         bindings_material->GetMaterial(SmallSourceLocation::Current()), i);
   }
 
+  if (enable_collider) {
+    // We use a BoxCollider for performance reasons, as computing a
+    // MeshCollider can be expensive. Additionally, the CPU mesh data required
+    // to build a MeshCollider is not currently stored.
+    node->AddComponent<BoxCollider>(mesh_renderer->GetRenderableAabb());
+  }
+
   std::move(node_cleanup).Cancel();
   return node.GetEntity().getId();
 }
@@ -216,6 +243,30 @@ absl::Status MeshManagerImpl::UpdateCustomMeshNodeBoneTransforms(
       reinterpret_cast<const imp::mat4f*>(transforms.data()), num_bones);
 
   return renderer->UpdateBoneTransformsInRange(new_bones, offset);
+}
+
+absl::Status MeshManagerImpl::SetCustomMeshNodeColliderEnabled(
+    int32_t node_entity_id, bool enable_collider) {
+  utils::Entity entity = utils::Entity::import(node_entity_id);
+  NodeHandle node(entity);
+  if (!node.IsValid()) {
+    return absl::NotFoundError("Node not found.");
+  }
+
+  if (enable_collider) {
+    ComponentHandle<MeshRenderer> mesh_renderer =
+        node->GetComponent<MeshRenderer>();
+    if (!mesh_renderer.IsValid()) {
+      return absl::NotFoundError("MeshRenderer not found on the node.");
+    }
+    // Remove any existing BoxCollider to ensure the AABB is updated.
+    node->RemoveComponent<BoxCollider>();
+    node->AddComponent<BoxCollider>(mesh_renderer->GetRenderableAabb());
+  } else {
+    node->RemoveComponent<BoxCollider>();
+  }
+
+  return absl::OkStatus();
 }
 
 absl::Status MeshManagerImpl::SetCustomMeshNodeMaterial(
@@ -249,6 +300,23 @@ absl::Status MeshManagerImpl::SetCustomMeshNodeMaterial(
       submesh_index);
 
   return absl::OkStatus();
+}
+
+absl::Status MeshManagerImpl::SetCustomMeshReformAffordanceEnabled(
+    int32_t impress_node, bool enable_affordance, bool system_movable) {
+  NodeHandle node_handle(utils::Entity::import(impress_node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  if (enable_affordance) {
+    return node_handle
+        ->AddComponent<SceneViewerComponent>(node_handle, system_movable)
+        .status();
+  } else {
+    node_handle->RemoveComponent<SceneViewerComponent>();
+    return absl::OkStatus();
+  }
 }
 
 void MeshManagerImpl::DestroyAllResources() {

@@ -112,6 +112,8 @@ class BaseMorphTargetBufferBuilder {
   virtual BaseMorphTargetBufferBuilder& VertexCount(
       size_t vertexCount) noexcept = 0;
   virtual BaseMorphTargetBufferBuilder& Count(size_t count) noexcept = 0;
+  virtual BaseMorphTargetBufferBuilder& EnableCustomMorphing(
+      bool enabled) noexcept = 0;
   virtual BaseMorphTargetBufferBuilder& PositionsAt(
       size_t target_index, const float3* positions, size_t count,
       size_t offset = 0) noexcept = 0;

@@ -33,8 +33,11 @@ namespace imp {
 
 class ImpressApiView;
 
-// Manages Custom Mesh resources (BindingsMeshBuffer, CustomMesh, CustomMesh
-// node) for the Jetpack XR Scene.
+// Manages mesh buffers and custom meshes for the Jetpack XR Scene.
+// Mesh buffers contain vertex and index data, while custom meshes use these
+// buffers to create meshes that can be added to the scene via custom mesh
+// nodes. This class manages BindingsMeshBuffer, BindingsCustomMesh, and custom
+// mesh node resources.
 class MeshManager {
  public:
   virtual ~MeshManager() = default;
@@ -64,14 +67,18 @@ class MeshManager {
       absl::Span<const BindingsCustomMesh::Subset> subsets,
       std::optional<Box> bounding_box) = 0;
 
+  // Gets the AABB of a CustomMesh.
+  virtual absl::StatusOr<Box> GetCustomMeshAabb(
+      std::intptr_t custom_mesh_handle) = 0;
+
   // Destroys a CustomMesh.
   virtual absl::Status DestroyCustomMesh(std::intptr_t custom_mesh_handle) = 0;
 
   // Creates a CustomMesh node and returns its entity ID.
   virtual absl::StatusOr<int32_t> CreateCustomMeshNode(
       std::intptr_t custom_mesh_handle,
-      const std::vector<std::intptr_t>& material_handles,
-      int32_t bone_count) = 0;
+      const std::vector<std::intptr_t>& material_handles, int32_t bone_count,
+      bool enable_collider) = 0;
 
   // Updates bone transforms for a custom mesh node.
   virtual absl::Status UpdateCustomMeshNodeBoneTransforms(
@@ -82,6 +89,20 @@ class MeshManager {
   virtual absl::Status SetCustomMeshNodeMaterial(
       int32_t node_entity_id, int32_t submesh_index,
       std::intptr_t material_handle) = 0;
+
+  // Enables or disables the collider on a CustomMesh node.
+  virtual absl::Status SetCustomMeshNodeColliderEnabled(
+      int32_t node_entity_id, bool enable_collider) = 0;
+
+  // Attaches or detaches a footprint affordance to a custom mesh node.
+  // A footprint affordance is a 2D visual representation of the object's
+  // footprint on a surface. It is used to indicate where an object will be
+  // placed when released from a drag, and to provide a target for manipulation
+  // gestures (e.g., move, rotate). If system_movable is true, system-level
+  // gestures can manipulate the object via this affordance.
+  virtual absl::Status SetCustomMeshReformAffordanceEnabled(
+      int32_t impress_node, bool enable_affordance,
+      bool system_movable = true) = 0;
 
   // Destroys all managed buffers and meshes.
   virtual void DestroyAllResources() = 0;

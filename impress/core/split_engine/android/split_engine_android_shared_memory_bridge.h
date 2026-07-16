@@ -19,13 +19,13 @@
 
 #include <jni.h>
 
-#include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
 
+#include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -53,8 +53,8 @@ class SplitEngineAndroidSharedMemoryBridge : public SplitEngineAndroidBridge {
   bool SetExternalTextureSurfaceSize(TextureId texture_id, int32_t width,
                                      int32_t height) override;
   bool SendRequest(
-      const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback) override;
+      absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) override;
 
  private:
   std::unique_ptr<SplitEngineSharedMemoryBridgeClient>

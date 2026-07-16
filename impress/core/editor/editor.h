@@ -18,11 +18,13 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_EDITOR_H_
 
 #include <memory>
+#include <optional>
 
 #include "absl/container/flat_hash_set.h"
 #include "core/camera/camera_component.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/editor_plugin.h"
+#include "core/geometry/shapes/rect.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
@@ -200,6 +202,14 @@ class Editor : public System {
 
   // Returns the GltfAsset::LoadOptions to use when loading glTF files.
   virtual GltfAsset::LoadOptions GetGltfLoadOptions() const noexcept = 0;
+
+  // Sets the screen-space rect of the 3D viewport widget.
+  // This is used to correctly transform pointer coordinates for selection and
+  // navigation.
+  virtual void SetViewportRect(std::optional<Rect> rect) = 0;
+
+  // Returns the screen-space rect of the 3D viewport widget.
+  virtual std::optional<Rect> GetViewportRect() const = 0;
 };
 
 // Gets the Editor from the Registry. If no Editor is present in the Registry,

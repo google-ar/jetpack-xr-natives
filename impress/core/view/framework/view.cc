@@ -205,16 +205,22 @@ void View::DestroyNode(NodeHandle node) {
   GetComponentManager().RemoveAllFromNodes(nodes_to_destroy);
 
   // Tell the serializer about the nodes being destroyed.
-  // This is done before the nodes are actually destroyed to ensure that the
-  // serializer can access the node's children to determine dependencies
-  // correctly.
+  // We send the entire set of nodes being destroyed as dependencies so that
+  // this destruction event can't be split across serializer batches.
   if (split_engine_serializer_) {
+    std::vector<utils::Entity> deps;
+    deps.reserve(nodes_to_destroy.size());
+    for (NodeHandle node_to_destroy : nodes_to_destroy) {
+      deps.push_back(node_to_destroy.GetEntity());
+    }
+
     for (NodeHandle node_to_destroy : nodes_to_destroy) {
       // We may get here after recursive calls to DestroyNode, so it's possible
       // that the node was already destroyed. If so, don't call the serializer
       // again. Similar check happens in NodeAttachmentManager::Destroy().
       if (node_to_destroy) {
-        split_engine_serializer_->DestroyNode(node_to_destroy.GetEntity());
+        split_engine_serializer_->DestroyNode(node_to_destroy.GetEntity(),
+                                              deps);
       }
     }
   }

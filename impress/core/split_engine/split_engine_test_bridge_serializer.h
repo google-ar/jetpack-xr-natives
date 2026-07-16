@@ -18,7 +18,6 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_TEST_BRIDGE_SERIALIZER_H_
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -26,6 +25,7 @@
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/types/span.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/verifier.h"
@@ -79,8 +79,8 @@ class SplitEngineTestBridgeSerializer {
   // Sends a request to the renderer view.
   // If save is true, the request will be saved to the current snapshot.
   absl::Status SendRequest(
-      BridgeId bridge_id, const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback,
+      BridgeId bridge_id, absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback,
       bool save = true);
 
   // Runs the given task on the serializer view and captures the messages if the
@@ -99,7 +99,7 @@ class SplitEngineTestBridgeSerializer {
 
  private:
   void SaveMessage(BridgeId bridge_id, android_xr::schemas::MessageType type,
-                   const std::vector<uint8_t>& message);
+                   absl::Span<const uint8_t> message);
   bool ShouldCreateSnapshotForCurrentApiLevel();
   void CreateSnapshot();
   void PlaybackSnapshot();

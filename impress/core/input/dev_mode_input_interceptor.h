@@ -40,6 +40,11 @@ class DevModeInputInterceptor : public InputInterceptor {
   ~DevModeInputInterceptor() override = default;
   // The interceptor should process and filter out any pointer events that it
   // does not want to propagate to the rest of the view.
+  // When UI is overlaid:
+  // 1. Sends input event to ImGui.
+  // 2. Prevents captured input from getting to the app.
+  // When using remote editor:
+  // 1. Sends input event to ImGui.
   void FilterPointerEvents(std::vector<PointerEvent>& pointer_events) override;
   // The interceptor should process and filter out any keyboard or text input
   // events that it does not want to propagate to the rest of the view.

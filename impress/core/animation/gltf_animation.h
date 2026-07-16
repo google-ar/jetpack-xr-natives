@@ -18,9 +18,11 @@
 #define THIRD_PARTY_IMPRESS_CORE_ANIMATION_GLTF_ANIMATION_H_
 
 #include <cstdint>
+#include <optional>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/vector.h"
@@ -168,6 +170,17 @@ class GltfAnimation {
   // Returns the bone targets for morph target animations.
   const BoneTargetSpan& MorphTargetAnimationTargets() const {
     return morph_target_animation_targets_;
+  }
+
+  // Returns the extra value for the given key if it exists and is of type T
+  // within the MorphTargetAnimation with the given id.
+  template <typename T>
+  std::optional<T> GetMorphTargetExtra(BoneTargetId id,
+                                       absl::string_view key) const {
+    if (!morph_target_animations_.IsValid(id)) {
+      return std::nullopt;
+    }
+    return morph_target_animations_[id].GetExtra<T>(key);
   }
 
   // Evaluates the material parameter for material animations.

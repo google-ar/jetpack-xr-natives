@@ -19,7 +19,11 @@
 
 #include <cstdint>
 
+#include "core/config.h"
 #include "core/ncsb/component.h"
+#if IMP_RUNTIME(DEV)
+#include "dear_imgui/imgui.h"
+#endif  // IMP_RUNTIME(DEV)
 
 namespace imp::split_engine {
 
@@ -30,6 +34,22 @@ class SplitEngineNodeInfo : public Component {
     front_end_entity_id_ = front_end_entity_id;
   };
   uint32_t GetFrontEndEntityId() { return front_end_entity_id_; };
+
+#if IMP_RUNTIME(DEV)
+  void DrawEditorUi() {
+    if (ImGui::BeginTable("##NodeInfoTable", 2,
+                          ImGuiTableFlags_Resizable |
+                              ImGuiTableFlags_BordersInnerV |
+                              ImGuiTableFlags_SizingStretchProp)) {
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::TextUnformatted("Front End Entity ID");
+      ImGui::TableNextColumn();
+      ImGui::Text("%u", front_end_entity_id_);
+      ImGui::EndTable();
+    }
+  }
+#endif  // IMP_RUNTIME(DEV)
 
  private:
   uint32_t front_end_entity_id_;

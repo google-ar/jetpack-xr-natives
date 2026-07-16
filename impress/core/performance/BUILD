@@ -66,12 +66,9 @@ cc_library(
             "darwin/editor_malloc.cc",
             "darwin/memory_stats.cc",
         ],
-        ":android_and_memory_graph": [
+        "@platforms//os:android": [
             "android/editor_malloc.cc",
             "android/memory_stats.cc",
-        ],
-        "@platforms//os:android": [
-            "default/memory_stats.cc",
         ],
         "@platforms//os:emscripten": [
             "wasm/editor_malloc.cc",
@@ -82,7 +79,7 @@ cc_library(
         ],
     }),
     hdrs = select({
-        ":android_and_memory_graph": [
+        "@platforms//os:android": [
             "android/editor_malloc.h",
             "memory_stats.h",
         ],
@@ -91,8 +88,7 @@ cc_library(
         ],
     }),
     linkopts = select({
-        ":android_and_memory_graph": imp_malloc_wrap_linkopts(),
-        "@platforms//os:android": [],
+        "@platforms//os:android": imp_malloc_wrap_linkopts(),
         "@platforms//os:emscripten": imp_malloc_wrap_linkopts(),
         "//conditions:default": [],
     }),

@@ -447,6 +447,14 @@ SplitEngineMorphTargetBufferBuilder& SplitEngineMorphTargetBufferBuilder::Count(
 }
 
 SplitEngineMorphTargetBufferBuilder&
+SplitEngineMorphTargetBufferBuilder::EnableCustomMorphing(
+    bool enabled) noexcept {
+  
+  state_.enable_custom_morphing_ = enabled;
+  return *this;
+}
+
+SplitEngineMorphTargetBufferBuilder&
 SplitEngineMorphTargetBufferBuilder::PositionsAt(size_t target_index,
                                                  const float3* positions,
                                                  size_t count,
@@ -519,7 +527,7 @@ SplitEngineMorphTargetBufferSerializerImpl::SerializeMorphTargetBuffer(
       builder, state_.morph_target_buffer_id,
       android_xr::schemas::CreateMorphTargetBufferInfo(
           builder, builder.CreateVector(attribute_offsets),
-          state_.vertex_count_));
+          state_.vertex_count_, state_.enable_custom_morphing_));
 }
 
 void SplitEngineMorphTargetBufferSerializerImpl::ContributeBufferSize(

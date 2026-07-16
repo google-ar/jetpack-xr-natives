@@ -19,6 +19,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/EntityManager.h"
 #include "core/ncsb/node.h"
@@ -41,7 +42,7 @@ Node& NodeHandle::operator*() const noexcept { return *operator->(); }
 
 Node* NodeHandle::operator->() const noexcept {
   AssertIsValid();
-  return static_cast<Node*>(&node_);
+  return &node_;
 }
 
 bool NodeHandle::operator==(const NodeHandle& other) const {
@@ -84,7 +85,7 @@ utils::Entity NodeHandle::GetEntity() const { return node_.GetEntity(); }
 
 std::string ToString(const NodeHandle& handle) {
   if (handle.IsValid()) {
-    if (auto name = handle->GetName(); !name.empty()) {
+    if (absl::string_view name = handle->GetName(); !name.empty()) {
       return absl::StrFormat("Node<%s>#%d", name, handle->GetEntity().getId());
     }
     return absl::StrFormat("Node#%d", handle->GetEntity().getId());

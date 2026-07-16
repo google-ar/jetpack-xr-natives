@@ -95,14 +95,14 @@ void NodeDetails::DrawImGui() {
     }
   } else {
     // Just display the name.
-    ImGui::LabelText("name", name.c_str());
+    ImGui::LabelText("name", "%s", name.c_str());
   }
 
   if (scene_metadata && !scene_metadata->GetBaseUrl().empty()) {
     Editor& editor = view_.GetRegistry().Get<Editor>()->get();
     std::string base = editor.GetAssetLibrary()->RemoveHomeDirectoryFromPath(
         scene_metadata->GetBaseUrl());
-    ImGui::LabelText("base", base.c_str());
+    ImGui::LabelText("base", "%s", base.c_str());
   }
 
   ImGui::PushItemWidth(kDetailsUiWidth);

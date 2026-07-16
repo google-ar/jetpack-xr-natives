@@ -29,6 +29,7 @@
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "core/common/paired_vector.h"
 #include "core/common/typed_set_vector.h"
 #include "core/common/typed_vector.h"
 #include "core/material_library/material_param_value.h"
@@ -137,6 +138,8 @@ class ModelData {
             TypedVector<filament::VertexBuffer*> vertex_buffers,
             TypedVector<filament::IndexBuffer*> index_buffers,
             TypedVector<filament::MorphTargetBuffer*> morph_target_buffers,
+            PairedVector<OwnedTexturePtr, filament::MorphTargetBuffer*>
+                morph_target_uv0_textures,
             TypedVector<OwnedTexturePtr> textures,
             TypedVector<GenericMaterialPtr> materials,
             absl::flat_hash_map<uint16_t, MaterialId> material_id_lookup,
@@ -171,6 +174,8 @@ class ModelData {
   const TypedVector<filament::VertexBuffer*>& VertexBuffers() const;
   const TypedVector<filament::IndexBuffer*>& IndexBuffers() const;
   const TypedVector<filament::MorphTargetBuffer*>& MorphTargetBuffers() const;
+  const PairedVector<OwnedTexturePtr, filament::MorphTargetBuffer*>&
+  MorphTargetUv0Textures() const;
   // This is only used if the glTF has >4 weights, otherwise this is empty.
   const TypedVector<SkinningBufferData>& SkinningBuffers() const;
   const MeshVertexDataLookup& GetStoredVertexData() const;
@@ -192,6 +197,8 @@ class ModelData {
   TypedVector<filament::VertexBuffer*> vertex_buffers_;
   TypedVector<filament::IndexBuffer*> index_buffers_;
   TypedVector<filament::MorphTargetBuffer*> morph_target_buffers_;
+  PairedVector<OwnedTexturePtr, filament::MorphTargetBuffer*>
+      morph_target_uv0_textures_;
   TypedVector<OwnedTexturePtr> textures_;
   TypedVector<GenericMaterialPtr> materials_;
   absl::flat_hash_map<uint16_t, MaterialId> material_id_lookup_;

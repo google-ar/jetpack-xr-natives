@@ -62,10 +62,10 @@ class TestStereoSurfaceManager : public StereoSurfaceManager {
       int32_t node_id, int64_t alpha_mask_token) override;
   absl::Status SetContentColorMetadataForStereoSurfaceEntity(
       int32_t node_id, MediaColorSpace color_space = {}) override;
-  absl::Status SetSubViewConfigForStereoSurfaceEntity(int32_t node_id,
-                                                      float bottom, float left,
-                                                      float right,
-                                                      float top) override;
+  absl::Status SetSubViewConfigForStereoSurfaceEntity(
+      int32_t node_id, float left_bottom, float left_left, float left_right,
+      float left_top, float right_bottom, float right_left, float right_right,
+      float right_top) override;
 };
 
 }  // namespace imp

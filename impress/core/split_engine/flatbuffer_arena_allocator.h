@@ -24,7 +24,6 @@
 
 #include "zetasql/base/arena.h"
 #include "absl/base/thread_annotations.h"
-#include "absl/container/flat_hash_map.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "flatbuffers/allocator.h"
@@ -50,8 +49,8 @@ class ArenaAllocator {
   virtual ~ArenaAllocator() = default;
 
   // See the CreateArena function documentation for explanation of these types.
-  using LowLevelAllocFunc = void* (*)(size_t size, void* user);
-  using LowLevelDeallocFunc = void (*)(void* ptr, void* user);
+  using LowLevelAllocFunc = uint8_t* (*)(size_t size, void* user);
+  using LowLevelDeallocFunc = void (*)(uint8_t* ptr, void* user);
 
   enum class GrowthStrategy : uint8_t {
     // The first block is allocated either via operator new or via the
@@ -141,7 +140,7 @@ class ArenaAllocator {
   size_t GetArenaSize(ArenaHandle arena_handle);
 
   // Returns the address of the beginning of the first block in the arena.
-  void* GetArenaHead(ArenaHandle arena_handle);
+  uint8_t* GetArenaHead(ArenaHandle arena_handle);
 
   // Allocates memory from the specified arena.
   // Preconditions: An arena is currently active, which means 1) CreateArena has
@@ -150,9 +149,6 @@ class ArenaAllocator {
   // deallocate.
   uint8_t* AllocateArenaMemory(ArenaHandle arena_handle, size_t size);
 
-  flatbuffers::Allocator& GetFlatbufferAllocator(ArenaHandle arena_handle);
-
- protected:
   virtual std::unique_ptr<flatbuffers::Allocator> CreateFlatbufferAllocator(
       ArenaHandle arena_handle);
 
@@ -182,7 +178,7 @@ class ArenaAllocator {
     void Clear();
 
     // AreanaHead is non-null of a non-null first_block_alloc was pass to ctor.
-    void* GetArenaHead() const { return first_block_head_; }
+    uint8_t* GetArenaHead() const { return first_block_head_; }
 
     GrowthStrategy GetGrowthStrategy() const {
       return memory_options_.growth_strategy;
@@ -193,15 +189,13 @@ class ArenaAllocator {
    private:
     size_t block_size_;
     std::unique_ptr<zetasql_base::UnsafeArena> arena_;
-    void* first_block_head_;
+    uint8_t* first_block_head_;
     MemoryOptions memory_options_;
     bool in_use_;
   };
 
   absl::Mutex arenas_mutex_;
   std::vector<ArenaAndAllocFunc> arenas_ ABSL_GUARDED_BY(arenas_mutex_);
-  absl::flat_hash_map<ArenaHandle, std::unique_ptr<flatbuffers::Allocator>>
-      flatbuffer_allocators_ ABSL_GUARDED_BY(arenas_mutex_);
 };
 
 // In order to transmit flatbuffers over RPC effectively, we need to prefix them
@@ -265,7 +259,6 @@ class SizePrefixedArenaAllocator : public ArenaAllocator {
   ArenaHandle CreateArena(size_t block_size,
                           MemoryOptions memory_options) override;
 
- protected:
   std::unique_ptr<flatbuffers::Allocator> CreateFlatbufferAllocator(
       ArenaHandle arena_handle) override;
 };

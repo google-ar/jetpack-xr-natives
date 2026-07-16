@@ -30,7 +30,6 @@ DragGesture::DragGesture(Dispatcher* dispatcher,
       pointer_id_(pointer_hit.event.GetChangedPointer().id),
       pointer_retainer_(),
       start_position_(pointer_hit.event.GetChangedPointer().point),
-      start_elapsed_time_(pointer_hit.event.ElapsedTime()),
       // TODO Handle RayHit and DoubleRayHit variant
       start_hit_(pointer_hit.GetTruncatedRayHit()),
       position_(start_position_) {}
@@ -92,9 +91,7 @@ bool DragGesture::TryStart(const PointerHitEvent& pointer_hit) {
   float2 new_position = event.GetChangedPointer(current_pointer_index).point;
   float2 delta_from_start = new_position - start_position_;
   float distance = length(delta_from_start);
-  auto elapsed_time = event.ElapsedTime() - start_elapsed_time_;
-  if (distance > kDragStartThresholdPixels ||
-      elapsed_time > kDragStartThresholdDuration) {
+  if (distance > kDragStartThresholdPixels) {
     pointer_retainer_ = GetPointerUtils()->RetainPointer(pointer_id_);
 
     float2 delta = TryUpdatePosition(pointer_hit).value_or(float2(0, 0));

@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_ASYNC_FUTURE_IMPL_H_
 #define THIRD_PARTY_IMPRESS_CORE_ASYNC_FUTURE_IMPL_H_
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -25,6 +26,7 @@
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
+#include "absl/container/inlined_vector.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -352,8 +354,8 @@ class FutureImpl {
 
   // Get the list of futures that should have their priority bubbled up to
   // from this future.
-  std::vector<std::shared_ptr<FutureImplWrapper>> GetPriorityBubbleUpTargets()
-      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+  absl::InlinedVector<std::shared_ptr<FutureImplWrapper>, 1>
+  GetPriorityBubbleUpTargets() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   // Refreshes the active priority of this future. Returns true if the active
   // priority changed.
@@ -376,7 +378,7 @@ class FutureImpl {
   ResultHolder result_ ABSL_GUARDED_BY(mu_);
 
   // Relationships that are resolved when this future becomes ready.
-  std::vector<Relationship> relationships_ ABSL_GUARDED_BY(mu_);
+  absl::InlinedVector<Relationship, 1> relationships_ ABSL_GUARDED_BY(mu_);
 
   // If set, this is the type-erased parent of this future.
   // Used to hold the parent future in memory until this futures result
@@ -611,6 +613,12 @@ void AddFutureToCombineResult(
     const std::shared_ptr<FutureImpl::FutureImplWrapper>& future_to_combine,
     absl::BlockingCounter* remaining_futures_counter,
     absl::Status* combined_status);
+
+struct CombineState {
+  explicit CombineState(size_t num_futures) : counter(num_futures) {}
+  absl::BlockingCounter counter;
+  absl::Status status;
+};
 
 }  // namespace internal
 

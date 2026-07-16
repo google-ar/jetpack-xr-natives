@@ -26,6 +26,7 @@
 #include "core/async/future.h"
 #include "core/materials/compiler/cache/material_cache.h"
 #include "core/materials/compiler/material_compiler_client.h"
+#include "core/materials/compiler/material_compiler_config.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
 #include "core/view/base_view.h"
 
@@ -51,8 +52,8 @@ class RuntimeMaterialCompiler {
   // Compiles the given source material (.mat) and returns a runtime Filament
   // Material representation. Expects the material input to be already inlined.
   Future<filament::Material*> CompileMaterial(
-      absl::string_view source_material_string, Platform platform,
-      TargetApi target_api,
+      absl::string_view source_material_string,
+      const MaterialCompilerConfig& config,
       const MaterialPreCompileOptions& material_precompile_options =
           MaterialAsset::kDefaultPreCompileOptions);
 

@@ -28,6 +28,7 @@
 #include "core/config.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_constants.h"
+#include "core/editor/editor_info.h"
 #include "core/editor/layout/layout_composer.h"
 #include "core/editor/remote_editor/remote_editor_config.h"
 #include "core/editor/remote_editor/remote_editor_renderer.h"
@@ -93,7 +94,7 @@ RemoteEditorServer::RemoteEditorServer(BaseView& view,
 RemoteEditorServer::~RemoteEditorServer() {
   ClearRemembered();
   if (executor_ != Executor::CurrentExecutor()) {
-    IMP_LOG(imp::DFATAL)
+    IMP_LOG(imp::ERROR)
         << "RemoteEditorServer must be destroyed on the foreground thread.";
   }
   Stop();
@@ -122,6 +123,15 @@ void RemoteEditorServer::Start(const RemoteEditorConfig& config) {
   }
 
   UpdateRemoteRenderingState();
+
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_.GetRegistry().Get<editor::Editor>();
+  if (editor.ok()) {
+    editor->get().SetDisplayMode(
+        config_.mode == Mode::kUiStreaming
+            ? editor::EditorInfo::DisplayMode::kRemoteScreen
+            : editor::EditorInfo::DisplayMode::kNativeScreen);
+  }
 }
 
 void RemoteEditorServer::Stop() {
@@ -136,6 +146,13 @@ void RemoteEditorServer::Stop() {
   }
 
   UpdateRemoteRenderingState();
+
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_.GetRegistry().Get<editor::Editor>();
+  if (editor.ok()) {
+    editor->get().SetDisplayMode(
+        editor::EditorInfo::DisplayMode::kNativeScreen);
+  }
 }
 
 absl::Status RemoteEditorServer::SetRenderTargetWindow(void* native_window,

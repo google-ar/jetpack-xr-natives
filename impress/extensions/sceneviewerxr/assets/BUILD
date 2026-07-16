@@ -22,6 +22,15 @@ package(
 )
 
 imp_assets(
+    name = "plane_assets",
+    srcs = [
+        "DotPattern.png",
+        "DotPattern_64.png",
+    ],
+    namespace = "imp",
+)
+
+imp_assets(
     name = "footprint_assets",
     srcs = [
         "Footprint.glb",

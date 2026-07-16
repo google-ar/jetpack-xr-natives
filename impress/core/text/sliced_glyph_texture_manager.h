@@ -23,12 +23,12 @@
 #include <memory>
 
 #include "filament/libs/utils/include/utils/Entity.h"
-#include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
 #include "core/common/bit_vector.h"
 #include "core/common/paired_vector.h"
 #include "core/common/rememberer.h"
+#include "core/materials/material.h"
 #include "core/math/math.h"
 #include "core/render/texture.h"
 #include "core/text/glyph_atlas_slice.h"
@@ -54,7 +54,7 @@ class SlicedGlyphTextureManager {
   uint2 GetGridSize() const { return grid_size_; }
 
   // Assigns the source texture to the blitting material.
-  void PrepareBlit(SliceId slice, Texture* texture);
+  void PrepareBlit(SliceId slice, BorrowedTexturePtr texture);
 
   // Renders a single slice.
   void RenderSlice(filament::Renderer& renderer, SliceId slice);
@@ -86,9 +86,9 @@ class SlicedGlyphTextureManager {
 
   filament::RenderTarget* blit_render_target_;
 
-  // Each slice gets a View, Scene, MaterialInstance, and Entity for blitting.
+  // Each slice gets a View, Scene, Material, and Entity for blitting.
   PairedVector<filament::View*, Slice> blit_views_;
-  PairedVector<filament::MaterialInstance*, Slice> blit_material_instances_;
+  PairedVector<MaterialPtr, Slice> blit_materials_;
   PairedVector<filament::Scene*, Slice> blit_scenes_;
   PairedVector<::utils::Entity, Slice> blit_entities_;
 };

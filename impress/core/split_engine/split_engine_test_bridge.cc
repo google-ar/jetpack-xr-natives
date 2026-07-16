@@ -23,16 +23,18 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/types/span.h"
 #include "filament/libs/utils/include/utils/ashmem.h"
+#include "flatbuffers/allocator.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/common/invocable.h"
@@ -76,10 +78,10 @@ bool TestSplitEngineAndroidBridge::SendCommand(
 }
 
 bool TestSplitEngineAndroidBridge::SendRequest(
-    const std::vector<uint8_t>& data,
-    std::function<void(const std::vector<uint8_t>&)> callback) {
+    absl::Span<const uint8_t> data,
+    imp::Invocable<void(absl::Span<const uint8_t>)> callback) {
   return split_engine_test_bridge_serializer_
-      .SendRequest(bridge_client_.GetClientId(), data, callback)
+      .SendRequest(bridge_client_.GetClientId(), data, std::move(callback))
       .ok();
 }
 
@@ -96,8 +98,9 @@ TestSplitEngineBridgeBuffer::TestSplitEngineBridgeBuffer(
   if (shared_memory_region_fd_ == 0) {
     IMP_LOG(imp::FATAL) << "Failed to allocate render bridge buffer";
   }
-  mmapped_ptr_ = ::mmap(nullptr, size_in_bytes_, PROT_READ | PROT_WRITE,
-                        MAP_SHARED, shared_memory_region_fd_, 0);
+  mmapped_ptr_ = static_cast<uint8_t*>(
+      ::mmap(nullptr, size_in_bytes_, PROT_READ | PROT_WRITE, MAP_SHARED,
+             shared_memory_region_fd_, 0));
   if (mmapped_ptr_ == MAP_FAILED) {
     IMP_LOG(imp::FATAL) << "Failed to mmap RenderingBridgeAssetBuffer";
   }
@@ -125,26 +128,26 @@ TestSplitEngineBridgeSender::TestSplitEngineBridgeSender(
     TestSplitEngineAndroidBridge& test_bridge)
     : test_bridge_(test_bridge) {}
 
-void* AllocateSharedMemoryBuffer(size_t size_in_bytes, void* user) {
+uint8_t* AllocateSharedMemoryBuffer(size_t size_in_bytes, void* user) {
   return reinterpret_cast<TestSplitEngineBridgeSender*>(user)
       ->CreateSharedMemoryBuffer(size_in_bytes);
 }
 
-void DeallocateSharedMemoryBuffer(void* ptr, void* user) {
+void DeallocateSharedMemoryBuffer(uint8_t* ptr, void* user) {
   reinterpret_cast<TestSplitEngineBridgeSender*>(user)
       ->DestroySharedMemoryBuffer(ptr);
 }
 
-void* TestSplitEngineBridgeSender::CreateSharedMemoryBuffer(
+uint8_t* TestSplitEngineBridgeSender::CreateSharedMemoryBuffer(
     size_t size_in_bytes) {
   auto bridge_buffer =
       std::make_unique<TestSplitEngineBridgeBuffer>(size_in_bytes);
-  void* buffer_head = bridge_buffer->Data();
+  uint8_t* buffer_head = bridge_buffer->Data();
   bridge_buffers_.emplace(buffer_head, std::move(bridge_buffer));
   return buffer_head;
 }
 
-void TestSplitEngineBridgeSender::DestroySharedMemoryBuffer(void* head) {
+void TestSplitEngineBridgeSender::DestroySharedMemoryBuffer(uint8_t* head) {
   // Note that the map that we're erasing from holds unique_ptrs, so this
   // erase() doesn't just remove it from the map but also destroys the
   // BridgeBuffer object.
@@ -182,13 +185,13 @@ absl::StatusOr<MessageGroupId> TestSplitEngineBridgeSender::BeginMessageGroup(
   
 
   // Step 2: Send a `BeginMessageGroup` message with the arena handle.
-  flatbuffers::FlatBufferBuilder fbb(
-      GetBeginMessageSize(),
-      &arena_allocator_.GetFlatbufferAllocator(arena_handle));
-
   const MessageGroupId group_id = test_bridge_.GenerateMessageGroupId();
   
   
+  
+
+  flatbuffers::FlatBufferBuilder fbb(GetBeginMessageSize(),
+                                     &GetFlatbufferAllocator(group_id));
 
   flatbuffers::Offset<android_xr::schemas::MessageGroupOperation>
       message_group = android_xr::schemas::CreateMessageGroupOperation(
@@ -209,10 +212,8 @@ absl::StatusOr<MessageGroupId> TestSplitEngineBridgeSender::BeginMessageGroup(
 imp::OwnedPtr<flatbuffers::FlatBufferBuilder>
 TestSplitEngineBridgeSender::CreateFlatBufferBuilder(MessageGroupId group_id,
                                                      size_t size_bytes) {
-  auto it = arena_handles_.find(group_id);
-  
   return imp::MakeOwned<flatbuffers::FlatBufferBuilder>(
-      size_bytes, &arena_allocator_.GetFlatbufferAllocator(it->second));
+      size_bytes, &GetFlatbufferAllocator(group_id));
 }
 
 absl::Status TestSplitEngineBridgeSender::EndMessageGroup(
@@ -220,30 +221,34 @@ absl::Status TestSplitEngineBridgeSender::EndMessageGroup(
   auto it = arena_handles_.find(group_id);
   
   const ArenaAllocator::ArenaHandle arena_handle = it->second;
-  flatbuffers::FlatBufferBuilder fbb(
-      GetBeginMessageSize(),
-      &arena_allocator_.GetFlatbufferAllocator(arena_handle));
+  {
+    flatbuffers::FlatBufferBuilder fbb(GetEndMessageSize(),
+                                       &GetFlatbufferAllocator(group_id));
 
-  const flatbuffers::Offset<android_xr::schemas::MessageGroupOperation>
-      message_group = android_xr::schemas::CreateMessageGroupOperation(
-          fbb, group_id,
-          android_xr::schemas::MessageGroupOperationTypes::EndMessageGroup,
-          android_xr::schemas::CreateEndMessageGroup(fbb).Union());
-  fbb.Finish(message_group);
+    const flatbuffers::Offset<android_xr::schemas::MessageGroupOperation>
+        message_group = android_xr::schemas::CreateMessageGroupOperation(
+            fbb, group_id,
+            android_xr::schemas::MessageGroupOperationTypes::EndMessageGroup,
+            android_xr::schemas::CreateEndMessageGroup(fbb).Union());
+    fbb.Finish(message_group);
 
-  // Test Bridge forwards everything to Renderer::HandleMessage, so we don't
-  // need to actually send the EndMessageGroup message, but we do need to
-  // build the message to utilize the memory.
-  //
-  // SendMessage(fbb);
+    // Test Bridge forwards everything to Renderer::HandleMessage, so we don't
+    // need to actually send the EndMessageGroup message, but we do need to
+    // build the message to utilize the memory.
+    //
+    // SendMessage(fbb);
 
-  // It's okay to destroy the arena here, since ::SendMessage copies the data
-  // out of the arena.
-  arena_allocator_.DestroyArena(
-      arena_handle,
-      /* allow_recycle= */
-      GetMessageGroupType(group_id) == MessageType::kFrameUpdate);
-  arena_handles_.erase(it);
+    // It's okay to destroy the arena here, since ::SendMessage copies the data
+    // out of the arena.
+    arena_allocator_.DestroyArena(
+        arena_handle,
+        /* allow_recycle= */
+        GetMessageGroupType(group_id) == MessageType::kFrameUpdate);
+    arena_handles_.erase(it);
+  }
+
+  // FlatbufferBuilder shall be destroyed before the arena allocator.
+  flatbuffer_allocators_.erase(arena_handle);
 
   return absl::OkStatus();
 }
@@ -280,8 +285,8 @@ void TestSplitEngineBridgeSender::ClearReleasedMessageGroups() {
   // Do nothing since data is copied out of the arenas.
 }
 
-absl::StatusOr<size_t> TestSplitEngineBridgeSender::GetActiveMessageGroupCount()
-    const {
+absl::StatusOr<size_t> TestSplitEngineBridgeSender::GetActiveMessageGroupCount(
+    std::optional<MessageType> message_type) const {
   return 0;
 }
 
@@ -295,6 +300,22 @@ TestSplitEngineBridgeSender::GetMessageGroupType(
 
 void TestSplitEngineBridgeSender::Schedule(imp::Invocable<absl::Status()> fn) {
   
+}
+
+flatbuffers::Allocator& TestSplitEngineBridgeSender::GetFlatbufferAllocator(
+    MessageGroupId group_id) {
+  const auto arena_handle_it = arena_handles_.find(group_id);
+  
+  const ArenaAllocator::ArenaHandle arena_handle = arena_handle_it->second;
+  const auto it = flatbuffer_allocators_.find(arena_handle);
+  if (it != flatbuffer_allocators_.end()) {
+    return *it->second;
+  }
+
+  const auto [result, _] = flatbuffer_allocators_.emplace(
+      arena_handle, arena_allocator_.CreateFlatbufferAllocator(arena_handle));
+
+  return *result->second;
 }
 
 }  // namespace imp::split_engine

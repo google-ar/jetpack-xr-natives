@@ -154,7 +154,7 @@ void DirectoryUiDesktop::DrawDirectoriesHeader() {
   float text_quarter_height = ImGui::GetTextLineHeight() * 0.25f;
   ImGui::SetCursorPosY((button_half_height - text_quarter_height) +
                        ImGui::GetCursorPosY());
-  ImGui::Text(repo_relative_path.c_str());
+  ImGui::Text("%s", repo_relative_path.c_str());
 }
 
 void DirectoryUiDesktop::DrawDirectoriesInCurrentDirectory() {

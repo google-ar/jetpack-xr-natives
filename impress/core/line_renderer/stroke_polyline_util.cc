@@ -64,7 +64,7 @@ int MaxVerticesForExtrudedStroke(int number_of_points, bool has_stamp,
   if (!loop) {
     // Don't include a start cap if connecting to the previous line.
     if (!connect_to_previous) {
-      switch (end_cap) {
+      switch (start_cap) {
         case LineCapShape::LINE_CAP_SHAPE_ROUNDED:
           count += kMaxSegmentsPerRoundedJoint;
           break;
@@ -141,10 +141,7 @@ int MaxIndicesForExtrudedStroke(int number_of_points, LineCapShape start_cap,
   // Add 2 for start and end caps.
   count += (num_segments + 2) * kIndicesPerQuad;
 
-  if (loop) {
-    // Looping adds another segment.
-    ++num_segments;
-  } else {
+  if (!loop) {
     if (!connect_to_previous) {
       switch (start_cap) {
         case LineCapShape::LINE_CAP_SHAPE_ROUNDED:

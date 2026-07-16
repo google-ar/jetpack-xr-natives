@@ -52,6 +52,10 @@ class GroupToProjectionQuadTextureRenderer : public imp::Component {
   absl::Status SetProjectionQuadStateInfo(
       const std::optional<ProjectionQuadState>& projection_quad_state);
 
+  const GroupToProjectionQuadTextureRendererState& GetState() const {
+    return state_;
+  }
+
  private:
   // Creates the Pipeline Renderer to facilitate rendering the offscreen
   // texture.

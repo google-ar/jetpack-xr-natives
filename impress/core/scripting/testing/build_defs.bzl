@@ -85,7 +85,6 @@ def _scripting_end_to_end_wasm_impl(name):
             # TODO: Add additional browsers here.
         ],
         configs = [
-            "//testing/web/configs:disable_web_security",
             "//testing/web/configs:enable_wtl_fileserver_cross_origin_isolation",
         ],
         # The example needs some files to run tests against.
@@ -128,6 +127,4 @@ def scripting_end_to_end_test(name, srcs = [], cc_deps = [], android_test_deps =
         deps = ios_test_deps + cc_deps,
     )
 
-    _scripting_end_to_end_wasm_impl(
-        name = name + "_wasm_endtoend_test",
-    )
+    _scripting_end_to_end_wasm_impl(name = name + "_wasm_endtoend_test")

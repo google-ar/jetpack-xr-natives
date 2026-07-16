@@ -429,7 +429,7 @@ void RecipeEditor::DrawRecipeVariables() {
       StringMap<recipe::Variable> variables = scope.GetVariables();
       for (auto& [name, variable] : variables) {
         ImGui::Text(
-            absl::StrCat(name, ": ", recipe::ToString(variable)).c_str());
+            "%s", absl::StrCat(name, ": ", recipe::ToString(variable)).c_str());
       }
     }
     ImGui::EndListBox();
@@ -459,11 +459,9 @@ void RecipeEditor::DrawSearchBar() {
   }
   ImGui::PopItemWidth();
 
-  ImGui::Text(
-      absl::StrFormat("%u of %u",
-                      search_results_.empty() ? 0 : search_result_index_ + 1,
-                      search_results_.size())
-          .c_str());
+  ImGui::Text("%zu of %zu",
+              search_results_.empty() ? 0 : search_result_index_ + 1,
+              search_results_.size());
 
   ImGui::SameLine();
   if (ImGui::Button("<")) {
@@ -864,11 +862,12 @@ void RecipeEditor::DrawNode(const RecipeEditorGraph::Node& node) {
   ax::NodeEditor::BeginNode(node_id);
 
   ImGui::BeginGroup();
-  ImGui::Text(node.type_name.c_str());
-  ImGui::Text(node.name.c_str());
-  ImGui::Text(node.content.c_str());
+  ImGui::Text("%s", node.type_name.c_str());
+  ImGui::Text("%s", node.name.c_str());
+  ImGui::Text("%s", node.content.c_str());
   for (auto& [name, value] : node.return_values) {
-    ImGui::Text(absl::StrCat(name, ": ", recipe::ToString(value)).c_str());
+    ImGui::Text("%s",
+                absl::StrCat(name, ": ", recipe::ToString(value)).c_str());
   }
   ImGui::EndGroup();
 
@@ -881,7 +880,7 @@ void RecipeEditor::DrawNode(const RecipeEditorGraph::Node& node) {
                              ax::NodeEditor::PinKind::Input);
     DrawSocket(socket, /*connected=*/true);
     ImGui::SameLine();
-    ImGui::Text(socket.name.c_str());
+    ImGui::Text("%s", socket.name.c_str());
     ax::NodeEditor::EndPin();
   }
   ImGui::EndGroup();
@@ -898,7 +897,7 @@ void RecipeEditor::DrawNode(const RecipeEditorGraph::Node& node) {
                              ax::NodeEditor::PinKind::Output);
     ax::NodeEditor::PinPivotAlignment(ImVec2(1.0f, 0.5f));
     ax::NodeEditor::PinPivotSize(ImVec2(0, 0));
-    ImGui::Text(socket.name.c_str());
+    ImGui::Text("%s", socket.name.c_str());
     ImGui::SameLine();
     // TODO Check if sockets are connected.
     DrawSocket(socket, /*connected=*/true);

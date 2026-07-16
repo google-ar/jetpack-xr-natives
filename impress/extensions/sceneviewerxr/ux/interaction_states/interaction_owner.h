@@ -87,6 +87,8 @@ class InteractionOwner {
 
   virtual UiEventListener* GetUiEventListener() = 0;
 
+  virtual void TriggerShutdownCallback() = 0;
+
   // Translation State Dependencies
   virtual std::optional<imp::float3> GetAnchorSnapPosition(
       imp::float3 footprint_position_local) = 0;

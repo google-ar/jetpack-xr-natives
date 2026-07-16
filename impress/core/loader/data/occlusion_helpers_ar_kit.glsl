@@ -29,13 +29,8 @@ float getVisibility(float renderedDepth, vec2 backgroundUv) {
   // While iOS never needs to generate ESSL 1.0 code, this file is included by
   // both Feature Level 0 and 1 materials, and Feature Level 0 shaders are
   // always validated against ESSL 1.0.
-#if FILAMENT_EFFECTIVE_VERSION == 100
-  float4 depth_texture_sample =
-    texture2D(materialParams_estimatedDepthTexture, backgroundUv);
-#else
   float4 depth_texture_sample =
     texture(materialParams_estimatedDepthTexture, backgroundUv);
-#endif
   // x channel contains the contents of the ARKit Dilated Depth texture.
   float depth = depth_texture_sample.x;
   // y channel contains the contents of the ARKit matte texture.

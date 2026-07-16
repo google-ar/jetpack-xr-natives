@@ -65,14 +65,10 @@ cc_library(
 
 # Target for the impress framework's node-component-system-behavior API.
 # Also includes the impress framework's dispatcher API, and some serialization functionality.
-#
-# TODO: Break out the dispatcher into its own library. This is non-trivial because
-# there is a circular dependency between Node and Dispatcher.
 cc_library(
     name = "ncsb",
     srcs = [
         "base_component_pool.cc",
-        "base_node.cc",
         "component.cc",
         "component_manager.cc",
         "dispatcher/connection_owner.cc",
@@ -90,7 +86,6 @@ cc_library(
     ],
     hdrs = [
         "base_component_pool.h",
-        "base_node.h",
         "component.h",
         "component_handle.h",
         "component_id.h",
@@ -110,7 +105,10 @@ cc_library(
         "isf_info.h",
         "node.h",
         "node_attachment_manager.h",
+        "node_children_iterator.h",
         "node_controller.h",
+        "node_definition.h",
+        "node_group_constants.h",
         "node_handle.h",
         "node_handle_message.h",
         "path_manager.h",

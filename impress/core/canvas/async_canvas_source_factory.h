@@ -29,7 +29,8 @@ namespace AsyncCanvasSourceFactory {
 std::unique_ptr<AsyncCanvasSource> Create(
     Context context, bool use_hardware_rendering = true,
     bool force_auto_method_rendering = false,
-    bool force_individual_glyph_source_instances = false);
+    bool force_individual_glyph_source_instances = false,
+    bool enable_label_prep_profile_logging = false);
 
 }  // namespace AsyncCanvasSourceFactory
 

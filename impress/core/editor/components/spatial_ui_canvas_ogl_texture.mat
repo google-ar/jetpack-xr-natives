@@ -23,16 +23,13 @@ material {
           default : false
       }
   ],
-  depthWrite: false,
   parameters: [
     { type: samplerExternal, name: globalBaseColor },
     { type: float2, name: cornerUv },
     { type: float2, name: sizeUv }
   ],
   requires: [ uv0 ],
-  culling : none,
-  depthWrite : false,
-  blending : transparent,
+  blending : opaque,
   shadingModel : unlit,
 }
 

@@ -102,6 +102,7 @@ struct PrimitiveTarget {
   std::optional<AccessorId> position = std::nullopt;
   std::optional<AccessorId> tangent = std::nullopt;
   std::optional<AccessorId> normal = std::nullopt;
+  std::optional<AccessorId> texcoord_0 = std::nullopt;
 };
 
 struct PrimitiveAccessors {
@@ -158,6 +159,16 @@ OptionalError GetMorphTargetsFromPrimitive(const Gltf& gltf,
             morph_target_index);
       }
       current_target.tangent = AccessorId::At(accessor_id);
+    }
+
+    if (target.texcoord_0.has_value()) {
+      int accessor_id = static_cast<int>(target.texcoord_0.value());
+      if (accessor_id < 0) {
+        return Error(
+            "Invalid value passed in for morph target texcoord_0 at index %i",
+            morph_target_index);
+      }
+      current_target.texcoord_0 = AccessorId::At(accessor_id);
     }
 
     out_accessors->targets.push_back(current_target);
@@ -477,20 +488,45 @@ OptionalError AppendMorphTargetAttributes(
     const absl::optional<DenseDataAccess>& indices_data,
     AccessorId normal_map_texcoord_id,
     std::vector<LoadedModelBuilder::MorphTargetBlock>* out_attributes) {
-  for (const PrimitiveTarget& target : targets) {
-    // Step 1: Gets morph target positions.
-    if (!target.position.has_value()) {
-      return absl::InvalidArgumentError("Morph target must have a position");
-    }
-    MP_ASSIGN_OR_RETURN(AccessorReader morph_target_positions_reader,
-                     AccessorReader::Create(gltf, *target.position));
-    MP_ASSIGN_OR_RETURN(DenseDataAccess morph_target_position_data,
-                     morph_target_positions_reader.GetPackedFloatData());
-    BufferAccess dest_positions_access =
-        morph_target_position_data.ReleaseBufferAccess();
+  AccessorId base_positions_accessor_id =
+      attribute_lookup[Gltf2Attribute::POSITION];
+  if (!base_positions_accessor_id) {
+    return Error("Primitive has no base positions");
+  }
+  MP_ASSIGN_OR_RETURN(AccessorReader base_positions_reader,
+                   AccessorReader::Create(gltf, base_positions_accessor_id));
+  const size_t vertex_count = base_positions_reader.GetCount();
 
-    // Step 2: Gets morph target normals.
-    // 2.a: Finds Accessor for base normal data.
+  for (const PrimitiveTarget& target : targets) {
+    // Step 1: Get optional morph target texcoords.
+    BufferAccess dest_texcoords_access;
+    if (target.texcoord_0.has_value()) {
+      MP_ASSIGN_OR_RETURN(AccessorReader morph_target_texcoords_reader,
+                       AccessorReader::Create(gltf, *target.texcoord_0));
+      MP_ASSIGN_OR_RETURN(DenseDataAccess morph_target_texcoord_data,
+                       morph_target_texcoords_reader.GetPackedFloatData());
+      dest_texcoords_access = morph_target_texcoord_data.ReleaseBufferAccess();
+    }
+
+    // Step 2: Gets morph target positions.
+    BufferAccess dest_positions_access;
+    std::optional<AccessorReader> morph_target_positions_reader;
+    if (target.position.has_value()) {
+      MP_ASSIGN_OR_RETURN(AccessorReader reader,
+                       AccessorReader::Create(gltf, *target.position));
+      morph_target_positions_reader = std::move(reader);
+      MP_ASSIGN_OR_RETURN(DenseDataAccess morph_target_position_data,
+                       morph_target_positions_reader->GetPackedFloatData());
+      dest_positions_access = morph_target_position_data.ReleaseBufferAccess();
+    } else {
+      // Fill in zeros for morph target positions.
+      uint8_t* ptr = BufferAccess::Create(vertex_count * sizeof(float3),
+                                          &dest_positions_access);
+      memset(ptr, 0, vertex_count * sizeof(float3));
+    }
+
+    // Step 3: Gets morph target normals.
+    // 3.a: Finds Accessor for base normal data.
     AccessorId base_normals_accessor_id =
         attribute_lookup[Gltf2Attribute::NORMAL];
     if (!base_normals_accessor_id) {
@@ -502,7 +538,7 @@ OptionalError AppendMorphTargetAttributes(
     MP_ASSIGN_OR_RETURN(DenseDataAccess absolute_morphed_normals,
                      base_normals_reader.GetPackedFloatData());
 
-    // 2.b Adds morph normal data (if any) to base normal data.
+    // 3.b Adds morph normal data (if any) to base normal data.
     bool has_morph_target_normals_accessor_id = target.normal.has_value();
     if (has_morph_target_normals_accessor_id) {
       MP_ASSIGN_OR_RETURN(AccessorReader morph_target_normals_reader,
@@ -512,14 +548,14 @@ OptionalError AppendMorphTargetAttributes(
           AccessorReader::RetrievalMode::kAdd));
     }
 
-    // Step 3: Gets morph target tangents.
-    // 3.a: Finds Accessor for the base/underlying tangent data which we are
+    // Step 4: Gets morph target tangents.
+    // 4.a: Finds Accessor for the base/underlying tangent data which we are
     // adding the morph tangent data to.
     AccessorId base_tangents_accessor_id =
         attribute_lookup[Gltf2Attribute::TANGENT];
     bool has_morph_target_tangents_accessor_id = target.tangent.has_value();
 
-    // 3.b(1) Base tangents exists: Generates orientation with normals and
+    // 4.b(1) Base tangents exists: Generates orientation with normals and
     // tangents.
     // Adjusts tangents by morph differences if provided, otherwise use base
     // tangent values.
@@ -552,7 +588,8 @@ OptionalError AppendMorphTargetAttributes(
       out_attributes->push_back(LoadedModelBuilder::MorphTargetBlock(
           std::move(dest_positions_access),
           ConvertFloat4ToShort4Buffer(orientations.Data(),
-                                      absolute_morphed_normals.GetCount())));
+                                      absolute_morphed_normals.GetCount()),
+          std::move(dest_texcoords_access)));
       continue;
     } else {
       if (has_morph_target_tangents_accessor_id) {
@@ -561,20 +598,17 @@ OptionalError AppendMorphTargetAttributes(
       }
     }
 
-    // 3.b(2) No base tangents: Tries to generate orientations by passing
+    // 4.b(2) No base tangents: Tries to generate orientations by passing
     // normals and texcoords to filament's SurfaceOrientation helper.
     if (!base_tangents_accessor_id && normal_map_texcoord_id) {
       // To generate tangents, we need to calculate the final vertex positions
       // modified by the morph target positions.
-      AccessorId base_positions_accessor_id =
-          attribute_lookup[Gltf2Attribute::POSITION];
-      MP_ASSIGN_OR_RETURN(
-          AccessorReader base_positions_reader,
-          AccessorReader::Create(gltf, base_positions_accessor_id));
       MP_ASSIGN_OR_RETURN(DenseDataAccess absolute_positions,
                        base_positions_reader.GetPackedFloatData());
-      MP_RETURN_IF_ERROR(morph_target_positions_reader.FillValues<float3>(
-          absolute_positions, AccessorReader::RetrievalMode::kAdd));
+      if (morph_target_positions_reader.has_value()) {
+        MP_RETURN_IF_ERROR(morph_target_positions_reader->FillValues<float3>(
+            absolute_positions, AccessorReader::RetrievalMode::kAdd));
+      }
 
       MP_ASSIGN_OR_RETURN(AccessorReader texcoord_reader,
                        AccessorReader::Create(gltf, normal_map_texcoord_id));
@@ -591,14 +625,15 @@ OptionalError AppendMorphTargetAttributes(
         out_attributes->push_back(LoadedModelBuilder::MorphTargetBlock(
             std::move(dest_positions_access),
             ConvertFloat4ToShort4Buffer(tangents.value().Data(),
-                                        base_normals_reader.GetCount())));
+                                        base_normals_reader.GetCount()),
+            std::move(dest_texcoords_access)));
         continue;
       } else {
         IMP_LOG(imp::WARNING) << tangents.status();
       }
     }
 
-    // 3.b(3) No base tangents, no textcoords or generate tangents from
+    // 4.b(3) No base tangents, no textcoords or generate tangents from
     // textcoords failed: Generates orientations with normals only.
     MP_ASSIGN_OR_RETURN(BufferAccess orientations,
                      GetOrientations(absolute_morphed_normals, nullptr));
@@ -610,7 +645,8 @@ OptionalError AppendMorphTargetAttributes(
     out_attributes->push_back(LoadedModelBuilder::MorphTargetBlock(
         std::move(dest_positions_access),
         ConvertFloat4ToShort4Buffer(orientations.Data(),
-                                    absolute_morphed_normals.GetCount())));
+                                    absolute_morphed_normals.GetCount()),
+        std::move(dest_texcoords_access)));
   }
   return absl::OkStatus();
 }
@@ -1133,6 +1169,7 @@ OptionalError ProcessPrimitives(
         morph_target_attributes_per_primitive.back().size();
     std::vector<size_t> position_sizes(num_morph_targets);
     std::vector<size_t> tangent_sizes(num_morph_targets);
+    std::vector<size_t> texcoords0_sizes(num_morph_targets);
 
     for (std::vector<LoadedModelBuilder::MorphTargetBlock>&
              primitive_morph_target_attributes :
@@ -1142,6 +1179,7 @@ OptionalError ProcessPrimitives(
             primitive_morph_target_attributes[i];
         position_sizes[i] += primitive_morph_target_block.positions.Size();
         tangent_sizes[i] += primitive_morph_target_block.tangents.Size();
+        texcoords0_sizes[i] += primitive_morph_target_block.texcoords0.Size();
       }
     }
 
@@ -1150,6 +1188,8 @@ OptionalError ProcessPrimitives(
       size_t current_position_offset = 0;
       std::unique_ptr<uint8_t[]> tangents_data;
       size_t current_tangent_offset = 0;
+      std::unique_ptr<uint8_t[]> texcoords0_data;
+      size_t current_texcoords0_offset = 0;
     };
 
     std::vector<MorphTargetAttributesData> morph_target_attributes_data(
@@ -1174,6 +1214,10 @@ OptionalError ProcessPrimitives(
           morph_target_data.tangents_data =
               std::make_unique<uint8_t[]>(tangent_sizes[i]);
         }
+        if (!morph_target_data.texcoords0_data) {
+          morph_target_data.texcoords0_data =
+              std::make_unique<uint8_t[]>(texcoords0_sizes[i]);
+        }
 
         std::copy_n(primitive_morph_target_block.positions.Data(),
                     primitive_morph_target_block.positions.Size(),
@@ -1188,6 +1232,13 @@ OptionalError ProcessPrimitives(
                         morph_target_data.current_tangent_offset);
         morph_target_data.current_tangent_offset +=
             primitive_morph_target_block.tangents.Size();
+
+        std::copy_n(primitive_morph_target_block.texcoords0.Data(),
+                    primitive_morph_target_block.texcoords0.Size(),
+                    morph_target_data.texcoords0_data.get() +
+                        morph_target_data.current_texcoords0_offset);
+        morph_target_data.current_texcoords0_offset +=
+            primitive_morph_target_block.texcoords0.Size();
       }
     }
 
@@ -1199,7 +1250,9 @@ OptionalError ProcessPrimitives(
           BufferAccess(std::move(morph_target_data.positions_data),
                        position_sizes[i]),
           BufferAccess(std::move(morph_target_data.tangents_data),
-                       tangent_sizes[i])));
+                       tangent_sizes[i]),
+          BufferAccess(std::move(morph_target_data.texcoords0_data),
+                       texcoords0_sizes[i])));
     }
   }
 

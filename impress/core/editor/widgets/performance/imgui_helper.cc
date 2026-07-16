@@ -62,7 +62,7 @@ void ImGuiHelper::DrawLegendItem(const char* label, bool& show_flag,
   const float offset_y = (swatch_size.y - text_height) * 0.5f;
   ImGui::SetCursorPosY(ImGui::GetCursorPosY() + offset_y);
 
-  ImGui::Text(label);
+  ImGui::Text("%s", label);
 
   if (ImGui::IsItemClicked()) {
     show_flag = !show_flag;

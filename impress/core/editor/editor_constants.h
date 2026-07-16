@@ -19,6 +19,7 @@
 
 #include "absl/strings/string_view.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
+#include "core/math/vec.h"
 
 namespace imp::editor {
 // LINT.IfChange(overlay_objects_group_name)
@@ -54,6 +55,18 @@ static constexpr absl::string_view kSavedLayoutIniFile =
     "/third_party/impress/core/editor/layout/saved_layout.ini";
 
 static constexpr absl::string_view kEntireTexture = "Entire Texture";
+
+// Spherical coordinates for the world space editor panels, relative to the
+// camera at the origin.
+//   - x(distance_from_camera)
+//   - y(horizontal_offset_degrees)
+//   - z(vertical_offset_degrees)
+static constexpr float3 kScenePanelSphericalLocation = {3.0f, -55.0f, 0.0f};
+static constexpr float3 kDetailsPanelSphericalLocation = {3.0f, -30.0f, -10.0f};
+static constexpr float3 kTabBarSphericalLocation = {3.0f, -55.0f, 20.0f};
+
+// A large enough default size of the world space editor canvas.
+static constexpr float2 kDefaultWorldLayoutCanvasSize = {2000.0f, 800.0f};
 
 }  // namespace imp::editor
 

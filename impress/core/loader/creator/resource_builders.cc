@@ -401,7 +401,18 @@ absl::Status FillMorphTargetBuffer(BaseView& view, Engine* engine,
         "Failed to create Morph Target Buffer - Invalid vertex count");
   }
 
-  builder.Count(targets_count).VertexCount(vertex_count);
+  bool has_custom_morphs = false;
+  for (int index = 0; index < info->targets()->size(); index++) {
+    if (info->targets()->Get(index)->texcoords0() != nullptr) {
+      has_custom_morphs = true;
+      break;
+    }
+  }
+
+  builder.Count(targets_count)
+      .VertexCount(vertex_count)
+      .EnableCustomMorphing(has_custom_morphs);
+
   for (int index = 0; index < info->targets()->size(); index++) {
     const schemas::MorphTargetAttributeInfo* target =
         info->targets()->Get(index);

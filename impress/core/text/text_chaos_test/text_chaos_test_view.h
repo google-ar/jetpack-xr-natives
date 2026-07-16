@@ -21,15 +21,14 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/strings/string_view.h"
 #include "core/async/future.h"
-#include "core/editor/widget.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/text/text_renderer_state.proto.imp.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/gestures/drag_gesture.h"
 #include "core/view/framework/view.h"
+#include "core/view/utils/frame_time.h"
 #include "core/view/utils/proto/view_config.proto.imp.h"
 #include "samples/text_stress_test/text_stress_test_dictionaries.h"
 
@@ -38,18 +37,22 @@ namespace imp {
 class TextChaosTestView : public View {
  public:
   void Setup() override;
+  void Update(const FrameTime& frame_time) override;
 
  private:
   TextRendererState GenerateRandomState(std::mt19937* external_gen);
+  Language GetRandomLanguage(std::mt19937* external_gen);
   Future<absl::Status> CreateTextNodeInternal(const TextRendererState& state,
                                               float3 pos);
 
   NodeHandle text_root_;
+  std::vector<NodeHandle> text_nodes_;
 
   ViewConfig view_config_;
 
   // Number of text nodes to create.
-  int count_ = 100;
+  int min_count_ = 100;
+  int max_count_ = 300;
   // Min and max font size in pixels
   float min_size_ = 8.0f;
   float max_size_ = 32.0f;
@@ -60,6 +63,10 @@ class TextChaosTestView : public View {
   Language language_ = Language::kEnglish;
 
   int seed_ = 42;
+  std::mt19937 gen_;
+
+  float elapsed_time_ = 0.0f;
+  float test_duration_ = 30.0f;
 };
 
 }  // namespace imp

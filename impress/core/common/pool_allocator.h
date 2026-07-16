@@ -142,8 +142,7 @@ template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
 PoolAllocator<T, EnableGenerations, MaxBlockPower>::PoolAllocator()
     : Base(ComputeMemoryLayout()) {
   // Ensure T's alignment is respected.
-  static_assert(sizeof(Slot) + ComputeMemoryLayout().slots_start_offset_bytes <=
-                    ComputeMemoryLayout().page_size_bytes,
+  static_assert(sizeof(Slot) <= ComputeMemoryLayout().footer_offset_bytes,
                 "T is too large for PoolAllocator pages");
 }
 
@@ -166,7 +165,7 @@ PoolAllocator<T, EnableGenerations, MaxBlockPower>::Allocate(Args&&... args) {
     imp_pool_allocator_internal::SetOccupancy(
         reinterpret_cast<std::byte*>(ptr),
         ~(static_cast<uintptr_t>(kMemoryLayout.page_size_bytes) - 1),
-        GetSlotSize(), kMemoryLayout.slots_start_offset_bytes);
+        GetSlotSize(), kMemoryLayout.footer_offset_bytes);
   }
 
   // If enabled, create a key with the current generation.
@@ -207,7 +206,7 @@ void PoolAllocator<T, EnableGenerations, MaxBlockPower>::Deallocate(T* obj) {
     index = imp_pool_allocator_internal::UnsetOccupancy(
         reinterpret_cast<std::byte*>(obj),
         ~(static_cast<uintptr_t>(kMemoryLayout.page_size_bytes) - 1),
-        GetSlotSize(), kMemoryLayout.slots_start_offset_bytes);
+        GetSlotSize(), kMemoryLayout.footer_offset_bytes);
   }
 
   Base::ReleaseSlot(obj, index);
@@ -245,14 +244,14 @@ PoolAllocator<T, EnableGenerations, MaxBlockPower>::ComputeMemoryLayout() {
     page_size_bytes *= 2;
   }
 
-  // The number of slots that would fit in the page if there were no header.
+  // The number of slots that would fit in the page if there were no footer.
   size_t num_potential_slots = page_size_bytes / slot_size_bytes;
 
   // The number of 64-bit words needed for the occupancy bitmap to cover all of
   // the potential slots.
   size_t bitmap_words_per_page = (num_potential_slots + 63) / 64;
 
-  // Now we need to find how much space the header will take up.
+  // Now we need to find how much space the footer will take up.
   // It consists of a start_index (uint32_t), then the occupancy bitmap
 
   // The alignment between start_index and occupancy.
@@ -266,30 +265,21 @@ PoolAllocator<T, EnableGenerations, MaxBlockPower>::ComputeMemoryLayout() {
   // 8 because each word is 64 bits.
   size_t bitmap_bytes = bitmap_words_per_page * 8;
 
-  // The total size of the header.
-  size_t header_overhead = bitmap_offset + bitmap_bytes;
+  // The total size of the footer.
+  size_t footer_overhead = bitmap_offset + bitmap_bytes;
 
-  // The alignment requirement of Slot, used to determine where the slots start
-  // after the header.
-  size_t slot_alignment = alignof(Slot);
+  size_t footer_offset_bytes = page_size_bytes - footer_overhead;
 
-  // The offset from the start of the header to the first slot, correctly
-  // accounting for memory alignment.
-  size_t slots_start_offset_bytes =
-      (header_overhead + slot_alignment - 1) & ~(slot_alignment - 1);
-
-  // The actual number of slots that fit in the page after the header size is
+  // The actual number of slots that fit in the page after the footer size is
   // accounted for.
-  size_t slots_per_page =
-      (page_size_bytes - slots_start_offset_bytes) / slot_size_bytes;
+  size_t slots_per_page = footer_offset_bytes / slot_size_bytes;
 
   return {.slot_size_bytes = slot_size_bytes,
-          .slot_alignment = slot_alignment,
+          .slot_alignment = alignof(Slot),
           .page_size_bytes = static_cast<uint32_t>(page_size_bytes),
           .slots_per_page = static_cast<uint32_t>(slots_per_page),
           .bitmap_words_per_page = static_cast<uint32_t>(bitmap_words_per_page),
-          .slots_start_offset_bytes =
-              static_cast<uint32_t>(slots_start_offset_bytes)};
+          .footer_offset_bytes = static_cast<uint32_t>(footer_offset_bytes)};
 }
 
 template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
@@ -329,16 +319,15 @@ void PoolAllocator<T, EnableGenerations, MaxBlockPower>::ForEach(Fn&& fn) {
 
     for (size_t page_index = 0; page_index < pages_count; ++page_index) {
       std::byte* page_base = Base::pages_[page_index];
-      uint64_t* occupancy =
-          imp_pool_allocator_internal::GetPageOccupancy(page_base);
+      uint64_t* occupancy = imp_pool_allocator_internal::GetPageOccupancy(
+          page_base, kMemoryLayout.footer_offset_bytes);
 
       const uint32_t last_word_index_for_page =
           page_index == last_page_index
               ? last_word_index
               : kMemoryLayout.bitmap_words_per_page - 1;
 
-      Slot* page_slot_base = reinterpret_cast<Slot*>(
-          page_base + kMemoryLayout.slots_start_offset_bytes);
+      Slot* page_slot_base = reinterpret_cast<Slot*>(page_base);
 
       for (uint32_t w = 0; w <= last_word_index_for_page; ++w) {
         uint64_t mask =

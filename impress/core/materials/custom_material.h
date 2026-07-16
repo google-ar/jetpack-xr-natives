@@ -149,7 +149,8 @@ class CustomMaterial : public Material {
 
  private:
   CustomMaterial(filament::MaterialInstance* material_instance,
-                 AssetPtr<MaterialAsset> material_asset);
+                 AssetPtr<MaterialAsset> material_asset,
+                 bool is_destruction_check_enabled = false);
 
   void SetOwnedOrBorrowedTexture(
       absl::string_view parameter_name, OwnedOrBorrowedTexturePtr texture,
@@ -180,6 +181,8 @@ class CustomMaterial : public Material {
   // This is only used for debugging purposes to detect if the filament
   // texture is destroyed while it is in use.
   StringMap<const Texture*> parameters_to_raw_textures_;
+
+  bool is_destruction_check_enabled_;
 
   friend class MaterialFactory;
   friend class GenericMaterialImpl;

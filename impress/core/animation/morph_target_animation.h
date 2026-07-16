@@ -17,16 +17,18 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_ANIMATION_MORPH_TARGET_ANIMATION_H_
 #define THIRD_PARTY_IMPRESS_CORE_ANIMATION_MORPH_TARGET_ANIMATION_H_
 
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string>
 #include <utility>
 #include <variant>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "core/animation/curve.h"
 #include "core/animation/schemas/gltf_animation_generated.h"
-#include "core/common/flatbuffer_helpers.h"
-#include "core/math/math.h"
-#include "core/math/vec.h"
-#include "core/model/model_data.h"
 
 namespace imp::animation {
 
@@ -47,6 +49,9 @@ class MorphTargetAnimation {
   // channel for morph target animations. Guaranteed to always be
   // BaseCurve::Cursor.
   using WeightsCursor = BaseCurve::Cursor;
+
+  // Variant type for morph target animation extras.
+  using ExtraValue = std::variant<int32_t, float, std::string>;
 
   MorphTargetAnimation(MorphTargetAnimation&& other) = default;
   MorphTargetAnimation& operator=(MorphTargetAnimation&& other) = default;
@@ -69,10 +74,23 @@ class MorphTargetAnimation {
   std::array<float, 256> Evaluate(float frame_time,
                                   WeightsCursor* cursor) const;
 
+  // Returns the extra value for the given key if it exists and is of type T.
+  template <typename T>
+  std::optional<T> GetExtra(absl::string_view key) const {
+    auto it = extras_.find(key);
+    if (it != extras_.end() && std::holds_alternative<T>(it->second)) {
+      return std::get<T>(it->second);
+    }
+    return std::nullopt;
+  }
+
  private:
-  explicit MorphTargetAnimation(WeightVariant weights)
-      : weights_(std::move(weights)) {}
+  explicit MorphTargetAnimation(
+      WeightVariant weights,
+      absl::flat_hash_map<std::string, ExtraValue> extras)
+      : weights_(std::move(weights)), extras_(std::move(extras)) {}
   WeightVariant weights_;
+  absl::flat_hash_map<std::string, ExtraValue> extras_;
 };
 
 }  // namespace imp::animation

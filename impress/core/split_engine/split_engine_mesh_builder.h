@@ -196,12 +196,15 @@ class SplitEngineMorphTargetBufferBuilder
     std::vector<AttributeData> positions_;
     std::vector<AttributeData> tangents_;
 
+    bool enable_custom_morphing_ = false;
     bool finalized = false;
   };
 
   SplitEngineMorphTargetBufferBuilder& VertexCount(
       size_t vertexCount) noexcept override;
   SplitEngineMorphTargetBufferBuilder& Count(size_t count) noexcept override;
+  SplitEngineMorphTargetBufferBuilder& EnableCustomMorphing(
+      bool enabled) noexcept override;
   SplitEngineMorphTargetBufferBuilder& PositionsAt(
       size_t target_index, const float3* positions, size_t count,
       size_t offset = 0) noexcept override;

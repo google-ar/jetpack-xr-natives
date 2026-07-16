@@ -14,13 +14,17 @@
 
 #include "core/ncsb/groups_manager.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <variant>
 
+#include "absl/container/inlined_vector.h"
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/Scene.h"
 #include "core/common/hash.h"
 #include "core/common/owned_or_borrowed_ptr.h"
@@ -93,6 +97,57 @@ void GroupsManager::RemoveNodeFromGroup(HashValue group_hash, NodeHandle node) {
   if (group.num_nodes_in_layer == 0 && group_hash != kMainGroupHash &&
       !GroupHasEnvironmentLight(group)) {
     DestroyGroup(group_hash);
+  }
+}
+
+void GroupsManager::UpdateNodeGroups(
+    absl::Span<const HashValue> old_hashes,
+    absl::Span<const HashValue> new_hashes, NodeHandle node,
+    absl::Span<const absl::string_view> new_group_names) {
+  static constexpr size_t kGroupHashInlineCapacity = 16;
+
+  absl::InlinedVector<HashValue, kGroupHashInlineCapacity> to_remove;
+  std::set_difference(old_hashes.begin(), old_hashes.end(), new_hashes.begin(),
+                      new_hashes.end(), std::back_inserter(to_remove));
+
+  absl::InlinedVector<HashValue, kGroupHashInlineCapacity> to_add;
+  std::set_difference(new_hashes.begin(), new_hashes.end(), old_hashes.begin(),
+                      old_hashes.end(), std::back_inserter(to_add));
+
+  for (HashValue h : to_remove) {
+    RemoveNodeFromGroup(h, node);
+  }
+
+  for (HashValue h : to_add) {
+    Group* group = nullptr;
+    auto itr = groups_.find(h);
+    if (itr != groups_.end()) {
+      group = &itr->second;
+    } else if (!new_group_names.empty()) {
+      // Slow path where we need to search for the group name based on the hash
+      // so that we can create the group.
+      //
+      // Alternatively, UpdateNodeGroups could take sorted pairs of hash and
+      // name, or a map from hash to name to speed this up. This intentionally
+      // isn't done because this path is not expected to be hit frequently and
+      // the overhead for creating and sorting those data structures every time
+      // this is called isn't worth it.
+      auto group_name_itr = std::find_if(
+          new_group_names.begin(), new_group_names.end(),
+          [h](absl::string_view group_name) { return Hash(group_name) == h; });
+      if (group_name_itr != new_group_names.end()) {
+        group = CreateGroup(*group_name_itr, h);
+      }
+    }
+
+    if (group) {
+      group->num_nodes_in_layer++;
+      if (node->IsActive()) {
+        group->scene->addEntity(node.GetEntity());
+      }
+    } else {
+      IMP_LOG(imp::FATAL) << "Unable to find or create group.";
+    }
   }
 }
 

@@ -295,7 +295,10 @@ struct CompletionGate {
   bool complete ABSL_GUARDED_BY(mutex) = false;
 };
 
-// A single slice of the glyph atlas representing a single texture.
+// A single slice of the glyph atlas representing a single canvas source and
+// its backing external texture. The atlas may use multiple slices (compositing
+// them into a single texture) or may run in "single slice mode" where there is
+// only one slice and no compositing is needed.
 class Slice {
  public:
   Slice() = default;
@@ -340,6 +343,7 @@ class Slice {
 
   // Represents the texture of the ScopedCanvas.
   Texture* texture_ = nullptr;
+  BorrowedTexturePtr borrowed_texture_ = nullptr;
 
   std::shared_ptr<CompletionGate> completion_gate_ =
       std::make_shared<CompletionGate>();
@@ -349,18 +353,19 @@ class Slice {
     kBlitRequired,
   };
 
-  EndFrameResult EndFrame(imp::BaseView& view)
+  EndFrameResult EndFrame(imp::BaseView& view, bool single_slice)
       ABSL_LOCKS_EXCLUDED(canvas_mutex_);
 
   static std::string ToString(
       const GlyphEmulator::GlyphKeyOrGlyphString& glyph);
 
   AsyncScopedCanvas* GetOrStartDrawing(imp::BaseView& view,
-                                       ScopedCanvas::DrawMode draw_mode)
+                                       ScopedCanvas::DrawMode draw_mode,
+                                       bool single_slice)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(canvas_mutex_);
 
   // Updates the actual texture atlas to include all the glyphs.
-  void DrawAllGlyphsToCanvas(imp::BaseView& view)
+  void DrawAllGlyphsToCanvas(imp::BaseView& view, bool single_slice)
       ABSL_LOCKS_EXCLUDED(canvas_mutex_, glyph_map_mutex_);
 
   // Updates the current texture based on what has been drawn to the current
@@ -385,8 +390,8 @@ class Slice {
   // asynchronously
   Future<absl::Status> DrawGlyphsToCanvasAsync(
       imp::BaseView& view,
-      std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs)
-      ABSL_LOCKS_EXCLUDED(canvas_mutex_);
+      std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs,
+      bool single_slice) ABSL_LOCKS_EXCLUDED(canvas_mutex_);
 
   // Gets a cached GlyphInfo by key or a nullptr if the glyph info is not yet
   // added to this slice.
@@ -403,7 +408,7 @@ class Slice {
   // Remove all unused glyphs from the slice. `glyph_cleared_fn` is called for
   // each glyph that is removed.
   void ClearUnusedGlyphs(
-      imp::BaseView& view,
+      imp::BaseView& view, bool single_slice,
       std::function<void(const CanvasOptionsGlyphKey&)> glyph_cleared_fn)
       ABSL_LOCKS_EXCLUDED(glyph_map_mutex_, canvas_mutex_);
 

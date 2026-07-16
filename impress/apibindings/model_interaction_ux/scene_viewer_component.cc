@@ -35,6 +35,7 @@
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
+#include "core/render/mesh_renderer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/collision/ray_hit.h"
@@ -107,6 +108,18 @@ mat4f GetRayFromWorldSpace(const imp::Ray& ray) {
 
 }  // namespace
 
+imp::Box SceneViewerComponent::GetModelBounds() const {
+  if (auto gltf_renderer = model_node_->GetComponent<imp::GltfRenderer>()) {
+    return gltf_renderer->GetLocalBounds();
+  } else if (auto mesh_renderer =
+                 model_node_->GetComponent<imp::MeshRenderer>()) {
+    return mesh_renderer->GetRenderableAabb();
+  }
+  IMP_LOG(imp::ERROR) << "No GltfRenderer or MeshRenderer found on model node. "
+                "Returning empty bounding box.";
+  return imp::Box();
+}
+
 SceneViewerComponent::SceneViewerComponent()
     : interaction_machine_(svxr::interaction_states::Initialized{}, this),
       model_node_(),
@@ -122,7 +135,35 @@ absl::Status SceneViewerComponent::Setup(imp::NodeHandle target_node,
 
   model_node_ = target_node;
   rig_node_->SetParent(subspace_root_);
-  model_node_->SetParent(rig_node_);
+
+  // Position the rig node at the bottom-center of the model's bounding box,
+  // without visually moving the model itself.
+  imp::Box local_bounds = GetModelBounds();
+  imp::float3 local_bottom_center =
+      local_bounds.center - imp::float3(0.f, local_bounds.halfExtent.y, 0.f);
+
+  mat4f model_world_trs = model_node_->GetWorldTrs();
+  imp::float3 world_bottom_center =
+      (model_world_trs * imp::float4(local_bottom_center, 1.0f)).xyz;
+
+  // Position the rig node at the bottom-center of the model's bounding box in
+  // world space.
+  auto rig_world_trs = imp::Transform<float>(
+      world_bottom_center, imp::Transform<float>(model_world_trs).rotation,
+      imp::float3(1.0f));
+  rig_node_->SetWorldTrs(rig_world_trs.AsMat4());
+
+  // Parent the model to the rig while preserving its exact world transform.
+  model_node_->SetParentKeepWorldTransform(rig_node_);
+
+  // Calculate the new local offset of the model relative to the rig node.
+  auto model_local_trs = imp::Transform<float>(model_node_->GetLocalTrs());
+  if (model_local_trs.scale.x == 0.0f || model_local_trs.scale.y == 0.0f ||
+      model_local_trs.scale.z == 0.0f) {
+    model_offset_ = imp::kZero3;
+  } else {
+    model_offset_ = model_local_trs.translation / model_local_trs.scale;
+  }
 
   model_event_connection_ = model_node_->Connect(
       [this](const SplitEngineInputEvent& event) mutable {
@@ -146,7 +187,11 @@ void SceneViewerComponent::CreateFootprint(const imp::FrameTime& delta_time) {
     return;
   }
   is_footprint_initialized_ = true;
-  rig_node_->AddComponent<svxr::Footprint>(model_node_)
+  std::optional<imp::Box> initial_bounds = std::nullopt;
+  if (!model_node_->GetComponent<imp::GltfRenderer>()) {
+    initial_bounds = GetModelBounds();
+  }
+  rig_node_->AddComponent<svxr::Footprint>(model_node_, initial_bounds)
       .Then([this](imp::ComponentHandle<svxr::Footprint> footprint) {
         footprint_ = footprint;
         // Listen to input events on the footprint
@@ -165,7 +210,8 @@ void SceneViewerComponent::CreateFootprint(const imp::FrameTime& delta_time) {
 }
 
 void SceneViewerComponent::Cleanup() {
-  model_node_->SetParent(rig_node_->GetParent());
+  // Reparent the model to the subspace root, preserving its world transform.
+  model_node_->SetParentKeepWorldTransform(rig_node_->GetParent());
   rig_node_->SetParent(NodeHandle());
 }
 
@@ -179,8 +225,7 @@ void SceneViewerComponent::SetModelScale(float model_scale) {
 }
 
 bool SceneViewerComponent::DoesRayIntersectModel(imp::Ray ray) {
-  imp::Box bounds =
-      model_node_->GetComponent<imp::GltfRenderer>()->GetLocalBounds();
+  imp::Box bounds = GetModelBounds();
   auto intersection = imp::collision::AABBIntersectsRay(
       bounds, ray.GetTransformed(inverse(model_node_->GetWorldTrs())));
 
@@ -442,8 +487,7 @@ void SceneViewerComponent::ConstrainRigPosition() {
 }
 
 void SceneViewerComponent::CalculateModelScaleLimits() {
-  imp::Box local_bounds =
-      model_node_->GetComponent<imp::GltfRenderer>()->GetLocalBounds();
+  imp::Box local_bounds = GetModelBounds();
 
   // TODO: Consider making the scale limits dynamic based on
   // the distance to the camera.
@@ -750,6 +794,10 @@ void SceneViewerComponent::SetRigRotation(imp::SmoothParameters parameters,
 
 svxr::UiEventListener* SceneViewerComponent::GetUiEventListener() {
   return nullptr;
+}
+
+void SceneViewerComponent::TriggerShutdownCallback() {
+  // No-op in forked component.
 }
 
 }  // namespace imp

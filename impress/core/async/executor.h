@@ -199,6 +199,10 @@ class Executor {
   // running tasks on a particular thread.
   static Executor* CurrentExecutor();
 
+  // Returns true if the current executor that runs tasks on this thread is on
+  // the foreground thread.
+  static bool IsOnForegroundExecutor();
+
  protected:
   // This sets the executor that is running tasks on the current thread.
   //

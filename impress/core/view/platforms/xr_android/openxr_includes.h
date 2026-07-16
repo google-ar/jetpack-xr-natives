@@ -57,6 +57,7 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #if IMP_PLATFORM(ANDROID)
+#include <openxr/public/xr_android_global_passthrough_dimming.h>
 #include <openxr/public/xr_androidx_spatial_interaction.h>
 #endif
 

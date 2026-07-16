@@ -51,7 +51,7 @@ fragment {
 
         // Assume alpha is not pre-multiplied into RGB. This is necessary to
         // correctly apply inverse tonemapping to the input sRGB texture values.
-        vec4 srgb_color = texture2D(materialParams_texture, uv);
+        vec4 srgb_color = texture(materialParams_texture, uv);
         material.baseColor = vec4(
             inverseTonemapSRGB(srgb_color.rgb) * srgb_color.a, srgb_color.a);
         if (materialConstants_enableColorConversion) {

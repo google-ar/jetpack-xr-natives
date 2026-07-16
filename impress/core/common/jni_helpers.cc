@@ -118,12 +118,12 @@ jobjectArray ToStringArray(JNIEnv* env, std::vector<absl::string_view> views) {
                          WrapJni(env, env->FindClass("java/lang/String")).get(),
                          ToJniString(env, absl::string_view()).get());
   for (int view_index = 0; view_index < views.size(); view_index++) {
-    jstring java_string = ToString(env, views[view_index]);
+    JniUniquePtr<jstring> java_string = ToJniString(env, views[view_index]);
     if (java_string == nullptr) {
       ThrowError(env, Error("Failed to allocate string!"));
       return nullptr;
     }
-    strings.Set(view_index, java_string);
+    strings.Set(view_index, java_string.get());
   }
 
   return strings.Release();

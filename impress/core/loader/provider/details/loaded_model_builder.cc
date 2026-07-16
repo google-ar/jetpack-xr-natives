@@ -197,7 +197,11 @@ LoadedModelBuilder::AddMorphTargetBuffer(
         return schemas::CreateMorphTargetAttributeInfo(
             fbb_,
             fbb_.CreateVector(block.positions.Data(), block.positions.Size()),
-            fbb_.CreateVector(block.tangents.Data(), block.tangents.Size()));
+            fbb_.CreateVector(block.tangents.Data(), block.tangents.Size()),
+            block.texcoords0.Empty()
+                ? 0
+                : fbb_.CreateVector(block.texcoords0.Data(),
+                                    block.texcoords0.Size()));
       });
   return morph_target_buffer_offsets_.Append<MorphTargetBufferId>(
       schemas::CreateMorphTargetBufferInfo(

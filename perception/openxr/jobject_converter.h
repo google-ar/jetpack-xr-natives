@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,10 @@
 #include <openxr/openxr.h>
 #include <openxr/public/all_extensions.h>
 
+#include <memory>
+#include <utility>
+#include <vector>
+
 namespace androidx::xr::openxr {
 
 // Returns an 'XrPosef' from an 'androidx/xr/math/Pose' JVM object.
@@ -37,6 +41,28 @@ XrQuaternionf ConvertToXrQuaternionf(JNIEnv* env, const jobject& quaternion);
 // 'androidx/xr/math/GeospatialPose' JVM object.
 XrGeospatialPoseANDROID ConvertToXrGeospatialPose(
     JNIEnv* env, const jobject& geospatial_pose);
+
+struct AugmentedImageDatabaseEntry {
+  XrTrackableImageDatabaseEntryANDROID xr_entry;
+  std::unique_ptr<uint8_t[]> buffer;
+};
+
+struct AugmentedImageDatabaseBuffers {
+  std::vector<XrTrackableImageDatabaseEntryANDROID> entries;
+  std::vector<std::unique_ptr<uint8_t[]>> buffers;
+};
+
+// Converts a JVM 'OpenXrAugmentedImageDatabaseEntry' object into:
+// - an XrTrackableImageDatabaseEntryANDROID struct
+// - the corresponding image data buffer (owned via unique_ptr)
+AugmentedImageDatabaseEntry ConvertToAugmentedImageDatabaseEntry(
+    JNIEnv* env, const jobject& entry);
+
+// Converts a JVM 'OpenXrAugmentedImageDatabase' object into:
+// - a vector of XrTrackableImageDatabaseEntryANDROID structs
+// - a vector of corresponding image data buffers (owned via unique_ptr)
+AugmentedImageDatabaseBuffers ConvertToAugmentedImageDatabaseEntryBufferPair(
+    JNIEnv* env, const jobject& image_database);
 
 }  // namespace androidx::xr::openxr
 

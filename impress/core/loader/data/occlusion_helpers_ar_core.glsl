@@ -28,9 +28,9 @@ vec2 getBackgroundUvFromWorldPosition(vec3 worldPosition) {
 vec2 getDepthAndMinVisibility(vec2 backgroundUv) {
   // Depth is packed into the red and green components of its texture.
   // The texture is a normalized format, storing millimeters.
-#if FILAMENT_EFFECTIVE_VERSION == 100
+#if MATERIAL_FEATURE_LEVEL == 0
   vec3 packedDepthAndVisibility =
-      texture2D(materialParams_estimatedDepthTexture, backgroundUv).xyz;
+      texture(materialParams_estimatedDepthTexture, backgroundUv).xyz;
 #else
   vec3 packedDepthAndVisibility =
       textureLod(materialParams_estimatedDepthTexture, backgroundUv, 0.0).xyz;

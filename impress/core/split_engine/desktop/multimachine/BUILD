@@ -59,6 +59,7 @@ cc_library(
     copts = imp_copts(),
     defines = imp_defines(),
     deps = [
+        "//core/common:invocable",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/types:span",
@@ -75,8 +76,8 @@ cc_library(
     deps = [
         ":split_engine_desktop_bridge_cc_grpc",  # buildcleaner: keep
         ":split_engine_desktop_bridge_client",
+        "//core/common:invocable",
         "//core/split_engine:message_group_monitor",
-        "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/desktop/utils:message_group_completion_client_reactor",
         "//third_party/grpc:grpc++_unsecure",
@@ -211,6 +212,7 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":split_engine_desktop_bridge_client",
+        "//core/common:invocable",
         "//core/split_engine/android:split_engine_android_bridge",
         "@com_google_absl//absl/types:span",
     ],

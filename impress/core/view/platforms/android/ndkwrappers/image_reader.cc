@@ -29,6 +29,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "core/common/context.h"
+#include "core/config.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/android/ndkwrappers/image.h"
 
@@ -43,6 +44,7 @@ ImageReader::ImageReader(const BaseView& view, const int2 size, int32_t format,
       max_images_(max_images) {}
 
 absl::Status ImageReader::Initialize() {
+#if IMP_PLATFORM(ANDROID_API26)
   media_status_t status = AImageReader_newWithUsage(
       size_.x, size_.y, format_, usage_, max_images_, &reader_);
   if (status != AMEDIA_OK) {
@@ -64,6 +66,9 @@ absl::Status ImageReader::Initialize() {
   }
 
   return absl::OkStatus();
+#else   // IMP_PLATFORM(ANDROID_API26)
+  return absl::UnimplementedError("Requires Android API 26 or higher.");
+#endif  // IMP_PLATFORM(ANDROID_API26)
 }
 
 absl::StatusOr<std::unique_ptr<ImageReader>> ImageReader::Create(
@@ -78,7 +83,9 @@ absl::StatusOr<std::unique_ptr<ImageReader>> ImageReader::Create(
 }
 
 ImageReader::~ImageReader() {
+#if IMP_PLATFORM(ANDROID_API26)
   if (reader_) AImageReader_delete(reader_);
+#endif  // IMP_PLATFORM(ANDROID_API26)
 }
 
 void ImageReader::CallImageListenerCallback() {
@@ -87,6 +94,7 @@ void ImageReader::CallImageListenerCallback() {
 
 absl::Status ImageReader::SetImageListenerCallback(
     void* context, const ImageListenerCallback& callback) {
+#if IMP_PLATFORM(ANDROID_API24)
   user_callback_ = callback;
   user_callback_context_ = context;
   listener_.context = this;
@@ -98,26 +106,37 @@ absl::Status ImageReader::SetImageListenerCallback(
     return absl::InternalError("Failed to set image listener.");
   }
   return absl::OkStatus();
+#else   // IMP_PLATFORM(ANDROID_API24)
+  return absl::UnimplementedError("Requires Android API 24 or higher.");
+#endif  // IMP_PLATFORM(ANDROID_API24)
 }
 
 absl::Status ImageReader::ResetImageListenerCallback() {
+#if IMP_PLATFORM(ANDROID_API24)
   listener_.context = nullptr;
   listener_.onImageAvailable = nullptr;
   if (AImageReader_setImageListener(reader_, &listener_) != AMEDIA_OK) {
     return absl::InternalError("Failed to reset image listener.");
   }
   return absl::OkStatus();
+#else   // IMP_PLATFORM(ANDROID_API24)
+  return absl::UnimplementedError("Requires Android API 24 or higher.");
+#endif  // IMP_PLATFORM(ANDROID_API24)
 }
 
 jobject ImageReader::GetSurface() { return surface_; };
 
 absl::StatusOr<std::unique_ptr<Image>> ImageReader::AcquireLatestImage() {
+#if IMP_PLATFORM(ANDROID_API24)
   AImage* aimage = nullptr;
   if (AImageReader_acquireLatestImage(reader_, &aimage) != AMEDIA_OK) {
     return absl::InternalError(
         "Failed to acquire lateset image from ImageReader.");
   }
   return Image::Create(*aimage);
+#else   // IMP_PLATFORM(ANDROID_API24)
+  return absl::UnimplementedError("Requires Android API 24 or higher.");
+#endif  // IMP_PLATFORM(ANDROID_API24)
 }
 
 absl::Status ImageReader::SetDefaultBufferSize(const int2 size) {

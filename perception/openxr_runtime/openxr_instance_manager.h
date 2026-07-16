@@ -15,6 +15,11 @@ class OpenXrInstanceManager {
   OpenXrInstanceManager() = default;
   ~OpenXrInstanceManager();
 
+  enum RenderingMode {
+    kMono = 0,
+    kStereo = 1,
+  };
+
   // Returns OpenXR instance, creates it if it doesn't exist.
   XrInstance GetInstance(JNIEnv* env, jobject context)
       ABSL_LOCKS_EXCLUDED(mutex_);
@@ -28,6 +33,21 @@ class OpenXrInstanceManager {
   // Returns the supported environment blend modes.
   std::vector<XrEnvironmentBlendMode> GetEnvironmentBlendModes(
       XrInstance instance) ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Retrieves device support for hand tracking.
+  bool IsHandTrackingSupported() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Retrieves device support for eye tracking.
+  bool IsEyeTrackingSupported() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Retrieves device support for depth tracking.
+  bool IsDepthTrackingSupported() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Retrieves device support for geospatial.
+  bool IsGeospatialSupported() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Retrieves device support for the provided rendering mode.
+  bool IsRenderingModeSupported(RenderingMode mode) ABSL_LOCKS_EXCLUDED(mutex_);
 
  private:
   // Gets the extensions to be loaded from the required and optional extensions.

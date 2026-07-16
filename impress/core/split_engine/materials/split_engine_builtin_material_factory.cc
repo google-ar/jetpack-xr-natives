@@ -90,9 +90,7 @@ SplitEngineBuiltinMaterialFactory::HandleCreateRequest(
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialbd7fe08c:
     case android_xr::schemas::BuiltInMaterialSpec::
         BuiltInMaterialTextureExternal:
-    case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec:
-    case android_xr::schemas::BuiltInMaterialSpec::
-        BuiltInMaterialGsplatBackgroundSpec: {
+    case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec: {
       absl::StatusOr<BuiltinMaterialRegistry::BuiltinMaterialCreator&> creator =
           BuiltinMaterialRegistry::Get(request.data_type());
       if (!creator.ok()) {

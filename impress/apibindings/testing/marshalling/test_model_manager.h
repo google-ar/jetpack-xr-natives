@@ -45,8 +45,7 @@ class TestModelManager : public ModelManager {
   void LoadGltfAsset(absl::Cord data, absl::string_view key,
                      std::unique_ptr<BaseAssetLoader> asset_loader) override;
   absl::Status ReleaseGltfAsset(std::intptr_t gltf_token) override;
-  absl::StatusOr<int32_t> InstanceGltfModel(std::intptr_t gltf_token,
-                                            bool enable_collider) override;
+  absl::StatusOr<int32_t> InstanceGltfModel(std::intptr_t gltf_token) override;
   absl::Status SetGltfModelColliderEnabled(int32_t node,
                                            bool enable_collider) override;
   absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,

@@ -15,9 +15,7 @@
 #include "core/split_engine/android/split_engine_shared_memory_bridge_sender.h"
 
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <memory>
 #include <utility>
 
@@ -29,45 +27,18 @@
 #include "core/common/owned_ptr.h"
 #include "core/split_engine/android/bridge_buffer.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
+#include "core/split_engine/android/buffer_handle_factory_shmem.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/shared/split_engine_defines.h"
-#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
-
-namespace {
-
-class SplitEngineSharedMemoryBridgeBufferHandleFactory
-    : public BufferHandleFactory {
- public:
-  SplitEngineSharedMemoryBridgeBufferHandleFactory(
-      SplitEngineSharedMemoryBridgeClient& client)
-      : client_(client) {}
-
-  std::unique_ptr<BufferHandle> Create(int fd,
-                                       size_t buffer_size_bytes) override {
-    absl::StatusOr<std::unique_ptr<BufferHandle>> handle =
-        client_.RegisterBuffer(fd, buffer_size_bytes);
-    if (!handle.ok()) {
-      IMP_LOG(imp::FATAL) << "Failed to register bridge buffer: " << handle.status();
-    }
-
-    return *std::move(handle);
-  }
-
- private:
-  SplitEngineSharedMemoryBridgeClient& client_;
-};
-
-}  // namespace
 
 SplitEngineSharedMemoryBridgeSender::SplitEngineSharedMemoryBridgeSender(
     SplitEngineSharedMemoryBridgeClient& bridge)
     : bridge_(bridge),
       buffer_handle_factory_(
-          std::make_unique<SplitEngineSharedMemoryBridgeBufferHandleFactory>(
-              bridge)) {}
+          std::make_unique<SharedMemoryBufferHandleFactory>(bridge)) {}
 
 absl::Status SplitEngineSharedMemoryBridgeSender::SendMessage(
     MessageGroupId group_id,

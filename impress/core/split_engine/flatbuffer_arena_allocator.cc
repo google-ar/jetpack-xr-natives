@@ -84,8 +84,8 @@ ArenaAllocator::ArenaAndAllocFunc::ArenaAndAllocFunc(
                             : nullptr),
       memory_options_(memory_options),
       in_use_(true) {
-  arena_ = std::make_unique<zetasql_base::UnsafeArena>(static_cast<char*>(first_block_head_),
-                                         block_size);
+  arena_ = std::make_unique<zetasql_base::UnsafeArena>(
+      reinterpret_cast<char*>(first_block_head_), block_size);
 }
 
 ArenaAllocator::ArenaAndAllocFunc::~ArenaAndAllocFunc() { Clear(); }
@@ -169,23 +169,12 @@ ArenaAllocator::ArenaHandle ArenaAllocator::CreateArena(
   for (int i = 0; i < arenas_.size(); ++i) {
     if (!arenas_[i].Get()) {
       arenas_[i] = std::move(new_arena);
-      flatbuffer_allocators_.emplace(i, CreateFlatbufferAllocator(i));
       return i;
     }
   }
 
   arenas_.emplace_back(std::move(new_arena));
-  const ArenaHandle arena_handle = arenas_.size() - 1;
-  flatbuffer_allocators_.emplace(arena_handle,
-                                 CreateFlatbufferAllocator(arena_handle));
-  return arena_handle;
-}
-
-flatbuffers::Allocator& ArenaAllocator::GetFlatbufferAllocator(
-    ArenaHandle arena_handle) {
-  absl::MutexLock lock(arenas_mutex_);
-  
-  return *flatbuffer_allocators_.at(arena_handle);
+  return arenas_.size() - 1;
 }
 
 void ArenaAllocator::DestroyArena(ArenaHandle arena_handle,
@@ -208,7 +197,7 @@ size_t ArenaAllocator::GetArenaSize(ArenaHandle arena_handle) {
   return arenas_[arena_handle].Get()->status().bytes_allocated();
 }
 
-void* ArenaAllocator::GetArenaHead(ArenaHandle arena_handle) {
+uint8_t* ArenaAllocator::GetArenaHead(ArenaHandle arena_handle) {
   absl::MutexLock lock(arenas_mutex_);
   
   

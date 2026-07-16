@@ -17,11 +17,13 @@
 #include <jni.h>
 
 #include <cstdint>
-#include <functional>
+#include <utility>
 #include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
@@ -54,9 +56,10 @@ bool SplitEngineAndroidSharedMemoryBridge::SetExternalTextureSurfaceSize(
 }
 
 bool SplitEngineAndroidSharedMemoryBridge::SendRequest(
-    const std::vector<uint8_t>& data,
-    std::function<void(const std::vector<uint8_t>&)> callback) {
-  if (!split_engine_shared_memory_bridge_client_->SendRequest(data, callback)
+    absl::Span<const uint8_t> data,
+    imp::Invocable<void(absl::Span<const uint8_t>)> callback) {
+  if (!split_engine_shared_memory_bridge_client_
+           ->SendRequest(data, std::move(callback))
            .ok()) {
     return false;
   }

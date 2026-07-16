@@ -59,7 +59,7 @@ class Invocable<R(Args...)> {
   // Helper for enabling operator() if it is called with valid arguments.
   template <typename... CallArgs>
   using EnableIfCallableWith =
-      std::enable_if_t<std::is_invocable_r_v<R, R(Args...), CallArgs...>, int>;
+      std::enable_if_t<std::is_invocable_v<R(Args...), CallArgs...>, int>;
 
   // Creates an Invocable that does not contain a functor.
   // Will evaluate to false.

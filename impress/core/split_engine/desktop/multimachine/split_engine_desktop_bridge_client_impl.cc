@@ -36,12 +36,12 @@
 #include "third_party/grpc/include/grpcpp/client_context.h"
 #include "third_party/grpc/include/grpcpp/support/client_callback.h"
 #include "third_party/grpc/include/grpcpp/support/status.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge.grpc.pb.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_client.h"
 #include "core/split_engine/desktop/utils/message_group_completion_client_reactor.h"
 #include "core/split_engine/message_group_monitor.h"
 #include "core/split_engine/shared/split_engine_defines.h"
-#include "core/split_engine/split_engine_bridge_sender.h"
 
 namespace imp::split_engine {
 
@@ -516,22 +516,33 @@ absl::Status SplitEngineMMDesktopBridgeClientImpl::EndMessageGroup(
 
 absl::Status SplitEngineMMDesktopBridgeClientImpl::SendRequest(
     absl::Span<const uint8_t> data,
-    std::function<void(absl::Span<const uint8_t>)> callback) {
+    imp::Invocable<void(absl::Span<const uint8_t>)> callback) {
   struct SendRequestArgs {
     grpc::ClientContext context;
     SendRequestRequest request;
     SendRequestResponse response;
   };
+
+  // Using shared_ptr to guarantee that the args will be destroyed even if the
+  // gRPC callback is never called.
   auto args = std::make_shared<SendRequestArgs>();
 
   args->request.set_bridge_id(bridge_id_);
   args->request.set_data(data.data(), data.size());
-  absl::Notification notification;
+
+  // gRPC callback is std::function and it's copy-only. In turn, lambda is
+  // supposed to be copy-only too. imp::Invocable is move-only, so using
+  // shared_ptr to capture "copyable" callback in the lambda below and guarantee
+  // that it will be destroyed even if the gRPC callback is never called.
+  auto callback_ptr =
+      std::make_shared<imp::Invocable<void(absl::Span<const uint8_t>)>>(
+          std::move(callback));
+
   stub_->async()->SendRequest(
       &args->context, &args->request, &args->response,
-      [callback = std::move(callback), args](grpc::Status status) {
+      [callback_ptr = std::move(callback_ptr), args](grpc::Status status) {
         
-        callback(absl::MakeSpan(
+        (*callback_ptr)(absl::MakeConstSpan(
             reinterpret_cast<const uint8_t*>(args->response.data().data()),
             args->response.data().size()));
       });

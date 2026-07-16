@@ -212,7 +212,9 @@ OwnedTexturePtr TextureFactory::CreateExternalTexture(
 
 OwnedTexturePtr TextureFactory::CreateTexture(
     const AssetPtr<TextureAsset> texture, TextureSamplerOptions options) {
-  filament::TextureSampler sampler(options.mag_filter, options.wrap_mode);
+  filament::TextureSampler sampler(options.min_filter, options.mag_filter,
+                                   options.wrap_mode);
+  sampler.setAnisotropy(options.anisotropy);
 
   auto texture_ptr = absl::WrapUnique(
       new Texture(view_, /*stream=*/nullptr, texture, sampler));
@@ -358,7 +360,8 @@ TexturePtr TextureFactory::CreateTexture(intptr_t id, uint32_t width,
   return texture_ptr;
 }
 
-TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
+OwnedTexturePtr TextureFactory::CreateTexture(
+    TextureCreationSettings settings) {
   TextureBuilder texture_builder(view_);
   texture_builder.Format(settings.format)
       .Width(settings.width)
@@ -385,6 +388,10 @@ TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
     texture_builder.Sampler(*settings.sampler_type);
   }
 
+  if (settings.name) {
+    texture_builder.Name(absl::StrFormat("%s_tex", *settings.name));
+  }
+
   filament::Texture* texture = texture_builder.Build(*view_.GetSharedEngine());
   if (!texture) {
     IMP_LOG(imp::ERROR) << "Could not create texture.";
@@ -403,6 +410,9 @@ TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
 
   auto texture_ptr =
       absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  if (settings.name) {
+    texture_ptr->SetName(*settings.name);
+  }
   // This version of CreateTexture is not compatible with Split Engine.
   // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
   texture_ptr->SetSuppressSplitEngineRemoval(true);

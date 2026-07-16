@@ -27,6 +27,6 @@ material {
 fragment {
     void material(inout MaterialInputs material) {
         prepareMaterial(material);
-        material.baseColor = texture2D(materialParams_baseColor, getUV0());
+        material.baseColor = texture(materialParams_baseColor, getUV0());
     }
 }

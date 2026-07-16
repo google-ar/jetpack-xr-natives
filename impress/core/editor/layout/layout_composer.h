@@ -157,6 +157,9 @@ class LayoutComposer {
   // Draws the scene draw functions.
   void DrawSceneSectionContents();
 
+  // Draws a viewport window that can be docked to the center of the screen.
+  void DrawDockableViewportWindow();
+
   // Draws an individual tab.
   void DrawTabbedWindow();
   // Draws a tabbed window that can be docked to the bottom of the screen.
@@ -186,6 +189,7 @@ class LayoutComposer {
 
   std::vector<imp::Invocable<void()>> details_draw_functions_;
   std::vector<imp::Invocable<void()>> scene_draw_functions_;
+  std::vector<imp::Invocable<void()>> viewport_draw_functions_;
   std::vector<WidgetInfo> left_dock_draw_functions_;
   std::vector<WidgetInfo> tab_item_info_;
   std::vector<imp::Invocable<void()>> menu_draw_functions_;

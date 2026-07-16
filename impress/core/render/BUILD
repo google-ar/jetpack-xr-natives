@@ -276,6 +276,7 @@ cc_library(
         "//core/ncsb",
         "//core/view:base_view",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",

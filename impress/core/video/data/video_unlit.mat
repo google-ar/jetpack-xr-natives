@@ -39,7 +39,7 @@ fragment {
     void material(inout MaterialInputs material) {
         prepareMaterial(material);
         vec2 uv = getUV0();
-        vec4 textureColor = texture2D(materialParams_videoTexture, uv).rgba;
+        vec4 textureColor = texture(materialParams_videoTexture, uv).rgba;
         float luminance = luminance(textureColor.rgb);
         material.baseColor = vec4(inverseTonemapSRGB(textureColor.rgb), textureColor.a * luminance) * materialParams.alphaFactor;
     }

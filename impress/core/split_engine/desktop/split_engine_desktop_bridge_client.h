@@ -19,7 +19,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
 #include <thread>  // NOLINT: Need to use threads available in bazel.
@@ -30,7 +29,9 @@
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "third_party/grpc/include/grpcpp/support/client_callback.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/desktop/split_engine_desktop_bridge.grpc.pb.h"
 #include "core/split_engine/desktop/utils/split_engine_desktop_bridge_utils.h"
@@ -63,8 +64,8 @@ class SplitEngineDesktopBridgeClient
                                              int32_t height) override;
 
   absl::Status SendRequest(
-      const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback) override;
+      absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) override;
 
   ClientId GetClientId() const override { return client_id_; }
 

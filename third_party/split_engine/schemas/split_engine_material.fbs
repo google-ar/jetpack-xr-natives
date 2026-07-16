@@ -15,6 +15,7 @@
 include "split_engine/schemas/split_engine_attributes.fbs";
 include "split_engine/schemas/split_engine_data.fbs";
 include "split_engine/schemas/split_engine_primitive.fbs";
+include "split_engine/schemas/split_engine_render_passes.fbs";
 
 namespace android_xr.schemas;
 
@@ -620,72 +621,176 @@ enum GsplatMode : int {
   GSPLAT = 2,
 }
 
-table BuiltInMaterialGsplatSpec {
-  // The material mode is used to select the material to render.
-  material_mode: GsplatMode (id: 0);
-  // Node responsible for rendering the Gsplat.
-  gsplat_node_id: uint32 (id: 1);
-  // Whether to use 3 vertices per splat (triangle) instead of 6 (quad).
-  use_triangles_for_splats: Bool (id: 2);
-  // If true, the precomputed data texture is provided and the deserializer
-  // should not create a precompute texture pipeline.
-  has_precomputed_data_texture: Bool (id: 3);
+// Gsplat material mode specific spec.
+union GsplatModeSpec {
+  GsplatSpec = 1,
+  MagicWindowSpec = 2,
 }
 
-// LINT.IfChange
-table BuiltInMaterialGsplatParameters {
-  // Adjust opacity for each splat.
+// GSPLAT mode spec.
+table GsplatSpec {
+  // Optional: when specified, this is the render group the Gsplat scene will be
+  // rendered to. This is to be used with another Gsplat material in
+  // MAGIC_WINDOW mode.
+  render_group: string (id: 0);
+}
+
+// MAGIC_WINDOW mode spec.
+// All fields are required.
+table MagicWindowSpec {
+  // The initial resolution of the offscreen texture.
+  magic_window_offscreen_resolution: Uint2 (id: 0);
+
+  // The render group that contains the Gsplat scene to be rendered to an
+  // offscreen texture.
+  render_group: string (id: 1);
+}
+
+// Built-in material spec for Gaussian Splat Material.
+// See go/gsplat-built-materials-api-proposal
+// All fields are required.
+table BuiltInMaterialGsplatSpec {
+  // The material mode. See GsplatMode.
+  material_mode: GsplatMode (id: 0);
+
+  // Specify the client entity id this material is attached to. This built-in
+  // material contains entity-specific logic, so the material cannot be
+  // shared between multiple entities.
+  entity: uint32 (id: 1);
+
+  // Mode specific spec.
+  mode_spec: GsplatModeSpec (id: 3);
+
+  // ---------------------------------------------------------------------------
+  // Experimental APIs.
+
+  // Whether to use 3 vertices per splat (triangle) instead of 6 (quad).
+  use_triangles_for_splats: Bool (id: 4);
+
+  // If true, the precomputed data texture is provided and the deserializer
+  // should not create a precompute texture pipeline.
+  has_precomputed_data_texture: Bool (id: 5);
+}
+
+// Gsplat material mode specific parameters.
+union GsplatModeParameters {
+  GsplatParameters = 1,
+  MagicWindowParameters = 2,
+}
+
+// GSPLAT mode parameters.
+table GsplatParameters {
+  // ---------------------------------------------------------------------------
+  // Required parameters.
+
+  // LINT.IfChange
+
+  // Additional opacity factor to apply to the splats.
   opacity_scale: Float (id: 0);
-  // Clamps the screen size for each splat
+
+  // The minimum screen size to clamp each splat to (units are in pixels).
+  // This value should be greater than or equal to zero.
   min_screen_size: Float2 (id: 1);
-  // Clamps the screen size for each splat
+
+  // The maximum screen size to clamp each splat to (units are in pixels).
+  // This value should be greater than min_screen_size.
   max_screen_size: Float2 (id: 2);
-  // If material_mode is "magic window",
-  // this contains the dimension of the renderable area (the dimension of the black quad)
-  window_dimension_in_magic_window: Float2 (id: 3);
-  // If material_mode is "magic window", this contains the transform from World Space to Magic Window Space
-  // This is necessary to calculate a position in Magic Window space for an eye, a splat, etc
-  // Magic Window Space is the world space of magic windows parent node.
-  magic_window_from_user_world_matrix: Mat4f (id: 4);
+
+  // Each texel value corresponds to a 3D position for a splat in the local
+  // space of the node the material attached to. The XYZ positions are stored in
+  // the RGB channels of an arbitrary-sized texture, with splats mapped
+  // sequentially in row-major order.
+  position_data_texture: BuiltInTextureParameter (id: 3);
+
+  // Each texel value corresponds to a 3D covariance matrix for a splat. The
+  // covariance matrix is symmetric, so only the upper half 6 values are packed
+  // into RGB channels, with each value represented by a half-float, and 2
+  // values packed into 1 32-bit channel as shown below:
+  // R = [2x16F] cov[0][0], cov[0][1]
+  // G = [2x16F] cov[0][2], cov[1][1]
+  // B = [2x16F] cov[1][2], cov[2][2]
+  // Because of this setup, the texture needs to have at least RGB channels, and
+  // each channel needs to be 32-bit unsigned integer. The texture size should
+  // be the same as position_data_texture.
+  cov3d_data_texture: BuiltInTextureParameter (id: 4);
+
+  // Each texel value corresponds to a color for a splat.
+  // The texture size should be the same as position_data_texture.
+  color_data_texture: BuiltInTextureParameter (id: 5);
+
+  // Each texel value corresponds to the index of a splat to render. The texture
+  // size should be the same as position_data_texture, and the splats will be
+  // rendered based on these indices in row-major order. The texture should have
+  // at least the R channel, and the data type should be unsigned integer.
+  sorted_indices_texture: BuiltInTextureParameter (id: 6);
+
+  // A scaling value controlling the size of the splats relative to their
+  // covariance-matrix defined scale. Mathematically, this is the number of
+  // standard deviations away from the gaussian mean.
+  splat_scale: Float (id: 7);
+
+  // LINT.ThenChange(
+  //   //depot/google3/third_party/impress/core/gsplat/gsplat_material_params.h,
+  //   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/builtin_gsplat.mat,
+  //   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/builtin_gsplat_data_precompute.mat,
+  // )
+
+  // ---------------------------------------------------------------------------
+  // Optional parameters.
+  //
+  // When these are specified, it signals this Gsplat material is going to be
+  // used by another Gsplat material in MAGIC_WINDOW mode to render the Gsplat
+  // scene to an offscreen texture, and the parameters are needed for the
+  // configuration.
+
+  // Specifies the pose and the dimension of the Magic Window projection quad,
+  // relative to the node specified by entity in BuiltInMaterialGsplatSpec.
+  magic_window_projection_quad: ProjectionQuad (id: 8);
+
+  // The desired Magic Window offscreen rendering resolution.
+  magic_window_offscreen_resolution: Uint2 (id: 9);
+
+  // ---------------------------------------------------------------------------
+  // Experimental APIs.
+
   // The precomputed data for rendering each splat, packed into an
   // RGBA32F texture. The format expected is:
   // R [2x16F] XY Clip Position of Splat Center
   // G [2x16F] Z Clip Position of Splat Center and Aspect Ratio of Splat
   // B [2x16F] X Basis Vector of Splat in Screen Space
   // A [4x8unorm] RGBA Color of Splat - If A == 0 the splat is disabled.
-  precomputed_data_texture: BuiltInTextureParameter (id: 5);
-  // Each texel value corresponds to a 3D position for a splat
-  // The texture format is RGBA16F. The pixel data format is RGBA. The pixel data type is HALF
-  position_data_texture: BuiltInTextureParameter (id: 6);
-  // Texels contain a 3D covariance matrix packed into RGB values.
-  // The texture format is RGBA32UI. The pixel data format is RGB_INTEGER or
-  // RGBA_INTEGER. The pixel data type is UINT
-  cov3d_data_texture: BuiltInTextureParameter (id: 7);
-  // Texels contain a 3D color.
-  // The texture format is RGBA8. The pixel data format is RGBA. The pixel data type is UBYTE
-  color_data_texture: BuiltInTextureParameter (id: 8);
-  // Texel values control rendering order.
-  // The texture format is R32UI. The pixel data format is R_INTEGER. The pixel data type is UINT
-  sorted_indices_texture: BuiltInTextureParameter (id: 9);
-  // If true, assigns random colors to nearby gsplats (Debugging only).
-  visualize_chunks: Bool (id: 10, deprecated);
-  // How many std-deviations of the gaussian will be shown. Lower values will
-  // clip the gaussian shapes (keeping the aspect ratio).
-  // Defaults to 4 std-devs.
-  splat_scale: Float (id: 11);
-}
-// LINT.ThenChange(
-//   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/builtin_gsplat.mat,
-//   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/builtin_gsplat_data_precompute.mat,
-//   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/builtin_magic_window.mat,
-//   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer.cc,
-// )
+  precomputed_data_texture: BuiltInTextureParameter (id: 10);
 
-table BuiltInMaterialGsplatBackgroundSpec {
+  // The resolution of the view the gsplat is being rendered to.
+  // This parameters serves a duplicate role as
+  // `magic_window_offscreen_resolution`, but we need to keep them separate
+  // since `magic_window_offscreen_resolution` is going to be public, but this
+  // one is not. When both are specified, `view_resolution` will be used.
+  view_resolution: Float2 (id: 11);
 }
 
-table BuiltInMaterialGsplatBackgroundParameters {
+// MAGIC_WINDOW mode parameters.
+// All fields are required.
+table MagicWindowParameters {
+  // Specifies the pose and the dimension of the Magic Window projection quad,
+  // relative to the node specified by entity in BuiltInMaterialGsplatSpec.
+  magic_window_projection_quad: ProjectionQuad (id: 0);
+
+  // The desired Magic Window offscreen rendering resolution. If this does not
+  // match the initial setting provided in MagicWindowSpec, the offscreen
+  // texture will be updated.
+  magic_window_offscreen_resolution: Uint2 (id: 1);
 }
+
+// Built-in material parameters for Gaussian Splat Material.
+// See go/gsplat-built-materials-api-proposal
+// All fields are required.
+table BuiltInMaterialGsplatParameters {
+  // Mode specific parameters.
+  mode_parameters: GsplatModeParameters (id: 1);
+}
+
+
 
 table BuiltInMaterialTextureExternal (requires_api: 1) {
 }
@@ -706,11 +811,6 @@ union BuiltInMaterialSpec (requires_api: 1) {
   BuiltInMaterialTextureExternal = 8 (requires_api: 1),
   BuiltInMaterialbd7fe08c = 9 (requires_api: 1),
   BuiltInMaterialGsplatSpec = 10,
-  // TEMPORARY: BuiltInMaterialGsplatBackgroundSpec is experimental and will be
-  // replaced by custom materials or another method.  Add new materials above it
-  // in the union.
-  // TODO: b/450582333 - Replace BuiltInMaterialGsplatBackgroundSpec.
-  BuiltInMaterialGsplatBackgroundSpec = 11,
 }
 
 // Request to create a built-in material instance and associate it with a
@@ -736,11 +836,6 @@ union BuiltInMaterialParameters (requires_api: 1) {
   BuiltInMaterialTextureExternalParameters = 8 (requires_api: 1),
   BuiltInMaterialbd7fe08cParameters = 9 (requires_api: 1),
   BuiltInMaterialGsplatParameters = 10,
-  // TEMPORARY: BuiltInMaterialGsplatBackgroundParameters is experimental and will be
-  // replaced by custom materials or another method.  Add new materials above it
-  // in the union.
-  // TODO: b/450582333 - Replace BuiltInMaterialGsplatBackgroundParameters.
-    BuiltInMaterialGsplatBackgroundParameters = 11,
 }
 
 table BuiltInMaterialInstanceParameters (requires_api: 1) {

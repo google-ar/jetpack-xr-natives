@@ -16,6 +16,8 @@
 
 #include <inttypes.h>
 
+#include <string>
+
 #include "absl/status/statusor.h"
 #include "dear_imgui/imgui.h"
 #include "core/ncsb/component_handle.h"
@@ -178,9 +180,8 @@ void VideoControllerWidgetHelper::ShowPlaybackInformationRow() {
   } else {
     error_str_ = "Failed to get current controller state";
   }
-  ImGui::Text(
-      absl::StrFormat("Controller State: %s", controller_state_str.data())
-          .c_str());
+  ImGui::Text("Controller State: %s",
+              std::string(controller_state_str).c_str());
 
   absl::StatusOr<uint2> video_size = component_->GetVideoSize();
   if (video_size.ok()) {

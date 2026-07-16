@@ -18,9 +18,12 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_VISUALIZERS_LIGHT_VISUALIZER_H_
 
 #include "absl/strings/string_view.h"
+#include "core/async/future.h"
 #include "core/common/robin_map.h"
 #include "core/editor/visualizers/visualizer.h"
 #include "core/lighting/light_state.proto.imp.h"
+#include "core/materials/material.h"
+#include "core/ncsb/node_handle.h"
 
 namespace imp::editor {
 
@@ -29,6 +32,7 @@ namespace imp::editor {
 class LightVisualizer : public Visualizer {
  public:
   void Setup(NodeHandle light) override;
+  void Cleanup();
   void Update(const FrameTime& frame_time) override;
 
  private:
@@ -50,7 +54,17 @@ class LightVisualizer : public Visualizer {
       {"spot_light", LightModelType::kSpotLight}};
   void UpdateVisualizer(LightState::Type visualizer);
 
+  // Loads the light visualizer ISF file.
+  imp::Future<NodeHandle> LoadLightIsf();
+
+  // Loads the materials for the light visualizer.
+  imp::Future<NodeHandle> LoadMaterials(NodeHandle model);
+
   NodeHandle light_visualizer_;
+  // Materials that belong to this light visualizer.
+  // Cannot be shared across all lights because we modify the color in update.
+  OwnedMaterialPtr opaque_material_;
+  OwnedMaterialPtr overlay_material_;
 };
 
 }  // namespace imp::editor

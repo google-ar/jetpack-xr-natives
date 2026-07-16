@@ -55,6 +55,9 @@ class NodeParticleEmitter : public ParticleEmitter {
   ParticleEmitterInfo GetParticleEmitterInfo() const override;
 
  protected:
+  // Destroys the emitter and all nodes that were created for it.
+  ~NodeParticleEmitter() override;
+
   // Verifies elements of the emitter state to ensure the particle system can
   // be properly initialized.
   static std::string ValidateEmitterState(

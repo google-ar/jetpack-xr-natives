@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -305,11 +306,17 @@ OptionalError SerializeSqtAnimation(
         schemas::ChannelFloatVector::NONE;
     flatbuffers::Offset<void> weights;
 
-    MP_RETURN_IF_ERROR(AddWeightsChannel(
-        gltf, animation_samplers[*animation_channels[weights_channel].sampler],
-        fbb, &weights_type, &weights, &weights_domain));
+    const imp::gltf::imp_proto::AnimationChannel& channel =
+        animation_channels[weights_channel];
+    std::optional<int32_t> additive_weight_index =
+        channel.extras.has_value() ? channel.extras->additive_weight_index
+                                   : std::nullopt;
+
+    MP_RETURN_IF_ERROR(
+        AddWeightsChannel(gltf, animation_samplers[*channel.sampler], fbb,
+                          &weights_type, &weights, &weights_domain));
     out_mt_offset->emplace(animation::schemas::CreateMorphTargetAnimation(
-        *fbb, weights_type, weights));
+        *fbb, weights_type, weights, additive_weight_index));
     *out_domain = weights_domain;
   }
 

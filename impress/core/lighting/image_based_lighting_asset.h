@@ -43,7 +43,7 @@ namespace imp {
 // ImageBasedLightingAsset contains data that can be used
 // for indirect lighting and skybox rendering. ImageBasedLightingAsset can be
 // built through `imp_imaged_based_lighting` rule. See example in:
-// third_party/impress/build_tools/imp_imaged_based_lighting.bzl
+// third_party/impress/build_tools/imp_image_based_lighting.bzl
 // Similar to other assets(for example, MaterialAsset), ImageBasedLightingAsset
 // can be loaded through AssetManager.
 //

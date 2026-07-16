@@ -26,10 +26,12 @@ package(
 imp_assets(
     name = "light_visualizer_assets",
     srcs = [
+        ":directional_light.gltf",
         ":light_isf",
-        "//core/editor/visualizers/light_assets:directional_light.gltf",
-        "//core/editor/visualizers/light_assets:point_light.gltf",
-        "//core/editor/visualizers/light_assets:spot_light.gltf",
+        ":point_light.gltf",
+        ":spot_light.gltf",
+        "//core/editor/visualizers:gizmo_visualizer_opaque_material",
+        "//core/editor/visualizers:gizmo_visualizer_overlay_material",
     ],
     namespace = "imp::editor::light_visualizer_assets",
 )

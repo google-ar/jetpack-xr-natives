@@ -22,8 +22,8 @@
 
 #include "core/ncsb/node_handle.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
-#include "core/particle/particle_format.h"
 #include "core/particle/particle_instance.h"
+#include "core/particle/utils/particle_format.h"
 #include "core/particle/utils/standard_data_provider.h"
 
 namespace imp::imp_particle {

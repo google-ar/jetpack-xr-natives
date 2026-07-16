@@ -215,7 +215,10 @@ class BaseView : public Rememberer,
     return filament::Engine::Config{.disableParallelShaderCompile = true};
   }
 
-  virtual ViewConfig GetConfig() const { return {}; }
+  virtual const ViewConfig& GetConfig() const {
+    static const ViewConfig kDefaultConfig;
+    return kDefaultConfig;
+  }
 
   // Returns the desired Filament feature level.
   // Filament may use a lower feature level depending on device support.

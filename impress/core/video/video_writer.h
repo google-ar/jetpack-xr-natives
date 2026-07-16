@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_VIDEO_VIDEO_WRITER_H_
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/math/vec.h"
@@ -31,13 +32,22 @@ class VideoWriter {
  public:
   virtual ~VideoWriter() {}
   // Opens a new video for writing with the given filename and dimensions.
-  virtual absl::Status Open(uint2 dimensions, absl::string_view filename) = 0;
+  virtual absl::Status Open(uint2 dimensions,
+                            absl::string_view filename = "") = 0;
+  virtual absl::Status Open(uint2 dimensions) { return Open(dimensions, ""); };
   // Captures the current frame. Must be called between render() and endFrame().
   virtual void CaptureFrame(window::FilamentHost* filament_host) = 0;
   // Writes a frame to the video file. Must be called after endFrame().
   virtual void WriteFrame() = 0;
   // Closes an active video, finishing the writing process.
   virtual Future<absl::Status> Close() = 0;
+
+  // Returns true if the writer is ready to capture frames.
+  virtual bool IsReady() const { return false; }
+
+  // Process input events from the web client.
+  virtual void ProcessInput(window::FilamentHost* host) {}
+
   // Creates a new video writer. Must be implemented for each platform.
   // record_microphone_audio maybe false if e.g. microphone access has not been
   // granted to the application.

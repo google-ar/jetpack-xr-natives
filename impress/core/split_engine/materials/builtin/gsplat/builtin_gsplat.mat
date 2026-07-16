@@ -72,6 +72,7 @@ material {
   vertexDomain : device,
   shadingModel : unlit,
   blending : transparent,
+  variantFilter : [ skinning, shadowReceiver ],
 }
 
 vertex {
@@ -99,11 +100,7 @@ vertex {
     vec4 clipPos = vec4(clipPosXY, clipPosZAspectRatio.x, 1.0);
 
     vec2 basisAxisX = unpackHalf2x16(splatDataPrecomputed.z);
-    float xSize = length(basisAxisX);
-
-    vec2 basisAxisXNormalized = basisAxisX / xSize;
-    vec2 basisAxisY = vec2(basisAxisXNormalized.y, -basisAxisXNormalized.x) *
-                      xSize * clipPosZAspectRatio.y;
+    vec2 basisAxisY = vec2(basisAxisX.y, -basisAxisX.x) * clipPosZAspectRatio.y;
 
     // Scale the quad to go beyond the first stddev of gaussian distribution.
     vec2 vertexCoord = getVertexCoord(vertIndex, materialConstants_useTrianglesForSplats) * materialParams.splatScale;

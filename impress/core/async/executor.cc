@@ -157,6 +157,11 @@ void Executor::SetForegroundExecutor(Executor* executor) {
 
 Executor* Executor::CurrentExecutor() { return s_current_executor; }
 
+bool Executor::IsOnForegroundExecutor() {
+  Executor* fg = ForegroundExecutor();
+  return fg != nullptr && CurrentExecutor() == fg;
+}
+
 void Executor::SetCurrentExecutor(Executor* executor) {
   if (executor == s_im_executor) {
     IMP_LOG(imp::FATAL) << "cannot set the current executor to "

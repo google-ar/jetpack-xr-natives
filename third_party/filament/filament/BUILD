@@ -117,6 +117,18 @@ cc_library(
             True,
         ),
         (
+            "noop_gl_vulkan",
+            [
+                ":_generated_desktop_gl_vulkan_noFL0_noMV_noMPC_materials",
+                "@third_party//filament/libs:filaflat_vulkan",
+            ],
+            [],
+            [],
+            [],
+            False,
+            False,
+        ),
+        (
             # The main filament library, configured to link to OpenGL 4/5 on desktop.
             "opengl_desktop",
             [
@@ -201,8 +213,8 @@ cc_library(
                 "FILAMENT_ENABLE_FEATURE_LEVEL_0=1",
                 "FILAMENT_SUPPORTS_EGL_ON_LINUX=1",
             ],
-            False,
-            False,
+            True,
+            True,
         ),
         (
             # The main filament library, configured to link to OpenGL ES 3.1 on
@@ -278,8 +290,10 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_metal",
                 "@third_party//filament/libs:filaflat",
-                ":_generated_mobile_metal_noFL0_noMV_noMPC_materials",
-            ],
+            ] + select({
+                "@third_party//filament:macos": [":_generated_desktop_metal_noFL0_noMV_noMPC_materials"],
+                "//conditions:default": [":_generated_mobile_metal_noFL0_noMV_noMPC_materials"],
+            }),
             [],
             [],
             [],
@@ -498,6 +512,7 @@ cc_library(
         ("mobile", "gl_vulkan", "all", False, False, None),
         ("desktop", "opengl", "all", False, False, None),
         ("desktop", "vulkan", "all", False, False, None),
+        ("desktop", "metal", "metal", False, False, None),
         ("desktop", "gl_vulkan", "all", False, False, None),
     ]
 ]
@@ -534,6 +549,7 @@ cc_library(
         ("mobile", "gl_vulkan", "noFL0", "noMV", "noMPC"),
         ("desktop", "opengl", "noFL0", "noMV", "noMPC"),
         ("desktop", "vulkan", "noFL0", "noMV", "noMPC"),
+        ("desktop", "metal", "noFL0", "noMV", "noMPC"),
         ("desktop", "gl_vulkan", "noFL0", "noMV", "noMPC"),
     ]
 ]

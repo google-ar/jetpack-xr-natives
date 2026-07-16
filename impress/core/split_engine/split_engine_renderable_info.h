@@ -25,6 +25,7 @@
 #include "absl/status/status.h"
 #include "absl/types/span.h"
 #include "core/common/small_source_location.h"
+#include "core/config.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/math.h"
@@ -34,6 +35,9 @@
 #include "core/ncsb/component.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_filament_resource_ptrs.h"
+#if IMP_RUNTIME(DEV)
+#include "dear_imgui/imgui.h"
+#endif  // IMP_RUNTIME(DEV)
 
 namespace imp::split_engine {
 // Component for storing additional information about the renderable added to a
@@ -89,6 +93,10 @@ class SplitEngineRenderableInfo : public Component {
       }
     }
   }
+
+#if IMP_RUNTIME(DEV)
+  void DrawEditorUi();
+#endif  // IMP_RUNTIME(DEV)
 
  private:
   struct PrimitiveInfo {

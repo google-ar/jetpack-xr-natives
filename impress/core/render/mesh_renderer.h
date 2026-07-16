@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/container/inlined_vector.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
 #include "filament/filament/include/filament/RenderableManager.h"
@@ -382,7 +383,7 @@ class MeshRenderer : public Component {
   filament::InstanceBuffer* instance_buffer_ = nullptr;
 
   std::vector<imp::mat4f> bones_;
-  std::vector<PrimitiveData> primitives_;
+  absl::InlinedVector<PrimitiveData, 1> primitives_;
   uint8_t layer_mask_;
 
   // Filament::RenderableManager has no getter for priority, channel, or culling

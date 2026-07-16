@@ -15,6 +15,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "openxr/openxr.h"
+#include "absl/log/log.h"
 #include "absl/synchronization/mutex.h"
 #include "common/openxr_util.h"
 
@@ -50,7 +52,8 @@ const std::array<std::string, 13> kRequiredExtensions = {
 };
 
 // Extensions must be listed after their dependencies.
-const std::array<OpenXrExtension, 7> kOptionalExtensions = {{
+// LINT.IfChange
+const std::array<OpenXrExtension, 8> kOptionalExtensions = {{
     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -65,7 +68,10 @@ const std::array<OpenXrExtension, 7> kOptionalExtensions = {{
      {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
     {XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME,
      {XR_EXT_FUTURE_EXTENSION_NAME}},
+    {XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME,
+     {XR_EXT_FUTURE_EXTENSION_NAME}},
 }};
+// LINT.ThenChange(//depot/google3/third_party/jetpack_xr_natives/openxr/openxr_manager.cc)
 
 const std::array<std::string, 7> kGeospatialExtensions = {
     XR_ANDROID_GEOSPATIAL_EXTENSION_NAME,
@@ -158,6 +164,127 @@ bool OpenXrInstanceManager::GetEnabledExtensions(
     }
   }
   return true;
+}
+
+bool OpenXrInstanceManager::IsHandTrackingSupported() {
+  absl::MutexLock lock(mutex_);
+  if (!GetXrSystem()) {
+    LOG(ERROR) << "Unable to retrieve system ID.";
+    return false;
+  }
+
+  XrSystemHandTrackingPropertiesEXT handTrackingProperties = {
+    .type = XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT,
+  };
+
+  XrSystemProperties systemProperties = {
+      .type = XR_TYPE_SYSTEM_PROPERTIES,
+      .next = &handTrackingProperties,
+  };
+
+  XR_RETURN_IF_FAILED(
+      xrGetSystemProperties(instance_, system_id_, &systemProperties));
+  return handTrackingProperties.supportsHandTracking;
+}
+
+bool OpenXrInstanceManager::IsEyeTrackingSupported() {
+  absl::MutexLock lock(mutex_);
+  if (!GetXrSystem()) {
+    LOG(ERROR) << "Unable to retrieve system ID.";
+    return false;
+  }
+
+  XrSystemEyeTrackingPropertiesANDROID eyeTrackingProperties = {
+    .type = XR_TYPE_SYSTEM_EYE_TRACKING_PROPERTIES_ANDROID,
+  };
+
+  XrSystemProperties systemProperties = {
+      .type = XR_TYPE_SYSTEM_PROPERTIES,
+      .next = &eyeTrackingProperties,
+  };
+
+  XR_RETURN_IF_FAILED(
+      xrGetSystemProperties(instance_, system_id_, &systemProperties));
+  return eyeTrackingProperties.supportsEyeTracking;
+}
+
+bool OpenXrInstanceManager::IsDepthTrackingSupported() {
+  absl::MutexLock lock(mutex_);
+  if (!GetXrSystem()) {
+    LOG(ERROR) << "Unable to retrieve system ID.";
+    return false;
+  }
+
+  XrSystemDepthTrackingPropertiesANDROID depthTrackingProperties = {
+    .type = XR_TYPE_SYSTEM_DEPTH_TRACKING_PROPERTIES_ANDROID,
+  };
+
+  XrSystemProperties systemProperties = {
+      .type = XR_TYPE_SYSTEM_PROPERTIES,
+      .next = &depthTrackingProperties,
+  };
+
+  XR_RETURN_IF_FAILED(
+      xrGetSystemProperties(instance_, system_id_, &systemProperties));
+  return depthTrackingProperties.supportsDepthTracking;
+}
+
+bool OpenXrInstanceManager::IsGeospatialSupported() {
+  absl::MutexLock lock(mutex_);
+  if (!GetXrSystem()) {
+    LOG(ERROR) << "Unable to retrieve system ID.";
+    return false;
+  }
+
+  XrSystemGeospatialPropertiesANDROID geospatialProperties = {
+    .type = XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROID,
+  };
+
+  XrSystemProperties systemProperties = {
+      .type = XR_TYPE_SYSTEM_PROPERTIES,
+      .next = &geospatialProperties,
+  };
+
+  XR_RETURN_IF_FAILED(
+      xrGetSystemProperties(instance_, system_id_, &systemProperties));
+  return geospatialProperties.supportsGeospatial;
+}
+
+bool OpenXrInstanceManager::IsRenderingModeSupported(RenderingMode mode) {
+  absl::MutexLock lock(mutex_);
+  if (!GetXrSystem()) {
+    LOG(ERROR) << "Unable to retrieve system ID.";
+    return false;
+  }
+
+  XrViewConfigurationType requestedType = XR_VIEW_CONFIGURATION_TYPE_MAX_ENUM;
+  switch (mode) {
+    case kMono:
+      requestedType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
+      break;
+    case kStereo:
+      requestedType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+      break;
+    default:
+      LOG(ERROR) << "Unknown rendering mode.";
+      return false;
+  }
+
+  std::vector<XrViewConfigurationType> view_configuration_types;
+  uint32_t view_configuration_count;
+  XR_RETURN_IF_FAILED(xrEnumerateViewConfigurations(
+      instance_, system_id_, /*viewConfigurationTypeCapacityInput=*/0,
+      &view_configuration_count, /*viewConfigurationTypes=*/nullptr));
+  view_configuration_types.resize(view_configuration_count);
+  XR_RETURN_IF_FAILED(xrEnumerateViewConfigurations(
+      instance_, system_id_, view_configuration_count,
+      &view_configuration_count, view_configuration_types.data()));
+  for (const auto& view_configuration_type : view_configuration_types) {
+    if (view_configuration_type == requestedType) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool OpenXrInstanceManager::CreateInstance(JNIEnv* env, jobject context) {

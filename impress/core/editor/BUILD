@@ -16,7 +16,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 # Impress Editor.
 load("//build_tools:assets.bzl", "imp_assets")
-load("//build_tools:imp.bzl", "if_desktop", "if_emscripten", "imp_defines", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android", "if_desktop", "if_emscripten", "imp_defines", "imp_google3_copts")
 load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 
 package(
@@ -50,6 +50,7 @@ cc_library(
         ":editor_info",
         ":editor_plugin",
         "//core/camera",
+        "//core/geometry/shapes",
         "//core/ncsb",
         "//core/view/framework",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -86,6 +87,7 @@ cc_library(
         ":widget_layout_info",
         ":widget_ui_system",
         "//core:config",
+        "//core/assets/gltf:gltf_asset",
         "//core/assets/gltf:gltf_audio_extension",
         "//core/assets/gltf:gltf_interactivity_extension",
         "//core/async:future",
@@ -124,7 +126,9 @@ cc_library(
         "//core/editor/widgets:visualize_origins",
         "//core/editor/widgets/performance",
         "//core/editor/widgets/window:window_widget",
+        "//core/geometry/shapes",
         "//core/input",
+        "//core/lighting:light_component",
         "//core/math",
         "//core/ncsb",
         "//core/ncsb:ncsb_proto_cc",
@@ -133,7 +137,6 @@ cc_library(
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
-        "//core/view/platforms/android/wrappers:imp_lifecycle_callback",
         "//previewer/widgets:header_widgets",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -141,6 +144,11 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_impress//core/common:log",
     ] + if_desktop([
+    ]) + if_android([
+        "//core/view/platforms/android/wrappers:imp_lifecycle_callback",
+        "@third_party//split_engine:subspace_events",
+        "//core/view/utils:string_map",
+        "//core/editor/components:world_space_editor_ui",
     ]) + if_emscripten([
     ]),
     alwayslink = 1,
@@ -379,6 +387,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core/editor/layout:layout_config_imp_cc_proto",
+        "//core/math",
         "@com_google_absl//absl/strings",
     ],
     alwayslink = 1,

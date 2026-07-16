@@ -81,6 +81,14 @@ def if_wasm(a, otherwise = []):
         "//conditions:default": otherwise,
     })
 
+def if_feature_level_0(a, otherwise = []):
+    return select({
+        clean_dep("@third_party//filament:wasm_feature_level_0"): a,
+        clean_dep("@third_party//filament:filament_uses_opengl_egl_headless_fl0"): a,
+        clean_dep("@third_party//filament:filament_uses_gles2_android"): a,
+        "//conditions:default": otherwise,
+    })
+
 def if_linux(a):
     return select({
         clean_dep("@third_party//filament:linux"): a,
@@ -189,6 +197,8 @@ def by_backend(opengl = [], metal = [], vulkan = [], gl_vulkan = None):
         clean_dep("@third_party//filament:filament_uses_metal_ios_x86_64"): metal,
         clean_dep("@third_party//filament:filament_uses_opengl_ios_x86_64"): opengl,
         clean_dep("@third_party//filament:linux"): opengl,
+        clean_dep("@third_party//filament:filament_uses_opengl_macos"): opengl,
+        clean_dep("@third_party//filament:macos"): metal,
         "//conditions:default": opengl,
     })
 
@@ -269,8 +279,6 @@ def filament_defines():
     ]) + if_ios_simulator([
         "FILAMENT_IOS_SIMULATOR",
         "FILAMENT_TARGET_MOBILE=1",
-    ]) + if_metal([
-        "FILAMENT_SUPPORTS_METAL",
     ]) + if_android([
         "__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__",
         "FILAMENT_TARGET_MOBILE=1",
@@ -289,12 +297,16 @@ def filament_defines():
             "FILAMENT_TRACING_ENABLED=1",
         ],
         ["FILAMENT_TRACING_ENABLED=0"],
+    ) + if_feature_level_0(
+        ["FILAMENT_ENABLE_FEATURE_LEVEL_0=1"],
     ) + [
         # Disable GTAO on g3 due to size increase.
         "FILAMENT_DISABLE_GTAO=1",
         "FILAMENT_RELAXED_CORRECTNESS_ASSERTIONS=1",
         # Enable Abseil logging in g3.
         
+        # Add HAS_SYSTEM_GETOPT by default
+        "HAS_SYSTEM_GETOPT=1",
     ]
     return out_defines
 
@@ -373,6 +385,7 @@ BUILTIN_MATERIAL_INCLUDES = [
     "antiAliasing/fxaa/fxaa.fs",
     "colorGrading/colorGrading.fs",
     "dof/dofUtils.fs",
+    "evsm/gaussian.fs",
     "fsr/ffx_a.h",
     "fsr/ffx_fsr1.h",
     "fsr/ffx_fsr1_mobile.fs",
@@ -427,7 +440,13 @@ BUILTIN_MATERIAL_NAMES = {
             "shadowmap",
             "skybox",
             "separableGaussianBlur",
+        ],
+    },
+    "evsm": {
+        "path_prefix": "evsm",
+        "files": [
             "vsmMipmap",
+            "gaussian",
         ],
     },
     "colorGrading": {

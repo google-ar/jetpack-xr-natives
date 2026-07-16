@@ -26,7 +26,6 @@
 #include "core/ncsb/node_handle.h"
 #include "extensions/sceneviewerxr/ux/constants.h"
 #include "extensions/sceneviewerxr/ux/gltf_bounds.h"
-#include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_owner.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
 
@@ -56,9 +55,6 @@ void FrameModel(imp::NodeHandle sv_node, const imp::mat4& camera_from_world,
 
   auto ideal_world_position = (world_from_camera * ideal_view_position).xyz;
 
-  const imp::mat4f& world_from_sv_node = sv_node->GetWorldTrs();
-  imp::mat4f sv_node_from_world = inverse(world_from_sv_node);
-
   const float kMinModelSize = 0.01f;
 
   auto vertical_scale =
@@ -69,7 +65,7 @@ void FrameModel(imp::NodeHandle sv_node, const imp::mat4& camera_from_world,
   float ideal_scale = std::min(vertical_scale, turn_table_scale);
 
   *out_rig_position =
-      (sv_node_from_world * ideal_world_position).xyz -
+      (ideal_world_position) -
       (ideal_scale * imp::float3(0.f, model_local_bounds.halfExtent.y, 0.f));
   *out_model_scale = ideal_scale;
 }
@@ -78,11 +74,17 @@ void FrameModel(imp::NodeHandle sv_node, const imp::mat4& camera_from_world,
 
 Machine::OptionalState HandleInput(interaction_states::Initialized& state,
                                    InteractionOwner& owner) {
-  if (!owner.GetFootprint().IsValid()) {
+  bool is_idle_ready = owner.GetFootprint().IsValid() &&
+                       owner.GetCamera().IsValid() &&
+                       owner.GetModelNode().IsValid();
+  if (!is_idle_ready) {
     // Defer entering Idle until our UX is ready.
     return {};
   }
-  return Machine::OptionalState{interaction_states::SetupIdleState()};
+  Opening opening_state;
+  opening_state.minimum_duration.Setup(0.0f);
+  opening_state.minimum_duration.SetTarget(1.0f, kOpeningAnimationDuration);
+  return Machine::OptionalState{opening_state};
 }
 
 void OnStateEnd(const interaction_states::Machine::State& current_state,
@@ -112,10 +114,11 @@ void OnStateEnd(const interaction_states::Machine::State& current_state,
 
       owner.CalculateModelScaleLimits();
 
-      owner.SetModelLogScale(kSmoothManualScaleParameters,
-                             std::log(owner.GetInitialModelScale()));
+      owner.SetModelLogScale(kSmoothSlowPopInScaleParameters, std::log(0.001f));
+      owner.GetModelLogScale().SetTarget(
+          std::log(owner.GetInitialModelScale()));
 
-      owner.GetRigNode()->SetLocalPosition(rig_position);
+      owner.GetRigNode()->SetWorldPosition(rig_position);
 
       owner.SetRigPosition(kSmoothFastResolvingPositionParameters,
                            rig_position);
@@ -129,13 +132,21 @@ void OnStateEnd(const interaction_states::Machine::State& current_state,
       }
       owner.GetModelNode()->SetEnabled(true);
 
-      owner.GetFootprint()->OnInteractionMachineInitialized();
+      if (owner.GetFootprint().IsValid()) {
+        owner.GetFootprint()->OnInteractionMachineInitialized();
+        // The scale pop-in animation takes ~300ms to visually settle.
+        // We match this duration so the footprint fades in concurrently.
+        owner.GetFootprint()->Show(kOpeningAnimationDuration);
+      }
     }
 
-    if (owner.GetUiEventListener()) {
-      owner.GetUiEventListener()->OnStartup();
+      if (!(std::get<interaction_states::Initialized>(current_state)
+                .is_reinitializing)) {
+        if (owner.GetUiEventListener()) {
+          owner.GetUiEventListener()->OnStartup();
+        }
+      }
     }
-  }
 }
 
 }  // namespace interaction_states

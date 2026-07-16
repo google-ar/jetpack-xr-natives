@@ -13,10 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load(
-    "//build_tools:imp.bzl",
-    "if_non_android",
-)
+load("//build_tools:imp.bzl", "if_non_android")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -42,6 +39,7 @@ cc_library(
     hdrs = ["split_engine_bridge.h"],
     deps = [
         "//core/async:executor",
+        "//core/common:invocable",
         "//core/common:jni_helpers",
         "//core/split_engine:message_group_monitor",
         "//core/split_engine:split_engine_bridge_sender",
@@ -53,6 +51,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,

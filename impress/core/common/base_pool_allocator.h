@@ -126,6 +126,16 @@ class BasePoolAllocator {
   // Returns the total capacity of all blocks.
   uint32_t GetCapacity() const;
 
+  // Reclaims memory from empty tail pages.
+  //
+  // Scans pages from the tail and frees those that are completely empty
+  // (no active objects). Stops at the first non-empty page.
+  //
+  // This operation requires filtering the intrusive free list to remove
+  // slots belonging to deleted pages, which is an O(N) operation where N is
+  // the total number of free slots.
+  void Trim();
+
  protected:
   explicit BasePoolAllocator(
       imp_pool_allocator_internal::MemoryLayout memory_layout);
@@ -380,8 +390,7 @@ void* BasePoolAllocator<EnableGenerations, MaxBlockPower>::GetSlotPointer(
     uint32_t page_idx = relative_idx / memory_layout_.slots_per_page;
     uint32_t slot_idx = relative_idx % memory_layout_.slots_per_page;
     std::byte* page_mem = pages_[page_idx];
-    std::byte* slots_start = page_mem + memory_layout_.slots_start_offset_bytes;
-    return slots_start + slot_idx * memory_layout_.slot_size_bytes;
+    return page_mem + slot_idx * memory_layout_.slot_size_bytes;
   }
 }
 
@@ -462,20 +471,116 @@ void BasePoolAllocator<EnableGenerations, MaxBlockPower>::AddPage() {
 
   uint32_t start_idx = GetCapacity();
 
-  new (page_base) imp_pool_allocator_internal::PageHeader{start_idx};
+  new (page_base + memory_layout_.footer_offset_bytes)
+      imp_pool_allocator_internal::PageFooter{start_idx};
 
-  uint64_t* occupancy =
-      imp_pool_allocator_internal::GetPageOccupancy(page_base);
+  uint64_t* occupancy = imp_pool_allocator_internal::GetPageOccupancy(
+      page_base, memory_layout_.footer_offset_bytes);
   new (occupancy) uint64_t[memory_layout_.bitmap_words_per_page]();
 
   pages_.push_back(page_base);
   current_capacity_ += memory_layout_.slots_per_page;
 
-  cursor_ptr_ = page_base + memory_layout_.slots_start_offset_bytes;
+  cursor_ptr_ = page_base;
 
   if constexpr (EnableGenerations) {
-    generations_.resize(current_capacity_, 0);
+    // current_capcity_ can be smaller than generations_.size() if we have
+    // trimmed the pages_.
+    if (generations_.size() < current_capacity_) {
+      generations_.resize(current_capacity_, 0);
+    }
   }
+}
+
+template <bool EnableGenerations, uint32_t MaxBlockPower>
+void BasePoolAllocator<EnableGenerations, MaxBlockPower>::Trim() {
+  // Safely skip if we are iterating to avoid invalidating iterator state.
+  if (iteration_depth_ > 0) {
+    return;
+  }
+
+  // Iterate backwards through pages to reclaim empty ones.
+  uint32_t pages_to_trim = 0;
+  uint32_t first_trimmed_index = current_capacity_;
+
+  // 1. Identify contiguous empty tail pages.
+  for (size_t i = pages_.size(); i > 0; --i) {
+    size_t idx = i - 1;
+    std::byte* page_base = pages_[idx];
+    uint64_t* occupancy = imp_pool_allocator_internal::GetPageOccupancy(
+        page_base, memory_layout_.footer_offset_bytes);
+
+    bool is_empty = true;
+    for (uint32_t w = 0; w < memory_layout_.bitmap_words_per_page; ++w) {
+      if (occupancy[w] != 0) {
+        is_empty = false;
+        break;
+      }
+    }
+
+    if (!is_empty) {
+      break;
+    }
+
+    auto* footer = reinterpret_cast<imp_pool_allocator_internal::PageFooter*>(
+        page_base + memory_layout_.footer_offset_bytes);
+    first_trimmed_index = footer->start_index;
+    pages_to_trim++;
+  }
+
+  // 2. Filter the free list in a single pass if we have pages to trim.
+  if (pages_to_trim > 0) {
+    imp_pool_allocator_internal::FreeSlot* new_head = nullptr;
+    imp_pool_allocator_internal::FreeSlot* new_tail = nullptr;
+
+    imp_pool_allocator_internal::FreeSlot* curr = free_head_ptr_;
+    while (curr != nullptr) {
+      if (curr->index < first_trimmed_index) {
+        if (new_head == nullptr) {
+          new_head = curr;
+        } else {
+          new_tail->next_free_ptr = curr;
+        }
+        new_tail = curr;
+      }
+      curr = curr->next_free_ptr;
+    }
+
+    if (new_tail != nullptr) {
+      new_tail->next_free_ptr = nullptr;
+    }
+
+    free_head_ptr_ = new_head;
+    free_tail_ptr_ = new_tail;
+
+    // 3. Delete pages and update capacity.
+    for (uint32_t i = 0; i < pages_to_trim; ++i) {
+      std::byte* page_base = pages_.back();
+      std::free(page_base);
+      pages_.pop_back();
+    }
+
+    current_capacity_ = first_trimmed_index;
+
+    // Roll back the bump cursor if it was pointing into the deleted pages or
+    // ran past them.
+    if (cursor_index_ > current_capacity_) {
+      cursor_index_ = current_capacity_;
+      // Note: We don't need to update cursor_ptr_ here.
+      // - If cursor_index_ was in a deleted page, setting it to
+      //   current_capacity_ ensures that the next allocation will NOT use the
+      //   bump cursor (since cursor_index_ == current_capacity_) and will
+      //   instead call AddPage(), which resets cursor_ptr_ to the newly
+      //   allocated page.
+      // - If cursor_index_ was in an earlier page, it was less than
+      //   current_capacity_ and we didn't touch it, so cursor_ptr_ is still
+      //   naturally correct.
+    }
+  }
+
+  // NOTE: The generations_ vector is intentionally not trimmed.
+  // If the allocator grows again and re-uses those slot indices, the generation
+  // tracking must remain consistent.
 }
 
 }  // namespace imp

@@ -88,6 +88,7 @@ cc_library(
         "utils/include/utils/JobSystem.h",
         "utils/include/utils/Log.h",
         "utils/include/utils/Logger.h",
+        "utils/include/utils/LruCache.h",
         "utils/include/utils/MonotonicRingMap.h",
         "utils/include/utils/Mutex.h",
         "utils/include/utils/NameComponentManager.h",
@@ -117,11 +118,13 @@ cc_library(
         "utils/include/utils/compiler.h",
         "utils/include/utils/compressed_pair.h",
         "utils/include/utils/debug.h",
+        "utils/include/utils/getopt.h",
         "utils/include/utils/memalign.h",
         "utils/include/utils/ostream.h",
         "utils/include/utils/sstream.h",
         "utils/include/utils/string.h",
         "utils/include/utils/trap.h",
+        "utils/include/utils/tribool.h",
         "utils/include/utils/unwindows.h",
         "utils/include/utils/vector.h",
     ] + if_windows([
@@ -777,6 +780,19 @@ cc_library(
             if_linux([
                 "bluegl/src/BlueGLLinuxEGL.cpp",
             ]),
+            [],
+        ),
+        # Assumes that the user will implement the following APIs that have been left out of the
+        # core bluegl library.  These functions are responsible for loading the correct OpenGl
+        # implementation that will allow BlueGL to bind OpenGL functions by calling loadFunction().
+        #   namespace bluegl {
+        #     extern bool initBinder();
+        #     extern void* loadFunction(const char* name);
+        #     extern void shutdownBinder();
+        #   }
+        (
+            "bluegl_linux_user",
+            [],
             [],
         ),
     ]

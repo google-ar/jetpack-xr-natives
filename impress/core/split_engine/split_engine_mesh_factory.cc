@@ -563,7 +563,9 @@ filament::MorphTargetBuffer* BuildMorphTargetBuffer(
   MeshBuilder mesh_builder(view);
   BaseMorphTargetBufferBuilder& builder =
       mesh_builder.CreateMorphTargetBufferBuilder();
-  builder.Count(targets_count).VertexCount(vertex_count);
+  builder.Count(targets_count)
+      .VertexCount(vertex_count)
+      .EnableCustomMorphing(info.enable_custom_morphing());
   for (int index = 0; index < info.targets()->size(); index++) {
     const android_xr::schemas::MorphTargetAttributeInfo* target =
         info.targets()->Get(index);

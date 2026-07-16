@@ -24,6 +24,7 @@
 #include "absl/base/attributes.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/Scene.h"
 #include "core/common/hash.h"
 #include "core/common/owned_or_borrowed_ptr.h"
@@ -31,6 +32,7 @@
 #include "core/common/owned_ptr.h"
 #include "core/lighting/environment_light.h"
 #include "core/ncsb/dispatcher/event.h"
+#include "core/ncsb/node_group_constants.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
 
@@ -84,7 +86,7 @@ class GroupsManager {
     std::string group_name;
   };
 
-  static constexpr absl::string_view kMainGroupName = "Main";
+  static constexpr absl::string_view kMainGroupName = imp::kMainGroupName;
   static constexpr HashValue kMainGroupHash = Hash(kMainGroupName);
 
   explicit GroupsManager(BaseView* view, filament::Scene* main_scene);
@@ -147,6 +149,10 @@ class GroupsManager {
                       NodeHandle node);
 
   void RemoveNodeFromGroup(HashValue group_hash, NodeHandle node);
+
+  void UpdateNodeGroups(absl::Span<const HashValue> old_hashes,
+                        absl::Span<const HashValue> new_hashes, NodeHandle node,
+                        absl::Span<const absl::string_view> new_group_names);
 
   void SetNodeActiveInGroup(HashValue group_hash, NodeHandle node,
                             bool is_active);

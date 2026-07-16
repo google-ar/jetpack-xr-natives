@@ -72,20 +72,15 @@ material {
   ],
   constants : [
         {
-           // If true, use triangles to render splats (3 vertices). Otherwise,
-           // use quads (6 vertices).
-           type      : bool,
-           name      : useTrianglesForSplats,
-           value     : false
+           // TODO: Remove this once we have uint render targets.
+           // a workaround for Metal devices where packing bits into floats can
+           // result in values being dropped entirely.
+           type      : float,
+           name      : fix,
+           value     : 0.0
         }
   ],
   variables : [
-        // TODO: Replace with call to getWorldFromModelMatrix() in
-        // the fragment shader.
-        worldFromModelMatrix0,
-        worldFromModelMatrix1,
-        worldFromModelMatrix2,
-        worldFromModelMatrix3,
         hasStereoAndEyeIndex //stereo info must be passed from fs to vs.
   ],
   flipUV : false,
@@ -97,15 +92,11 @@ material {
   culling : none,
   blending : opaque,
   interpolation : flat,
+  apiLevel : 2,
 }
 
 vertex {
   void materialVertex(inout MaterialVertexInputs material) {
-    mat4 worldFromModelMatrix = getWorldFromModelMatrix();
-    material.worldFromModelMatrix0 = worldFromModelMatrix[0];
-    material.worldFromModelMatrix1 = worldFromModelMatrix[1];
-    material.worldFromModelMatrix2 = worldFromModelMatrix[2];
-    material.worldFromModelMatrix3 = worldFromModelMatrix[3];
 #if defined(VARIANT_HAS_STEREO)
    material.hasStereoAndEyeIndex.x = float(getEyeIndex());
 #else
@@ -137,10 +128,6 @@ fragment {
 
   void material(inout MaterialInputs material) {
     prepareMaterial(material);
-    mat4 worldFromModelMatrix = mat4(variable_worldFromModelMatrix0,
-                                     variable_worldFromModelMatrix1,
-                                     variable_worldFromModelMatrix2,
-                                     variable_worldFromModelMatrix3);
 
     int splatIndex = int(floor(gl_FragCoord.y) * getResolution().x + floor(gl_FragCoord.x));
     ivec2 sampleCoord = getSampleCoord(splatIndex, /*stride=*/1, materialParams_splatDataPosition);
@@ -156,7 +143,7 @@ fragment {
     vec2 basisAxisX;
     float aspectRatio;
 
-    computeSplatData(eyeIndex, position, cov3d, worldFromModelMatrix,
+    computeSplatData(eyeIndex, position, cov3d, getWorldFromModelMatrix(),
                      vec2(materialParams.mainViewResolution),
                      materialParams.minScreenSize, materialParams.maxScreenSize,
                      clipPos, basisAxisX, aspectRatio);
@@ -177,9 +164,9 @@ fragment {
       color.a = 0.0;
     }
 
-    material.baseColor = vec4(uintBitsToFloat(packHalf2x16(clipPos.xy)),
-                              uintBitsToFloat(packHalf2x16(vec2(clipPos.z, aspectRatio))),
-                              uintBitsToFloat(packHalf2x16(basisAxisX)),
-                              uintBitsToFloat(packUnorm4x8(color)));
+    material.baseColor = vec4(uintBitsToFloat(packHalf2x16(clipPos.xy)) + materialConstants_fix,
+                              uintBitsToFloat(packHalf2x16(vec2(clipPos.z, aspectRatio))) + materialConstants_fix,
+                              uintBitsToFloat(packHalf2x16(basisAxisX)) + materialConstants_fix,
+                              uintBitsToFloat(packUnorm4x8(color)) + materialConstants_fix);
   }
 }

@@ -84,21 +84,21 @@ struct ThreadPoolGlobals {
   ThreadPoolThreadEnd thread_end = []() {};
 };
 
-ThreadPoolGlobals &GetThreadPoolGlobals() {
-  static ThreadPoolGlobals *globals = new ThreadPoolGlobals();
+ThreadPoolGlobals& GetThreadPoolGlobals() {
+  static ThreadPoolGlobals* globals = new ThreadPoolGlobals();
   return *globals;
 }
 
 void SetCallbacksForThreadPool(ThreadPoolThreadBegin thread_begin,
                                ThreadPoolThreadEnd thread_end) {
-  ThreadPoolGlobals &globals = GetThreadPoolGlobals();
+  ThreadPoolGlobals& globals = GetThreadPoolGlobals();
   globals.thread_begin = std::move(thread_begin);
   globals.thread_end = std::move(thread_end);
   IMP_LOG(imp::INFO) << "Assigned ThreadPool callbacks";
 }
 
 void ClearCallbacksForThreadPool() {
-  ThreadPoolGlobals &globals = GetThreadPoolGlobals();
+  ThreadPoolGlobals& globals = GetThreadPoolGlobals();
   globals.thread_begin = []() {};
   globals.thread_end = []() {};
   IMP_LOG(imp::INFO) << "Cleared ThreadPool callbacks";
@@ -107,18 +107,18 @@ void ClearCallbacksForThreadPool() {
 class ThreadBookend {
  public:
   ThreadBookend() {
-    ThreadPoolGlobals &globals = GetThreadPoolGlobals();
+    ThreadPoolGlobals& globals = GetThreadPoolGlobals();
     globals.thread_begin();
   }
   ~ThreadBookend() {
-    ThreadPoolGlobals &globals = GetThreadPoolGlobals();
+    ThreadPoolGlobals& globals = GetThreadPoolGlobals();
     globals.thread_end();
   }
 };
 
 #if IMP_THREADS(GOOGLE3)
 ThreadPoolExecutor::WorkerThread::WorkerThread(
-    ThreadPoolExecutor *thread_pool_executor, Executor *foreground_executor)
+    ThreadPoolExecutor* thread_pool_executor, Executor* foreground_executor)
     : Thread(thread::Options().set_joinable(true).set_nice_priority_level(
                  kWorkerThreadNicenessOffset),
              kThreadPrefix),
@@ -136,10 +136,15 @@ void ThreadPoolExecutor::WorkerThread::Run() {
 }
 #endif
 
-ThreadPoolExecutor::ThreadPoolExecutor(Executor *foreground_executor)
+ThreadPoolExecutor::ThreadPoolExecutor(Executor* foreground_executor)
+    : ThreadPoolExecutor(foreground_executor, GetWorkerThreadCount()) {}
+
+ThreadPoolExecutor::ThreadPoolExecutor(Executor* foreground_executor,
+                                       int thread_pool_size)
     : finished_(false), callback_counter_(0) {
   task_scheduler_ = std::make_unique<TaskScheduler>();
-  const int worker_thread_count = GetWorkerThreadCount();
+  const int worker_thread_count =
+      thread_pool_size > 0 ? thread_pool_size : GetWorkerThreadCount();
 
   worker_threads_.reserve(worker_thread_count);
   for (int i = 0; i < worker_thread_count; ++i) {
@@ -292,7 +297,7 @@ void ThreadPoolExecutor::Shutdown() {
   }
 
   IMP_LOG(imp::INFO) << "Shutting down thread pool";
-  for (auto &worker_thread : worker_threads_) {
+  for (auto& worker_thread : worker_threads_) {
 #if IMP_THREADS(GOOGLE3)
     worker_thread->Join();
 #elif IMP_THREADS(STDLIB)
@@ -350,6 +355,8 @@ int ThreadPoolExecutor::GetPendingTaskCount() {
   }
   return task_scheduler_->GetTaskCount();
 }
+
+int ThreadPoolExecutor::GetPoolSize() const { return worker_threads_.size(); }
 
 bool ThreadPoolExecutor::IsPumpingRequired() { return false; }
 

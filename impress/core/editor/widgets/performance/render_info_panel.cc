@@ -177,7 +177,9 @@ void RenderInfoPanel::DrawSelectedFrameLabels(int frame_number,
     frame_value_data_[idx].show_flag = show_gltfs_;
   }
 
-  ImGuiHelper::DrawFrameValueLabels(frame_number, frame_value_data_, draw_list);
+  ImGuiHelper::DrawFrameValueLabels(
+      frame_number, absl::MakeSpan(frame_value_data_).subspan(0, idx + 1),
+      draw_list);
 }
 
 void RenderInfoPanel::DrawHighlightFrame(int frame_number,

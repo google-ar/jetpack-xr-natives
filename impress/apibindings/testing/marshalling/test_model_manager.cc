@@ -85,10 +85,9 @@ absl::Status TestModelManager::ReleaseGltfAsset(std::intptr_t gltf_token) {
 }
 
 absl::StatusOr<int32_t> TestModelManager::InstanceGltfModel(
-    std::intptr_t gltf_token, bool enable_collider) {
+    std::intptr_t gltf_token) {
   ModelTestContext& context = ModelTestContext::Get();
   context.instance_gltf_model.actual_token = gltf_token;
-  context.instance_gltf_model.actual_collider = enable_collider;
 
   
   

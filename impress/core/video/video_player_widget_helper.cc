@@ -16,8 +16,10 @@
 
 #include <inttypes.h>
 
-#include "core/video/video_player.h"
+#include <string>
+
 #include "dear_imgui/imgui.h"
+#include "core/video/video_player.h"
 
 namespace imp {
 
@@ -176,8 +178,7 @@ void VideoPlayerWidgetHelper::ShowPlaybackInformationRow() {
   } else {
     error_str_ = "Failed to get current player state";
   }
-  ImGui::Text(
-      absl::StrFormat("Player State: %s", player_state_str.data()).c_str());
+  ImGui::Text("Player State: %s", std::string(player_state_str).c_str());
 
   absl::StatusOr<uint2> video_size = component_->GetVideoSize();
   if (video_size.ok()) {

@@ -18,10 +18,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
-#include <functional>
 #include <memory>
 #include <thread>  // NOLINT: Need to use threads available in bazel.
-#include <utility>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
@@ -30,6 +28,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "third_party/grpc/include/grpcpp/support/client_callback.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge.grpc.pb.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -48,7 +47,7 @@ class SplitEngineMMDesktopBridgeClientImpl
 
   absl::Status SendRequest(
       absl::Span<const uint8_t> data,
-      std::function<void(absl::Span<const uint8_t>)> callback) override;
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) override;
 
   absl::Status SendMessage(MessageGroupId message_group_id,
                            size_t message_group_max_size_bytes,

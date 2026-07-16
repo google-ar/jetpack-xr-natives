@@ -23,6 +23,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
+#include "core/camera/camera_component.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
@@ -35,6 +36,7 @@
 #include "core/render_passes/texture_pipeline_renderer.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
 #include "core/resources/resource_definition.h"
+#include "core/scene_handles/scene_handles.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -73,9 +75,12 @@ imp::ComponentHandle<imp::MeshRenderer> CreateMeshRenderer(
 
 // Configuration for the precompute pass
 imp::TexturePipelineRendererState::Pass ConfigurePrecomputeDataTexture(
-    const std::string& texture_group_name, uint2 size) {
+    const std::string& texture_group_name, uint2 size,
+    imp::ComponentHandle<imp::CameraComponent> camera = {}) {
   return {
       .group = texture_group_name,
+      .camera = camera ? ComponentSceneHandle<imp::CameraComponent>(camera)
+                       : ComponentSceneHandle<imp::CameraComponent>(),
       .color_texture_config =
           imp::TexturePipelineRendererState::Texture{
               .name = texture_group_name,
@@ -93,12 +98,20 @@ imp::TexturePipelineRendererState::Pass ConfigurePrecomputeDataTexture(
 // texture. The group name is based on node id and will be used in the render
 // pass
 imp::Future<ComponentHandle<imp::TexturePipelineRenderer>>
-CreateTexturePipelineRenderer(NodeHandle precompute_node, uint2 size) {
+CreateTexturePipelineRenderer(
+    NodeHandle precompute_node, uint2 size,
+    imp::ComponentHandle<imp::CameraComponent> camera = {}) {
   const std::string texture_group_name =
       absl::StrCat(precompute_node.GetEntity().getId());
 
   imp::TexturePipelineRendererState texture_pipeline_renderer_state = {
-      .passes = {ConfigurePrecomputeDataTexture(texture_group_name, size)}};
+      .passes = {ConfigurePrecomputeDataTexture(texture_group_name, size,
+                                                camera)},
+      // We give a high priority to this precompute pass, since it needs to run
+      // before other passes, especially when Gsplat is set up to render to
+      // another offscreen texture.
+      .priority = 10,
+  };
 
   return precompute_node->AddComponentWithState<imp::TexturePipelineRenderer>(
       texture_pipeline_renderer_state);
@@ -129,8 +142,9 @@ imp::Future<absl::Status> PrecomputeTexturePipeline::Setup(
                 precompute_node, precompute_material_.Borrow(), aabb_override);
             return absl::OkStatus();
           })
-      .Then([this](absl::Status status) mutable {
-        return CreateTexturePipelineRenderer(GetNode(), size_)
+      .Then([this, precompute_node](absl::Status status) mutable {
+        return CreateTexturePipelineRenderer(precompute_node, size_,
+                                             camera_override_)
             .Then([this](ComponentHandle<TexturePipelineRenderer> renderer) {
               texture_pipeline_renderer_ = renderer;
               return absl::OkStatus();
@@ -168,6 +182,12 @@ absl::Status PrecomputeTexturePipeline::ResizePassTexture(
   size_ = texture_size;
   return texture_pipeline_renderer_->ResizePassTexture(pass_index,
                                                        texture_size);
+}
+
+absl::Status PrecomputeTexturePipeline::SetCamera(
+    imp::ComponentHandle<imp::CameraComponent> camera) {
+  camera_override_ = camera;
+  return texture_pipeline_renderer_->SetPassCamera(0, camera_override_);
 }
 
 }  // namespace imp::split_engine

@@ -72,6 +72,7 @@ struct FootprintInteractionStates {
     Ramp<imp::float4> fill_cutoff_color;
     bool is_footprint_primary_receiver = false;
     bool is_footprint_secondary_receiver = false;
+    bool ignore_visibility_flags = false;
     int footprint_primary_receiver_grace_frames = 0;
     std::bitset<4> scale_handles_visibility;
     std::array<Ramp<float>, 4> scale_handle_animations;
@@ -93,7 +94,9 @@ class Footprint : public imp::Component,
   ~Footprint() override;
 
   // Initializes a footprint component.
-  imp::Future<absl::Status> Setup(imp::NodeHandle model_node);
+  imp::Future<absl::Status> Setup(
+      imp::NodeHandle model_node,
+      std::optional<imp::Box> initial_bounds = std::nullopt);
   absl::Status Setup(
       imp::AssetPtr<imp::GltfAsset> footprint_asset,
       std::unique_ptr<android_xr::SVXRFootprintMaterial> edge_material,
@@ -111,6 +114,13 @@ class Footprint : public imp::Component,
   imp::NodeHandle FootprintNode() const { return footprint_node_; }
 
   void OnInteractionMachineInitialized();
+
+  // Forces the footprint to fade in/out regardless of interaction state.
+  void Show(std::optional<absl::Duration> custom_fade_duration = std::nullopt);
+  void Hide();
+
+  // Directly forces the alpha to a certain fraction, interrupting animations.
+  void SetAlpha(float target_alpha);
 
   void OnModelSizeChanged();
 

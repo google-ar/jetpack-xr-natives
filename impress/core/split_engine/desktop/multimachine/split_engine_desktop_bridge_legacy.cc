@@ -15,26 +15,19 @@
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_legacy.h"
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <utility>
-#include <vector>
 
 #include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_client.h"
 
 namespace imp::split_engine {
 
 bool SplitEngineMMDesktopBridgeLegacy::SendRequest(
-    const std::vector<uint8_t>& data,
-    std::function<void(const std::vector<uint8_t>&)> callback) {
-  return client_
-      ->SendRequest(
-          data,
-          [callback = std::move(callback)](absl::Span<const uint8_t> data) {
-            callback(std::vector<uint8_t>(data.begin(), data.end()));
-          })
-      .ok();
+    absl::Span<const uint8_t> data,
+    imp::Invocable<void(absl::Span<const uint8_t>)> callback) {
+  return client_->SendRequest(data, std::move(callback)).ok();
 }
 
 }  // namespace imp::split_engine

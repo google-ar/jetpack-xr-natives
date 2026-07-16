@@ -48,6 +48,7 @@
 
 #include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/half.h"
+#include "filament/libs/math/include/math/vec2.h"
 #include "filament/libs/math/include/math/vec4.h"
 
 #include <algorithm>
@@ -75,6 +76,7 @@ struct ShadowMappingUniforms {
     float ssContactShadowDistance;
     uint32_t directionalShadows;
     uint32_t cascades;
+    math::float2 atlasResolution;
 };
 
 class ShadowMapManager {
@@ -136,6 +138,21 @@ public:
             RenderPassBuilder const& passBuilder,
             FView& view, CameraInfo const& mainCameraInfo, math::float4 const& userTime) noexcept;
 
+    FrameGraphId<FrameGraphTexture> gaussianBlurSeparatedPass(
+        FEngine& engine,
+        FrameGraph& fg,
+        FrameGraphId<FrameGraphTexture> input,
+        FrameGraphId<FrameGraphTexture> output,
+        utils::FixedCapacityVector<ShadowMap const*> shadowMapList,
+        math::int2 dir);
+
+    FrameGraphId<FrameGraphTexture> vsmMipmapPass(
+            FEngine& engine,
+            FrameGraph& fg,
+            FrameGraphId<FrameGraphTexture> input, uint8_t layer, size_t level,
+            math::float4 clearColor) noexcept;
+
+
     // valid after calling update() above
     ShadowMappingUniforms getShadowMappingUniforms() const noexcept {
         return mShadowMappingUniforms;
@@ -168,6 +185,10 @@ public:
         float const effectiveFilterRadius = std::max(1.0f, options.vsm.blurWidth);
         float const filterCeiling = ABSOLUTE_FILTER_LIMIT / effectiveFilterRadius;
         return std::min(targetExponent, filterCeiling);
+    }
+
+    ShadowMap::ShaderParameters const& getCascadeShaderParameters(size_t index) const noexcept {
+        return mCascadesShaderParameters[index];
     }
 
 private:
@@ -252,6 +273,8 @@ private:
     ShadowMappingUniforms mShadowMappingUniforms = {};
 
     ShadowMap::SceneInfo mSceneInfo;
+
+    ShadowMap::ShaderParameters mCascadesShaderParameters[4]{};
 
     // Inline storage for all our ShadowMap objects, we can't easily use a std::array<> directly.
     // Because ShadowMap doesn't have a default ctor, and we avoid out-of-line allocations.

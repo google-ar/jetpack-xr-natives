@@ -38,6 +38,9 @@ Future<WasmTextureContents> WasmDecodeImageToTexture(
     filament::backend::TextureFormat format =
         filament::backend::TextureFormat::SRGB8_A8);
 
+// Sets whether label prep profile logging is enabled.
+void SetLabelPrepProfileLogging(bool enabled);
+
 }  // namespace imp::image::details
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_IMAGE_WASM_DECODE_IMAGE_H_

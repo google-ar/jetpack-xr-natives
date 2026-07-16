@@ -114,6 +114,7 @@ cc_library(
         "//core/common:rememberer",
         "//core/editor",
         "//core/editor:editor_constants",
+        "//core/editor:editor_info",
         "//core/editor:widget_ui_system",
         "//core/editor/components:world_space_editor_ui_assets",
         "//core/editor/layout",

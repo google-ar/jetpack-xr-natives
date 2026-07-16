@@ -20,7 +20,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,7 +32,9 @@
 #include "absl/status/statusor.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "core/async/executor.h"
+#include "core/common/invocable.h"
 #include "core/common/jni_helpers.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -53,15 +54,15 @@ JniUniquePtr<jlongArray> ToLongArray(
       texture_ids_array.get(), 0, in_texture_ids.size(),
       reinterpret_cast<const jlong*>(in_texture_ids.data()));
   return texture_ids_array;
-};
+}
 
 JniUniquePtr<jbyteArray> ToByteArray(JNIEnv* env,
-                                     const std::vector<uint8_t>& data) {
+                                     absl::Span<const uint8_t> data) {
   JniUniquePtr<jbyteArray> data_array = CreateJniByteArray(env, data.size());
   env->SetByteArrayRegion(data_array.get(), 0, data.size(),
                           reinterpret_cast<const jbyte*>(data.data()));
   return data_array;
-};
+}
 
 class SplitEngineBufferHandle : public BufferHandle {
  public:
@@ -179,12 +180,12 @@ absl::Status SplitEngineBridge::SetExternalTextureSurfaceSize(
 }
 
 absl::Status SplitEngineBridge::SendRequest(
-    const std::vector<uint8_t>& data,
-    std::function<void(const std::vector<uint8_t>&)> callback) {
+    absl::Span<const uint8_t> data,
+    imp::Invocable<void(absl::Span<const uint8_t>)> callback) {
   // Note: the callback object JavaWrapper is released to java and deleted
   // in the native callback when it resolves.
   SplitEngineRequestCallback* request_callback =
-      new SplitEngineRequestCallback(Env(), callback);
+      new SplitEngineRequestCallback(Env(), std::move(callback));
   auto data_array = ToByteArray(Env(), data);
   JavaWrapper::CallVoidMethod(send_request_, data_array.release(),
                               request_callback->Release());

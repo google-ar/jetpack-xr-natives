@@ -58,8 +58,10 @@ cc_library(
     deps = [
         "//core:config",
         "//core/common:context",
+        "//core/common:owned_ptr",
         "//core/input",
         "//core/split_engine:split_engine_serializer_impl",
+        "//core/split_engine:split_engine_serializer_transport_legacy_impl",
         "//core/split_engine/android:split_engine_android_bridge",
         "//core/split_engine/android:split_engine_android_shared_memory_bridge",
         "//core/split_engine/android:split_engine_shared_memory_bridge_sender",

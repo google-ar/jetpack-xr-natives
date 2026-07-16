@@ -183,6 +183,8 @@ backend_opengl_srcs = backend_srcs + [
     "src/opengl/OpenGLProgram.cpp",
     "src/opengl/OpenGLDriverFactory.h",
     "src/opengl/OpenGLProgram.h",
+    "src/opengl/OpenGLState.h",
+    "src/opengl/OpenGLState.cpp",
     "src/opengl/OpenGLTimerQuery.cpp",
     "src/opengl/OpenGLTimerQuery.h",
     "src/opengl/ShaderCompilerService.cpp",
@@ -566,6 +568,44 @@ cc_library(
     alwayslink = 1,
 )
 
+# Filament backend library that supports both OpenGL (PlatformGLX, PlatformEGLHeadless, and
+# PlatformOSMesa) and Vulkan (VulkanPlatformLinux) platforms for linux. In order to switch between
+# the different OpenGL drivers, users must implement their own bluegl code. See the
+# :bluegl_linux_user for more details.
+cc_library(
+    name = "backend_gl_vulkan_linux_user",
+    srcs = backend_opengl_srcs + backend_vulkan_only_srcs + if_linux([
+        "src/opengl/platforms/PlatformGLX.cpp",
+        "src/opengl/platforms/PlatformEGL.cpp",
+        "src/opengl/platforms/PlatformEGLHeadless.cpp",
+        "src/opengl/platforms/PlatformOSMesa.cpp",
+    ]),
+    hdrs = if_linux([
+        "include/backend/platforms/PlatformEGL.h",
+        "include/backend/platforms/PlatformEGLHeadless.h",
+        "include/backend/platforms/PlatformOSMesa.h",
+        "include/backend/platforms/PlatformGLX.h",
+        "include/backend/platforms/VulkanPlatformLinux.h",
+    ]),
+    copts = filament_copts(),
+    defines = backend_opengl_defines + backend_vulkan_defines + [
+        "FILAMENT_SUPPORTS_X11",
+        "FILAMENT_SUPPORTS_XLIB",
+    ],
+    includes = ["src"],
+    linkstatic = True,
+    textual_hdrs = backend_textual_hdrs,
+    deps = [
+        # These should come early in the dep list.
+        "@third_party//filament/libs:bluegl_linux_user",
+        "@third_party//filament/libs:bluevk",
+    ] + backend_opengl_deps + backend_vulkan_deps + [
+        "//third_party/mesa:OSMesa_header_thirdparty",
+        "@third_party//gl",
+    ],
+    alwayslink = 1,
+)
+
 cc_library(
     name = "backend_opengl_osmesa",
     srcs = backend_opengl_srcs + [
@@ -781,6 +821,7 @@ objc_library(
     ],
     textual_hdrs = backend_metal_textual_hdrs,
     deps = backend_deps + [
+        "//third_party/apple_frameworks:QuartzCore",
         "@third_party//filament/filament:filament_hdrs",
     ],
 )

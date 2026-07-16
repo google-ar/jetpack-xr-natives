@@ -285,25 +285,30 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
                   : MeshFactory::MeshDataStorageMode::kStoreMeshData));
     }
   } else if (shape_stereo != nullptr) {
-    is_per_eye_ = shape_stereo->right_positions.has_value() &&
-                  !shape_stereo->right_positions->empty();
+    is_per_eye_ = shape_stereo->right_positions.has_value();
 
-    imp::CreateStereoMeshSettings settings{
-        .positions = shape_stereo->left_positions,
-        .texture_coordinates = shape_stereo->left_texcoords};
+    bool has_left_mesh = !shape_stereo->left_positions.empty();
+    bool has_right_mesh =
+        is_per_eye_ && !shape_stereo->right_positions->empty();
 
-    if (shape_stereo->left_indices.has_value() &&
-        !shape_stereo->left_indices->empty()) {
-      settings.indices = shape_stereo->left_indices;
+    if (has_left_mesh) {
+      imp::CreateStereoMeshSettings left_settings{
+          .positions = shape_stereo->left_positions,
+          .texture_coordinates = shape_stereo->left_texcoords};
+
+      if (shape_stereo->left_indices.has_value() &&
+          !shape_stereo->left_indices->empty()) {
+        left_settings.indices = shape_stereo->left_indices;
+      }
+
+      left_settings.draw_mode = shape_stereo->draw_mode;
+
+      mesh_renderer_left_or_both_->SetMesh(
+          CreateStereoMesh(&GetView(), left_settings,
+                           MeshFactory::MeshDataStorageMode::kDiscardMeshData));
     }
 
-    settings.draw_mode = shape_stereo->draw_mode;
-
-    mesh_renderer_left_or_both_->SetMesh(
-        CreateStereoMesh(&GetView(), settings,
-                         MeshFactory::MeshDataStorageMode::kDiscardMeshData));
-
-    if (is_per_eye_) {
+    if (has_right_mesh) {
       imp::CreateStereoMeshSettings right_settings{
           .positions = *shape_stereo->right_positions,
           .texture_coordinates = *shape_stereo->right_texcoords};
@@ -311,7 +316,7 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
           !shape_stereo->right_indices->empty()) {
         right_settings.indices = shape_stereo->right_indices;
       }
-      right_settings.draw_mode = settings.draw_mode;
+      right_settings.draw_mode = shape_stereo->draw_mode;
       mesh_renderer_right_->SetMesh(
           CreateStereoMesh(&GetView(), right_settings,
                            MeshFactory::MeshDataStorageMode::kDiscardMeshData));
@@ -436,11 +441,22 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
           if (mesh_renderer_left_or_both_) {
             mesh_renderer_left_or_both_->SetMaterial(
                 material_left->GetMaterial());
-            mesh_renderer_left_or_both_->SetEnabled(true);
+            bool has_left_mesh = true;
+            auto shape_stereo = std::get_if<StereoMesh>(&canvas_shape_);
+            if (shape_stereo != nullptr) {
+              has_left_mesh = !shape_stereo->left_positions.empty();
+            }
+            mesh_renderer_left_or_both_->SetEnabled(has_left_mesh);
           }
           if (mesh_renderer_right_) {
             mesh_renderer_right_->SetMaterial(material_right->GetMaterial());
-            mesh_renderer_right_->SetEnabled(true);
+            bool has_right_mesh = false;
+            auto shape_stereo = std::get_if<StereoMesh>(&canvas_shape_);
+            if (shape_stereo != nullptr) {
+              has_right_mesh = shape_stereo->right_positions.has_value() &&
+                               !shape_stereo->right_positions->empty();
+            }
+            mesh_renderer_right_->SetEnabled(has_right_mesh);
           }
           material_cache_.SetCornerRadius(kEyeTargetsLeftRight, blending_mode,
                                           corner_radius);
@@ -856,10 +872,8 @@ void StereoSurface::SetSubViewRects(const float4& left_rect,
           });
   per_eye_material_future_ = per_eye_material_future_.Then(
       [this, left_rect, right_rect, blending_mode = blending_mode_]() {
-        material_cache_.SetSubViewConfig(kEyeTargetsLeft, blending_mode,
-                                         left_rect, kRectFullView);
-        material_cache_.SetSubViewConfig(kEyeTargetsRight, blending_mode,
-                                         kRectFullView, right_rect);
+        material_cache_.SetSubViewConfig(kEyeTargetsLeftRight, blending_mode,
+                                         left_rect, right_rect);
       });
 }
 

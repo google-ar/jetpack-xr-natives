@@ -182,14 +182,28 @@ void SplitEngineBuiltinMaterial::UpdateParameters() const {
             data.data());
     flatbuffers::Verifier verifier(data.data(), data.size());
 
-    // In local mode, the material_ is an OwnedMaterialPtr holding a
-    // BuiltInMaterial, so this cast is safe.
-    BorrowedPtr<BuiltInMaterial> local_material = BorrowedPtr<BuiltInMaterial>(
-        material_.Borrow(SmallSourceLocation::Current()));
-    if (absl::Status status =
-            local_material->SetParameters(verifier, *schema, texture_borrower);
-        !status.ok()) {
-      IMP_LOG(imp::FATAL) << "Failed to set parameters on built-in material: " << status;
+    // In local mode, the material_ is supposed to be an OwnedMaterialPtr
+    // holding a BuiltInMaterial, but there's an edge case where generic
+    // material uses remote material even on local mode. Thus, we can't cast
+    // directly to BuiltInMaterial.
+    // TODO: Remove else block once (broken link) is fixed.
+    if (IsAlwaysRemote()) {
+      view_.GetSplitEngineSerializer()->SetBuiltInMaterialParameters(
+          GetMaterial()->GetFilamentMaterialInstance(),
+          static_cast<BuiltInMaterialParameters>(parameters_type_),
+          std::move(serialize_func));
+    } else {
+      // In local mode, the material_ is an OwnedMaterialPtr holding a
+      // BuiltInMaterial, so this cast is safe.
+      BorrowedPtr<BuiltInMaterial> local_material =
+          BorrowedPtr<BuiltInMaterial>(
+              material_.Borrow(SmallSourceLocation::Current()));
+      if (absl::Status status = local_material->SetParameters(verifier, *schema,
+                                                              texture_borrower);
+          !status.ok()) {
+        IMP_LOG(imp::FATAL) << "Failed to set parameters on built-in material: "
+                   << status;
+      }
     }
   } else {
     // In Split Engine built-in material mode, the OwnedMaterialPtr is a

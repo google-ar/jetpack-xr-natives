@@ -44,8 +44,8 @@ class MaterialCompilerService {
                                     const schemas::CompileRequest* request);
 
   absl::StatusOr<std::string> CompileMaterial(
-      absl::string_view source_material_string, schemas::Platform platform,
-      schemas::TargetApi target_api);
+      absl::string_view source_material_string,
+      const schemas::Config* ipc_config);
 
   absl::Status SendResponse(const flatbuffers::FlatBufferBuilder& builder);
 

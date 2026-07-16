@@ -35,7 +35,7 @@ mat3 unpackCov3d(uint3 cov3dPacked) {
 }
 
 // Computes cov2d from cov3d, use eq(5) in the 3DGS paper.
-vec3 computeCov2d(vec3 eyePos, mat3 eyeFromModel, mat4 clipFromEye, mat4 eyeFromClip, mat3 cov3d, vec2 resolution) {
+vec3 computeCov2d(vec3 eyePos, mat3 eyeFromModel, mat4 clipFromEye, mat3 cov3d, vec2 resolution) {
   vec2 focal = resolution * vec2(clipFromEye[0][0], clipFromEye[1][1]) / 2.0;
 
   mat3 jacobian;
@@ -50,10 +50,8 @@ vec3 computeCov2d(vec3 eyePos, mat3 eyeFromModel, mat4 clipFromEye, mat4 eyeFrom
   }
   else {
     // Perspective Projection
-    // this is needed in order for splats that are visible in view but clipped "quite a lot" to work
-    vec2 tanFov = vec2(eyeFromClip[0][0], eyeFromClip[1][1]);
-    vec2 limit = 1.3 * tanFov;
-    eyePos.xy = clamp(eyePos.xy / eyePos.z, -limit, limit) * eyePos.z;
+    // TODO: b/490486575 - Figure out why the scuba tests that compare using
+    // offscreen renderer vs. direct rendering to screen still fail
     jacobian = mat3(
         focal.x / eyePos.z, 0,                  -(focal.x * eyePos.x) / (eyePos.z * eyePos.z),
         0,                  focal.y / eyePos.z, -(focal.y * eyePos.y) / (eyePos.z * eyePos.z),
@@ -64,10 +62,6 @@ vec3 computeCov2d(vec3 eyePos, mat3 eyeFromModel, mat4 clipFromEye, mat4 eyeFrom
   mat3 jw = transpose(eyeFromModel) * jacobian;
   mat3 cov = transpose(jw) * cov3d * jw;
 
-  // Low pass filter to make each splat at least 1px size.
-  // TODO: Remove this logic and update Scuba tests.
-  cov[0][0] += 0.3;
-  cov[1][1] += 0.3;
   // Only need upper half of matrix since it's diagonal
   return vec3(cov[0][0], cov[0][1], cov[1][1]);
 }
@@ -79,8 +73,14 @@ void scaleAndRotationFromCov2D(vec3 cov2d, vec2 minSize, vec2 maxSize,
   float diag1 = cov2d.x, diag2 = cov2d.z, offDiag = cov2d.y;
   float mid = 0.5 * (diag1 + diag2);
   float radius = length(vec2((diag1 - diag2) / 2.0, offDiag));
+
+  // TODO: b/490486575 - See if it's necessary to get rid of the max operation
+  // that uses a hard-coded value of 0.1 to preserve the correct splat scale.
   float2 lambda = float2(mid + radius, max(mid - radius, 0.1));
   vec2 diagVec = normalize(vec2(offDiag, lambda.x - diag1));
+
+  // TODO: b/490486575 - Investigate if minSize and maxSize need to be scaled
+  // based on the FoV of the projection matrix used.
   float2 size = min(max(sqrt(2.0 * lambda), minSize), maxSize);
   basisAxisX = size.x * diagVec;
   aspectRatio = size.y / size.x;
@@ -98,20 +98,17 @@ void computeSplatData(int eyeIndex, vec4 position, mat3 cov3d,
                       out float aspectRatio) {
   mat4 eyeFromModel;
   mat4 clipFromEye;
-  mat4 eyeFromClip;
 
   if (eyeIndex >= 0) {
     eyeFromModel =
       getEyeFromViewMatrix(eyeIndex) * getViewFromWorldMatrix() * worldFromModelMatrix;
     clipFromEye =
       getClipFromWorldMatrix(eyeIndex) * inverse(getEyeFromViewMatrix(eyeIndex) * getViewFromWorldMatrix());
-    eyeFromClip = inverse(clipFromEye);
   } else {
     // When rendering in mono mode, we can use a simpler construction to avoid
     // an extra matrix multiplication.
     eyeFromModel = getViewFromWorldMatrix() * worldFromModelMatrix;
     clipFromEye = getClipFromViewMatrix();
-    eyeFromClip = getViewFromClipMatrix();
   }
   vec4 eyePos = eyeFromModel * position;
 
@@ -126,8 +123,7 @@ void computeSplatData(int eyeIndex, vec4 position, mat3 cov3d,
   }
 
   // Compute cov2d from cov3d.
-  vec3 cov2d = computeCov2d(eyePos.xyz, mat3(eyeFromModel), clipFromEye,
-                            eyeFromClip, cov3d, resolution);
+  vec3 cov2d = computeCov2d(eyePos.xyz, mat3(eyeFromModel), clipFromEye, cov3d, resolution);
   // Get basis axes for quad in NDC space (which encodes the scale and
   // rotation) from cov2d.
   scaleAndRotationFromCov2D(cov2d, minSize, maxSize, basisAxisX, aspectRatio);

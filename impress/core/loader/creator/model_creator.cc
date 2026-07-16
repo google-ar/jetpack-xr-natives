@@ -55,6 +55,7 @@
 #include "core/common/flatbuffer_helpers.h"
 #include "core/common/hash.h"
 #include "core/common/optional_error.h"
+#include "core/common/paired_vector.h"
 #include "core/common/robin_map.h"
 #include "core/common/schemas/math_generated.h"
 #include "core/common/schemas/render_generated.h"
@@ -148,6 +149,9 @@ namespace {
 
 // Maximum number of vertices, global to the model.
 static constexpr size_t kMaxVertexCount = 10000000;             // 10 million.
+static constexpr size_t kMaxMorphTargetTextureWidth = 2048;
+static constexpr size_t kMaxMorphTargetTextureSize =
+    kMaxMorphTargetTextureWidth * kMaxMorphTargetTextureWidth;
 static constexpr float3 kMinimumHalfExtents = float3(1.0e-3f);  // 1 mm.
 
 ModelData::RuntimeData GetDefaultRuntimeData() {
@@ -305,6 +309,8 @@ Future<absl::Status> CreateModelResources(
     TypedVector<filament::VertexBuffer*>* out_vertex_buffers,
     TypedVector<filament::IndexBuffer*>* out_index_buffers,
     TypedVector<filament::MorphTargetBuffer*>* out_morph_target_buffers,
+    PairedVector<OwnedTexturePtr, filament::MorphTargetBuffer*>*
+        out_morph_target_uv0_textures,
     TypedVector<OwnedTexturePtr>* out_textures,
     TypedVector<GenericMaterialPtr>* out_materials,
     MeshVertexDataLookup* stored_vertex_data,
@@ -385,6 +391,84 @@ Future<absl::Status> CreateModelResources(
   mesh_builder.Build(out_vertex_buffers, out_index_buffers,
                      out_morph_target_buffers);
 
+  // Create optional UV morph textures to correspond with each morph target
+  // buffer. Insert a nullptr for morph target buffers that do not have
+  // texcoords0 data to indicate the target buffer has no UV morphs.
+  for (const schemas::MorphTargetBufferInfo* morph_target_buffer_info :
+       *model->morph_target_buffers()) {
+    const size_t vertex_count = morph_target_buffer_info->vertex_count();
+    if (vertex_count > kMaxMorphTargetTextureSize) {
+      return Future<absl::Status>(absl::InvalidArgumentError(
+          "Vertex limit exceeded for UV morph target texture."));
+    }
+
+    // Determine if there is any UV morph data for this target buffer and
+    // validate the vertex count matches when there is.
+    bool has_uv_morphs = false;
+    for (const schemas::MorphTargetAttributeInfo* target :
+         *morph_target_buffer_info->targets()) {
+      if (target->texcoords0() != nullptr) {
+        has_uv_morphs = true;
+        if (target->texcoords0()->size() != vertex_count * sizeof(float2)) {
+          return Future<absl::Status>(absl::InvalidArgumentError(
+              "UV morph target texture data size mismatch."));
+        }
+      }
+    }
+
+    if (!has_uv_morphs) {
+      out_morph_target_uv0_textures->emplace_back(nullptr);
+      continue;
+    }
+
+    const size_t width = std::min(vertex_count, kMaxMorphTargetTextureWidth);
+    const size_t height = (vertex_count + kMaxMorphTargetTextureWidth - 1) /
+                          kMaxMorphTargetTextureWidth;
+    const size_t num_targets = morph_target_buffer_info->targets()->size();
+
+    // sampler2dArray: width = 2048 (max), height = ceil(vertex_count / 2048),
+    // depth = num_targets. Format: RG32F (float2). Matches Filament's built-in
+    // morphTarget wrapping logic.
+    filament::Texture* uv_morph_tex =
+        filament::Texture::Builder()
+            .width(width)
+            .height(height)
+            .depth(num_targets)
+            .levels(1)
+            .sampler(filament::Texture::Sampler::SAMPLER_2D_ARRAY)
+            .format(filament::Texture::InternalFormat::RG32F)
+            .build(*engine);
+
+    const size_t pixels_per_target = width * height;
+    float2* uv_data = new float2[pixels_per_target * num_targets];
+    std::memset(uv_data, 0, pixels_per_target * num_targets * sizeof(float2));
+    for (size_t t = 0; t < num_targets; ++t) {
+      const schemas::MorphTargetAttributeInfo* target =
+          morph_target_buffer_info->targets()->Get(t);
+      if (target->texcoords0() != nullptr) {
+        std::memcpy(&uv_data[t * pixels_per_target],
+                    target->texcoords0()->Data(),
+                    vertex_count * sizeof(float2));
+      }
+    }
+
+    filament::Texture::PixelBufferDescriptor desc(
+        uv_data, pixels_per_target * num_targets * sizeof(float2),
+        filament::Texture::Format::RG, filament::Texture::Type::FLOAT,
+        [](void* buffer, size_t size, void* user) {
+          delete[] static_cast<float2*>(buffer);
+        });
+
+    uv_morph_tex->setImage(*engine, 0, 0, 0, 0, width, height, num_targets,
+                           std::move(desc));
+
+    // TODO: (broken link) - Support SAMPLER_2D_ARRAY in Split Engine. Once
+    // supported, use view.GetTextureFactory().CreateTexture() to enable
+    // serialization of this UV morph texture.
+    out_morph_target_uv0_textures->emplace_back(
+        view.GetTextureFactory().WrapTexture(uv_morph_tex));
+  }
+
   // Create textures.
   if (model->textures()->size() != model->images()->size() ||
       model->images()->size() != images.size()) {
@@ -406,6 +490,9 @@ Future<absl::Status> CreateModelResources(
           absl::InternalError("Failed to create Texture"));
     imp::OwnedTexturePtr owned_texture(
         view.GetTextureFactory().WrapTexture(texture));
+    if (texture_info->name()) {
+      owned_texture->SetName(texture_info->name()->str());
+    }
     out_textures->emplace_back(std::move(owned_texture));
   }
 
@@ -917,10 +1004,10 @@ Future<absl::Status> ModelCreator::CreateModelResources(
             return imp::loader::details::CreateModelResources(
                 view, engine_, loader_options_, model, std::move(images),
                 &vertex_buffers_, &index_buffers_, &morph_target_buffers_,
-                &textures_, &materials_, &stored_vertex_data_,
-                &stored_index_data_, &material_config_info_,
-                &inflight_creation_, materials_by_params, material_id_lookup_,
-                name);
+                &morph_target_uv0_textures_, &textures_, &materials_,
+                &stored_vertex_data_, &stored_index_data_,
+                &material_config_info_, &inflight_creation_,
+                materials_by_params, material_id_lookup_, name);
           });
 }
 
@@ -939,11 +1026,12 @@ absl::StatusOr<std::unique_ptr<model::ModelData>> ModelCreator::CreateModelData(
       std::move(lights_punctual_), std::move(materials_variants_),
       std::move(*skeleton_), std::move(vertex_buffers_),
       std::move(index_buffers_), std::move(morph_target_buffers_),
-      std::move(textures_), std::move(materials_),
-      std::move(material_id_lookup_), std::move(skin_id_lookup_),
-      std::move(skinning_buffers_), std::move(stored_vertex_data_),
-      std::move(stored_index_data_), std::move(material_config_info_),
-      std::move(audio_emitters_), std::move(audio_sources_), std::move(audios_),
+      std::move(morph_target_uv0_textures_), std::move(textures_),
+      std::move(materials_), std::move(material_id_lookup_),
+      std::move(skin_id_lookup_), std::move(skinning_buffers_),
+      std::move(stored_vertex_data_), std::move(stored_index_data_),
+      std::move(material_config_info_), std::move(audio_emitters_),
+      std::move(audio_sources_), std::move(audios_),
       std::move(scene_audio_emitters_), std::move(interactivity_)));
 
   return result;

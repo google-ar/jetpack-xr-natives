@@ -31,6 +31,7 @@
 #include "core/common/typed_vector.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/video/video_writer.h"
 #include "core/view/base_view.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filament_host.h"
@@ -74,6 +75,8 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   // Schedules all ImGui work for this frame.
   void PreRender(absl::Duration previous_vsync, absl::Duration next_vsync,
                  bool force) override;
+  // Reroute UI rendering to alternative target if needed.
+  void RerouteUiRendering() override;
   // Submits the ImGui-specific view for rendering.
   void Render() override;
   // Informs ImGui of swap chain resize events.
@@ -91,7 +94,11 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   void SetEnabled(bool is_enabled) override;
   bool IsEnabled() override;
 
+  bool RemoteUiEnabled(FilamentHost* host) override;
+
   ImGuiRenderer* GetImGuiRenderer() override { return imgui_renderer_.get(); }
+
+  detail::FilamentView* GetUiView() override { return &ui_view_; }
 
  protected:
   ImFont* LoadFont(const BufferAccess& font_data, const char* font_name,
@@ -107,6 +114,9 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
 
  private:
   void ProcessImGuiCommands();
+  // Returns true if the UI should be rendered in place instead of being
+  // rerouted to an alternative target.
+  bool ShouldRenderUiInPlace();
 
   // Pointer to the host that owns this dev mode extension.
   FilamentHost* host_ = nullptr;
@@ -129,6 +139,8 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   uint2 cached_screen_size_;
   float2 cached_subpixel_ratio_;
   bool is_enabled_ = true;
+
+  std::unique_ptr<imp::video::VideoWriter> video_writer_ = nullptr;
 };
 
 }  // namespace imp::window

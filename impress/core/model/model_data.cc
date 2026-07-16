@@ -27,6 +27,7 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "core/common/filament_helpers.h"
 #include "core/common/paired_span.h"
+#include "core/common/paired_vector.h"
 #include "core/common/typed_set_vector.h"
 #include "core/common/typed_vector.h"
 #include "core/material_library/generic_material.h"
@@ -52,6 +53,8 @@ ModelData::ModelData(
     SkeletonData skeleton, TypedVector<filament::VertexBuffer*> vertex_buffers,
     TypedVector<filament::IndexBuffer*> index_buffers,
     TypedVector<filament::MorphTargetBuffer*> morph_target_buffers,
+    PairedVector<OwnedTexturePtr, filament::MorphTargetBuffer*>
+        morph_target_uv0_textures,
     TypedVector<OwnedTexturePtr> textures,
     TypedVector<GenericMaterialPtr> materials,
     absl::flat_hash_map<uint16_t, MaterialId> material_id_lookup,
@@ -75,6 +78,7 @@ ModelData::ModelData(
       vertex_buffers_(std::move(vertex_buffers)),
       index_buffers_(std::move(index_buffers)),
       morph_target_buffers_(std::move(morph_target_buffers)),
+      morph_target_uv0_textures_(std::move(morph_target_uv0_textures)),
       textures_(std::move(textures)),
       materials_(std::move(materials)),
       material_id_lookup_(std::move(material_id_lookup)),
@@ -208,6 +212,11 @@ const TypedVector<filament::IndexBuffer*>& ModelData::IndexBuffers() const {
 const TypedVector<filament::MorphTargetBuffer*>& ModelData::MorphTargetBuffers()
     const {
   return morph_target_buffers_;
+}
+
+const PairedVector<OwnedTexturePtr, filament::MorphTargetBuffer*>&
+ModelData::MorphTargetUv0Textures() const {
+  return morph_target_uv0_textures_;
 }
 
 // This is only used if the glTF has >4 weights, otherwise this is empty.

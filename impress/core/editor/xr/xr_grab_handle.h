@@ -17,12 +17,16 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_XR_XR_GRAB_HANDLE_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_XR_XR_GRAB_HANDLE_H_
 
+#include "absl/types/optional.h"
 #include "core/actions/controller_events.h"
+#include "core/collision/ray.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
+#include "core/render/mesh_renderer.h"
 #include "core/view/framework/input/pointer_input_handler.h"
-#include "core/view/framework/render/mesh_renderer.h"
+#include "split_engine/input/split_engine_input_event.h"
+
 namespace imp::editor {
 // XrGrabHandle is a component that allows the attached Node to be
 // dragged-and-dropped in a sphere around the main Impress camera. I.e., The
@@ -31,6 +35,13 @@ namespace imp::editor {
 // center of the XrGrabHandleNode.
 class XrGrabHandle : public imp::Component {
  public:
+  enum class InputSourceType {
+    kUnknown = 0,
+    kControllerLeftHand = 1,
+    kControllerRightHand = 2,
+    kSplitEngineLeftHand = 3,
+    kSplitEngineRightHand = 4,
+  };
   // distance_from_camera is the distance from the camera the XrGrabHandle.
   // will be rendered.
   // initial_vertical_offset_degrees is the starting angle above the horizon
@@ -41,15 +52,19 @@ class XrGrabHandle : public imp::Component {
   void Update(const imp::FrameTime& frame_time);
 
  private:
-  // Tracks grab state by monitoring per-frame PointerHitEvents (for mouse
-  // inputs)
+  // Tracks grab state by monitoring per-frame PointerHitEvents (for 2D screen
+  // mouse inputs)
   void HandlePointerHitEvent(imp::PointerHitEvent event);
   // Tracks grab state by monitoring per-frame ControllerHitEvents.
   void HandleControllerHitEvent(imp::ControllerHitEvent event);
-  // Called per-ControllerHitEvent to update the position of the Node with the
+  // Tracks grab state by monitoring per-frame SplitEngineInputEvents.
+  void HandleSplitEngineInputEvent(
+      const android_xr::SplitEngineInputEvent& event);
+  // Called per hit event to update the position of the Node with the
   // XrGrabHandle component.
-  void UpdateGrabHandleState(imp::ControllerHitEvent event, bool button_down,
-                             bool has_changed_since_last_sync);
+  void UpdateGrabHandleState(absl::optional<float3> hit_world_point,
+                             InputSourceType input_source_type, Ray ray,
+                             bool button_down, bool has_changed);
 
   enum class XrGrabHandleState {
     kNotHovered,  // Controller ray does not collide with the XrGrabHandle.
@@ -68,7 +83,8 @@ class XrGrabHandle : public imp::Component {
   float distance_from_camera_;
   bool is_select_or_pinch_button_activated_;
   imp::float3 direction_vector_;
-  absl::optional<ControllerHitEvent::Hand> active_hand_;
+  absl::optional<InputSourceType> active_input_source_;
+  bool is_split_engine_button_activated_ = false;
 };
 }  // namespace imp::editor
 

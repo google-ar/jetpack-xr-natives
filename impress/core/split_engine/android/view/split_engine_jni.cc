@@ -36,6 +36,7 @@
 #include "core/common/buffer_access.h"
 #include "core/common/enum_flags.h"
 #include "core/common/jni_helpers.h"
+#include "core/common/owned_ptr.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/registry.h"
 #include "core/math/transform.h"
@@ -47,6 +48,7 @@
 #include "core/split_engine/android/view/view_update_params.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_serializer_impl.h"
+#include "core/split_engine/split_engine_serializer_transport_legacy_impl.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/render/renderable_manager_wrapper.h"
@@ -169,10 +171,13 @@ JNI_METHOD_ACTIVITY(void, nSetup)
   api_level = android_xr::kSplitEngineExperimentalApiLevel;
 #endif
 
+  auto transport = imp::MakeOwned<
+      imp::split_engine::SplitEngineSerializerTransportLegacyImpl>(
+      std::move(bridge), std::move(bridge_sender));
+
   auto split_engine_serializer =
       std::make_unique<imp::split_engine::SplitEngineSerializerImpl>(
-          *view, api_level, std::move(bridge), std::move(bridge_sender),
-          bridge_buffer_size_bytes);
+          *view, api_level, std::move(transport), bridge_buffer_size_bytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 

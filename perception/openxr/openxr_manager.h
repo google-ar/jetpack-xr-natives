@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,6 +65,12 @@ class OpenXrManager {
     XrPlaneLabelANDROID label;
   };
 
+  // Struct holding the memory for image database entries and their buffers.
+  struct AugmentedImageDatabase {
+    std::vector<XrTrackableImageDatabaseEntryANDROID> entries;
+    std::vector<std::unique_ptr<uint8_t[]>> buffers;
+  };
+
   // Enum returned by functions that call xrCreateAnchorSpaceANDROID which
   // provides details on the result returned by OpenXR.
   enum class CreateAnchorResult : int32_t {
@@ -114,6 +120,12 @@ class OpenXrManager {
   enum class AnchorPersistenceMode : uint8_t {
     kDisabled = 0x00,
     kLocal = 0x01
+  };
+
+  // Enum representing the configuration state for the augmented image trackers.
+  enum class AugmentedImageTrackingMode : uint8_t {
+    kDisabled = 0x00,
+    kEnabled = 0x01,
   };
 
   // Enum representing the configuration state for face tracking.
@@ -178,6 +190,8 @@ class OpenXrManager {
     EyeTrackingMode eye_tracking_mode = EyeTrackingMode::kDisabled;
     std::vector<XrObjectLabelANDROID> object_tracking_labels = {};
     GeospatialMode geospatial_mode = GeospatialMode::kDisabled;
+    AugmentedImageTrackingMode augmented_image_tracking_mode =
+        AugmentedImageTrackingMode::kDisabled;
   };
 
   // Struct that contains a depth image buffer and its size.
@@ -281,6 +295,28 @@ class OpenXrManager {
   bool ChoosePlane(const PlaneConstraints& plane_constraints,
                    XrTrackableANDROID* out_trackable,
                    XrTrackablePlaneANDROID* out_plane);
+
+  // Returns a vector containing tracked augmented images
+  // from the trackable tracker.
+  std::vector<XrTrackableANDROID> GetAugmentedImages();
+
+  // Gets the OpenXR data associated with the augmented image for the
+  // trackable_id at the specified time in the specified reference space.
+  // If the time is a negative number, the current time will be used.
+  // This function is thread safe.
+  // Returns true if successful and populates the out_image. Returns false if
+  // there was an error getting the image data.
+  bool GetAugmentedImageState(XrTrackableANDROID trackable_id,
+                              XrReferenceSpaceType reference_space_type,
+                              XrTime time, XrTrackableImageANDROID& out_image);
+
+  // Returns a boolean stating if the device supports
+  // physical size estimation.
+  bool SupportsPhysicalSizeEstimation() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Returns the maximum number of images an image
+  // database can have loaded.
+  uint32_t GetMaxLoadedImageCount() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Creates an anchor at the pose provided in the default reference space.
   // Returns a CreateAnchorResult enum corresponding to whether the anchor was
@@ -513,6 +549,22 @@ class OpenXrManager {
   XrResult ConfigureSession(const ConfigSettings& new_config_settings)
       ABSL_LOCKS_EXCLUDED(mutex_);
 
+  // Stages a new augmented image database by moving the currently active one
+  // into a rollback location, allowing the system to revert to the previous
+  // state if configuration fails for any reason.
+  // This method must be called before any session configuration that modifies
+  // the image database. The rollback data is only cleared after a successful
+  // configuration (i.e. either the session configured correctly,
+  // or the rollback did).
+  // If rollback data already exists a warning is logged.
+  // This may indicate that a previous configuration was
+  // interrupted or incomplete.
+  // Do not call this multiple time without completing or
+  // aborting the configuration.
+  XrResult StageAugmentedImageDatabase(
+      std::vector<XrTrackableImageDatabaseEntryANDROID>&& entries,
+      std::vector<std::unique_ptr<uint8_t[]>>&& buffers);
+
   // Creates a spatial anchor from a geospatial pose.
   CreateAnchorResult CreateGeospatialAnchor(
       XrTime time, double latitude, double longitude, double altitude,
@@ -654,6 +706,10 @@ class OpenXrManager {
   // Cancels all pending futures.
   void CancelPendingFutures() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Cancel a single pending future.
+  XrResult CancelPendingFuture(const XrFutureEXT& future_to_cancel)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Checks if polling has stopped.
   bool ShouldPoll() const ABSL_LOCKS_EXCLUDED(mutex_);
 
@@ -675,6 +731,10 @@ class OpenXrManager {
   XrResult ConfigureObjectTracking(
       const ObjectTrackingMode& object_tracking_mode,
       const std::vector<XrObjectLabelANDROID>& object_tracking_labels)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Initializes or destroys the image tracker depending on the mode.
+  XrResult ConfigureAugmentedImageTracking(AugmentedImageTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Initializes or destroys the hand trackers depending on the mode.
@@ -730,6 +790,10 @@ class OpenXrManager {
   // Creates the eye tracker if it is not already created.
   XrResult MaybeCreateEyeTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Create an image tracker if one does not currently exist.
+  XrResult MaybeCreateAugmentedImageTracker()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Creates persistence_handle_ if it is not already created. Returns
   // XR_SUCCESS if the handle is created or has already been created before.
   // Returns a negative XR_RESULT if there was an error creating the handle.
@@ -760,6 +824,36 @@ class OpenXrManager {
       std::function<void(const XrCreateSpatialContextCompletionEXT&)> callback)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Returns true if the system image tracking properties
+  // offers support for image tracking.
+  bool SupportsImageTracking() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // If system properties have not been cached, call xrGetSystemProperties,
+  // retrieve the optional XrSystemImageTrackingPropertiesANDROID, and cache it.
+  XrResult FetchSystemImageTrackingPropertiesIfNecessary()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Validate image database creation before beginning the async call.
+  // Returns XR_SUCCESS if creation can proceed.
+  // Can return XR_ERROR_LIMIT_REACHED if trying to create more images than
+  // are supported by the image tracking properties.
+  // Can return XR_ERROR_VALIDATION_FAILURE if attempting to create an entry
+  // which does not have a corresponding data buffer, or if a physical width
+  // of 0 meters is supplied when physical width estimation is not supported.
+  // Returns XR_ERROR_RUNTIME_FAILURE if an image database handle already
+  // exists.
+  XrResult ValidateAugmentedImageDatabaseCreation(
+      const AugmentedImageDatabase& new_image_database) const
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Create an XrTrackableImageDatabaseANDROID.
+  // This will trigger an async method with an XrFuture which must be polled.
+  // When the future is ready, the created database will be
+  // added to the image trackable tracker.
+  XrResult CreateAugmentedImageDatabase(
+      AugmentedImageDatabase& new_image_database)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   XrInstance instance_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrSystemId system_id_ ABSL_GUARDED_BY(mutex_) = XR_NULL_SYSTEM_ID;
   XrSession session_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
@@ -771,6 +865,8 @@ class OpenXrManager {
   XrTrackableTrackerANDROID planes_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
   XrTrackableTrackerANDROID object_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
+      XR_NULL_HANDLE;
+  XrTrackableTrackerANDROID image_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
   XrHandTrackerEXT left_hand_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrHandTrackerEXT right_hand_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
@@ -821,6 +917,23 @@ class OpenXrManager {
       ABSL_GUARDED_BY(mutex_);
 
   std::vector<XrTrackableANDROID> all_plane_trackables_;
+  std::vector<XrTrackableANDROID> all_image_trackables_;
+
+  // Only one image database exists at a time.
+  XrTrackableImageDatabaseANDROID image_database_handle_
+      ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
+
+  // The last valid augmented image database which was successfully added to
+  // the image_trackable_tracker_
+  AugmentedImageDatabase augmented_image_database_ ABSL_GUARDED_BY(mutex_);
+
+  // When staging a new image database, the previous database is stored,
+  // temporarily, to allow for rollback support.
+  XrTrackableImageDatabaseANDROID rollback_database_handle_
+      ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
+
+  XrSystemImageTrackingPropertiesANDROID image_tracking_properties_
+      ABSL_GUARDED_BY(mutex_){};
   OpenXrState open_xr_state_ ABSL_GUARDED_BY(mutex_) =
       OpenXrState::kUninitialized;
 
@@ -837,11 +950,20 @@ class OpenXrManager {
   // This flag controls whether or not the polling thread should still run.
   bool stop_polling_ ABSL_GUARDED_BY(mutex_) = false;
 
+  // After a call to xrCreateTrackableImageDatabaseAsyncANDROID
+  // this will be populated with the data for the future creation result.
+  // Only one database can ever exist.
+  // If a second call to create a database is received this future
+  // must be cancelled before a new one is assigned.
+  XrFutureEXT image_database_creation_future_ ABSL_GUARDED_BY(mutex_) =
+      XR_NULL_FUTURE_EXT;
+
   // An object that contains the current state of the runtime configuration.
   ConfigSettings config_settings_ ABSL_GUARDED_BY(mutex_);
 
   bool cloud_auth_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
   bool geospatial_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
+  bool image_tracking_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
 
   // Mutex to guard variables that are accessible by the polling thread. It must
   // be called after the initialization_mutex_.
@@ -929,6 +1051,17 @@ class OpenXrManager {
   PFN_xrDestroyEyeTrackerANDROID destroy_eye_tracker_;
   PFN_xrGetFineTrackingEyesInfoANDROID get_fine_tracking_eyes_info_;
   PFN_xrGetCoarseTrackingEyesInfoANDROID get_coarse_tracking_eyes_info_;
+
+  PFN_xrGetTrackableImageANDROID get_trackable_image_;
+  PFN_xrAddTrackableImageDatabaseANDROID add_trackable_image_database_;
+  PFN_xrRemoveTrackableImageDatabaseANDROID remove_trackable_image_database_;
+  PFN_xrCreateTrackableImageDatabaseAsyncANDROID
+      create_trackable_image_database_async_;
+  PFN_xrCreateTrackableImageDatabaseCompleteANDROID
+      create_trackable_image_database_complete_;
+  PFN_xrDestroyTrackableImageDatabaseANDROID destroy_trackable_image_database_;
+
+  PFN_xrGetSystemProperties get_system_properties_;
 
   PFN_xrCancelFutureEXT cancel_future_;
   PFN_xrPollFutureEXT poll_future_;

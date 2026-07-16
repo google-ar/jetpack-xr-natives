@@ -119,7 +119,10 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(BaseView& view, Config config)
             return AsyncCanvasSourceFactory::Create(
                 view.GetContext(), config.use_hardware_rendering,
                 /*force_auto_method_rendering=*/false,
-                config.force_individual_glyph_source_instances);
+                config.force_individual_glyph_source_instances,
+                view.GetConfig()
+                    .experimental_feature_flags
+                    ->enable_label_prep_profile_logging.Value());
           },
           config) {}
 
@@ -155,7 +158,8 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
       .Then([this](std::unique_ptr<TextureManager> texture_manager) {
         texture_manager_ = std::move(texture_manager);
         pending_renders_.ForEachBit<SliceId>([this](SliceId slice) {
-          texture_manager_->PrepareBlit(slice, slices_[slice].texture_);
+          texture_manager_->PrepareBlit(slice,
+                                        slices_[slice].borrowed_texture_);
         });
       })
       .KeptBy(this);
@@ -296,6 +300,10 @@ void SlicedGlyphAtlas::RenderBlits(filament::Renderer& renderer) {
 
 SlicedGlyphAtlas::~SlicedGlyphAtlas() {
   ClearRemembered();
+
+  texture_manager_.reset();
+  composite_texture_.reset();
+
   for (auto& slice : slices_) {
     {
       // Wait until destruction-blocking blocks across all threads have been
@@ -309,9 +317,6 @@ SlicedGlyphAtlas::~SlicedGlyphAtlas() {
   free(slice_storage_);
 
   shared_canvas_source_.reset();
-
-  texture_manager_.reset();
-  composite_texture_.reset();
 
 #if IMP_RUNTIME(DEV)
   if (auto editor = view_.GetRegistry().Get<editor::Editor>(); editor.ok()) {
@@ -329,12 +334,13 @@ void SlicedGlyphAtlas::EndFrame() {
   constexpr size_t kMaxSlicesRenderedCount = 2;
   size_t slices_rendered_count = 0;
   for (auto& slice : slices_) {
-    Slice::EndFrameResult result = slice.EndFrame(view_);
+    Slice::EndFrameResult result = slice.EndFrame(view_, slices_.size() == 1);
     if (result == Slice::EndFrameResult::kBlitRequired) {
       // Schedule a blit.
       pending_renders_.Set(slices_.IdOf(slice), true);
       if (texture_manager_) {
-        texture_manager_->PrepareBlit(slices_.IdOf(slice), slice.texture_);
+        texture_manager_->PrepareBlit(slices_.IdOf(slice),
+                                      slice.borrowed_texture_);
       }
       if (++slices_rendered_count >= kMaxSlicesRenderedCount) {
         break;
@@ -486,7 +492,8 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                       {
                         absl::MutexLock lock(slice.canvas_mutex_);
                         slice.GetOrStartDrawing(
-                            view_, ScopedCanvas::DrawMode::kKeepContents);
+                            view_, ScopedCanvas::DrawMode::kKeepContents,
+                            slices_.size() == 1);
                       }
 
                       // Schedule the glyphs that are newly added to the atlas
@@ -507,7 +514,8 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                       // itself.
                       slice
                           .DrawGlyphsToCanvasAsync(view_,
-                                                   std::move(entry.glyphs))
+                                                   std::move(entry.glyphs),
+                                                   slices_.size() == 1)
                           .Then(
                               [entry_future](absl::Status status) {
                                 entry_future.Return(status);
@@ -520,7 +528,8 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                       // Set the texture_status_ to kHasNewGlyphs to ensure that
                       // the glyphs will be drawn on the next frame.
                       slice.GetOrStartDrawing(view_,
-                                              ScopedCanvas::DrawMode::kClear);
+                                              ScopedCanvas::DrawMode::kClear,
+                                              slices_.size() == 1);
                       slice.texture_status_ = TextureStatus::kHasNewGlyphs;
                       entry_future.Return(absl::OkStatus());
                     }
@@ -639,12 +648,12 @@ std::optional<SlicedGlyphAtlas::SlicedGlyphInfo>
 SlicedGlyphAtlas::GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
                                     const CanvasOptionsGlyphKey& glyph_key,
                                     bool& out_added_new_glyph) {
-  CanvasOptionsInfo& canvas_options_info = GetCanvasOptionsInfo(
+  CanvasOptionsInfo* canvas_options_info = &GetCanvasOptionsInfo(
       CanvasOptionsKey{.canvas_options = glyph_key.canvas_options,
                        .requires_color_key = glyph_key.requires_color_key});
 
   std::optional<SlicedGlyphInfo> glyph_info =
-      GetGlyphInfo(glyph_key, canvas_options_info);
+      GetGlyphInfo(glyph_key, *canvas_options_info);
   if (glyph_info.has_value()) {
     out_added_new_glyph = false;
     return *glyph_info;
@@ -689,7 +698,7 @@ SlicedGlyphAtlas::GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
 
 std::optional<SlicedGlyphAtlas::SlicedAtlasEntry>
 SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
-                                   CanvasOptionsInfo& info,
+                                   CanvasOptionsInfo* info,
                                    const CanvasOptionsGlyphKey& glyph_key) {
   std::optional<SlicedGlyphAtlas::SlicedAtlasEntry> result = std::nullopt;
 
@@ -698,7 +707,7 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
   // slices we need to check when searching for a glyph, but also improves the
   // performance of rendering a slice by minimizing JNI state changes on the
   // canvas paint objects.
-  info.active_slices.ForEachBit<SliceId>(
+  info->active_slices.ForEachBit<SliceId>(
       [this, &atlas_entry_size, &result](SliceId slice) {
         absl::MutexLock lock(slices_[slice].atlas_packer_mutex_);
         std::optional<AtlasPacker::ScopedAtlasEntry> atlas_entry =
@@ -710,7 +719,7 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
       });
 
   if (result.has_value()) {
-    ++info.glyph_count[result->slice];
+    ++info->glyph_count[result->slice];
     return result;
   }
 
@@ -721,7 +730,7 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
   // Attempt to add to a new slice starting from the (rotating) addition cursor.
   do {
     // Skip slices we've already checked.
-    if (!info.active_slices.Get(cursor)) {
+    if (!info->active_slices.Get(cursor)) {
       absl::MutexLock lock(slices_[cursor].atlas_packer_mutex_);
       std::optional<AtlasPacker::ScopedAtlasEntry> atlas_entry =
           slices_[cursor].atlas_packer_.AddEntry(atlas_entry_size);
@@ -738,8 +747,8 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
   if (++addition_cursor_ == end_slice) addition_cursor_ = begin_slice;
 
   if (result.has_value()) {
-    if (!(info.glyph_count[result->slice]++))
-      info.active_slices.Set(result->slice);
+    if (!(info->glyph_count[result->slice]++))
+      info->active_slices.Set(result->slice);
     return result;
   }
 
@@ -747,7 +756,7 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
   ClearUnusedGlyphs();
 
   // Clearing glyphs can invalidate the info handle; refresh the reference.
-  info = GetCanvasOptionsInfo(
+  info = &GetCanvasOptionsInfo(
       CanvasOptionsKey{.canvas_options = glyph_key.canvas_options,
                        .requires_color_key = glyph_key.requires_color_key});
 
@@ -764,8 +773,8 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
   }
 
   if (result.has_value()) {
-    if (!(info.glyph_count[result->slice]++))
-      info.active_slices.Set(result->slice);
+    if (!(info->glyph_count[result->slice]++))
+      info->active_slices.Set(result->slice);
     return result;
   } else {
     IMP_LOG(imp::ERROR) << "Unable to find space in Glyph Atlas for glyph with size x="
@@ -778,15 +787,18 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
 void SlicedGlyphAtlas::ClearUnusedGlyphs() {
   for (auto& slice : slices_) {
     absl::MutexLock lock(slice.atlas_packer_mutex_);
-    slice.ClearUnusedGlyphs(view_, [this, id = slices_.IdOf(slice)](
-                                       const CanvasOptionsGlyphKey& glyph_key) {
-      CanvasOptionsInfo& canvas_options_info = GetCanvasOptionsInfo(
-          CanvasOptionsKey{.canvas_options = glyph_key.canvas_options,
-                           .requires_color_key = glyph_key.requires_color_key});
-      if (!--canvas_options_info.glyph_count[id]) {
-        canvas_options_info.active_slices.Set(id, false);
-      }
-    });
+    slice.ClearUnusedGlyphs(
+        view_, slices_.size() == 1,
+        [this,
+         id = slices_.IdOf(slice)](const CanvasOptionsGlyphKey& glyph_key) {
+          CanvasOptionsInfo& canvas_options_info =
+              GetCanvasOptionsInfo(CanvasOptionsKey{
+                  .canvas_options = glyph_key.canvas_options,
+                  .requires_color_key = glyph_key.requires_color_key});
+          if (!--canvas_options_info.glyph_count[id]) {
+            canvas_options_info.active_slices.Set(id, false);
+          }
+        });
   }
 
   // Holding the mutex, clear all infos that are now empty.

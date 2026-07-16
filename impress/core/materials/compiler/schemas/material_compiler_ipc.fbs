@@ -38,15 +38,20 @@ enum ErrorStatusCode : uint8 {
   Unsupported,
 }
 
+table Config {
+  // The platform to compile for.
+  platform: Platform;
+  // The target API to compile for.
+  target_api: TargetApi;
+}
+
 // Client->Service requests.
 
 table CompileRequest {
   // The source material to compile.
   source_material: string (required);
-  // The platform to compile for.
-  platform: Platform;
-  // The target APIs to compile for.
-  target_api: TargetApi;
+  // The configuration for the compilation.
+  config: Config;
 }
 
 table CloseRequest {}

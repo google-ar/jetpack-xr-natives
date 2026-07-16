@@ -278,6 +278,7 @@ cc_library(
         "//core/canvas/fonts:font_params_proto_cc",
         "//core/common:small_source_location",
         "//core/geometry/shapes",
+        "//core/image:wasm_decode_image",
         "//core/math",
         "//core/render",
         "//core/text:text_helpers",

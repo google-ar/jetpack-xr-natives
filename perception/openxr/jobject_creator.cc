@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ using ::androidx::xr::common::GetJxrClass;
 using ::androidx::xr::common::GetJxrFullClassName;
 
 using ::androidx::xr::common::PACKAGE_ARCORE;
-using ::androidx::xr::common::PACKAGE_ARCORE_RUNTIME;
 using ::androidx::xr::common::PACKAGE_ARCORE_OPENXR;
+using ::androidx::xr::common::PACKAGE_ARCORE_RUNTIME;
 using ::androidx::xr::common::PACKAGE_CORE;
 using ::androidx::xr::common::PACKAGE_MATH;
 
@@ -158,8 +158,9 @@ jobject CreateJavaPose(JNIEnv* env, const XrPosef& xr_pose) {
   jmethodID pose_constructor = env->GetMethodID(
       pose_class, "<init>",
       absl::StrFormat("(L%s;L%s;)V",
-      GetJxrFullClassName(env, PACKAGE_MATH, "Vector3"),
-      GetJxrFullClassName(env, PACKAGE_MATH, "Quaternion")).c_str());
+                      GetJxrFullClassName(env, PACKAGE_MATH, "Vector3"),
+                      GetJxrFullClassName(env, PACKAGE_MATH, "Quaternion"))
+          .c_str());
 
   jobject position = CreateJavaVector3(env, xr_pose.position);
   jobject orientation = CreateJavaQuaternion(env, xr_pose.orientation);
@@ -168,29 +169,41 @@ jobject CreateJavaPose(JNIEnv* env, const XrPosef& xr_pose) {
 
 jobject CreateJavaFieldOfView(JNIEnv* env, const XrFovf& fov) {
   jclass fov_class = GetJxrClass(env, PACKAGE_MATH, "FieldOfView");
+  // Fall back to PACKAGE_CORE version if PACKAGE_MATH version is not available.
+  if (fov_class == nullptr) {
+    env->ExceptionClear();
+    fov_class = GetJxrClass(env, PACKAGE_CORE, "FieldOfView");
+  }
   jmethodID fov_constructor = env->GetMethodID(fov_class, "<init>", "(FFFF)V");
   return env->NewObject(fov_class, fov_constructor, fov.angleLeft,
                         fov.angleRight, fov.angleUp, fov.angleDown);
 }
 
 jobjectArray CreateJavaViewCameraStates(JNIEnv* env, uint32_t view_count,
-                                       XrView* views) {
+                                        XrView* views) {
   jclass view_camera_state_class =
       GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "ViewCameraState");
+  common::Package fov_package = PACKAGE_MATH;
+  jclass fov_class = GetJxrClass(env, PACKAGE_MATH, "FieldOfView");
+  // Fall back to PACKAGE_CORE version if PACKAGE_MATH version is not available.
+  if (fov_class == nullptr) {
+    env->ExceptionClear();
+    fov_package = PACKAGE_CORE;
+  }
   jmethodID view_camera_state_constructor = env->GetMethodID(
       view_camera_state_class, "<init>",
       absl::StrFormat("(L%s;L%s;)V",
                       GetJxrFullClassName(env, PACKAGE_MATH, "Pose"),
-                      GetJxrFullClassName(env, PACKAGE_MATH, "FieldOfView"))
+                      GetJxrFullClassName(env, fov_package, "FieldOfView"))
           .c_str());
 
   jobjectArray view_camera_states =
       env->NewObjectArray(view_count, view_camera_state_class, nullptr);
   for (uint32_t i = 0; i < view_count; ++i) {
-    jobject view_camera_state = env->NewObject(
-        view_camera_state_class, view_camera_state_constructor,
-        CreateJavaPose(env, views[i].pose),
-        CreateJavaFieldOfView(env, views[i].fov));
+    jobject view_camera_state =
+        env->NewObject(view_camera_state_class, view_camera_state_constructor,
+                       CreateJavaPose(env, views[i].pose),
+                       CreateJavaFieldOfView(env, views[i].fov));
     env->SetObjectArrayElement(view_camera_states, i, view_camera_state);
   }
 
@@ -267,8 +280,8 @@ jobject CreateJavaPlaneLabel(JNIEnv* env,
                                      static_cast<uint32_t>(xr_plane_label));
 }
 
-jobject CreateJavaAugmentedObjectState(JNIEnv* env,
-                                   const XrTrackableObjectANDROID& xr_object) {
+jobject CreateJavaAugmentedObjectState(
+    JNIEnv* env, const XrTrackableObjectANDROID& xr_object) {
   jclass augmented_object_state_class =
       GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "AugmentedObjectState");
   jmethodID augmented_object_state_constructor = env->GetMethodID(
@@ -285,9 +298,30 @@ jobject CreateJavaAugmentedObjectState(JNIEnv* env,
   jobject extents = CreateJavaFloatSize3d(env, xr_object.extents);
   jobject augmented_object_state = env->NewObject(
       augmented_object_state_class, augmented_object_state_constructor,
-      tracking_state, static_cast<int64_t>(xr_object.objectLabel),
-      pose, extents);
+      tracking_state, static_cast<int64_t>(xr_object.objectLabel), pose,
+      extents);
   return augmented_object_state;
+}
+
+jobject CreateJavaAugmentedImageState(JNIEnv* env,
+                                      const XrTrackableImageANDROID& xr_image) {
+  jclass augmented_image_state_class =
+      GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "AugmentedImageState");
+  jmethodID augmented_image_state_constructor = env->GetMethodID(
+      augmented_image_state_class, "<init>",
+      absl::StrFormat(
+          "(L%s;L%s;L%s;I)V",
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "TrackingState"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "Pose"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "FloatSize2d"))
+          .c_str());
+  jobject tracking_state = CreateJavaTrackingState(env, xr_image.trackingState);
+  jobject pose = CreateJavaPose(env, xr_image.centerPose);
+  jobject extents = CreateJavaFloatSize2d(env, xr_image.extents);
+  jobject augmented_image_state = env->NewObject(
+      augmented_image_state_class, augmented_image_state_constructor,
+      tracking_state, pose, extents, xr_image.databaseEntryIndex);
+  return augmented_image_state;
 }
 
 jobject CreateJavaAnchorState(JNIEnv* env,
@@ -347,7 +381,7 @@ jobject CreateJavaHitData(JNIEnv* env,
       hit_data_class, "<init>",
       absl::StrFormat("(L%s;J)V",
                       GetJxrFullClassName(env, PACKAGE_MATH, "Pose"))
-                      .c_str());
+          .c_str());
 
   jobject hit_pose = CreateJavaPose(env, xr_hit_result.pose);
   return env->NewObject(hit_data_class, hit_data_constructor, hit_pose,
@@ -445,7 +479,8 @@ jobject CreateJavaEyeState(JNIEnv* env, const XrEyeStateANDROID& xr_eye_state) {
       eye_data_class, "fromOpenXrEyeState",
       absl::StrFormat(
           "(L%s;I)L%s;",
-          GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR, "EyeStatus$Companion"),
+          GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR,
+                              "EyeStatus$Companion"),
           GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR, "EyeStatus"))
           .c_str());
   jobject eye_state_static_obj =
@@ -486,9 +521,10 @@ jobject CreateJavaEye(JNIEnv* env, const XrEyeANDROID& xr_eye) {
       GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR, "EyeData").c_str());
   jmethodID eye_constructor = env->GetMethodID(
       eye_class, "<init>",
-      absl::StrFormat("(L%s;L%s;)V",
-                      GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR, "EyeStatus"),
-                      GetJxrFullClassName(env, PACKAGE_MATH, "Pose"))
+      absl::StrFormat(
+          "(L%s;L%s;)V",
+          GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR, "EyeStatus"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "Pose"))
           .c_str());
   return env->NewObject(eye_class, eye_constructor,
                         CreateJavaEyeState(env, xr_eye.eyeState),

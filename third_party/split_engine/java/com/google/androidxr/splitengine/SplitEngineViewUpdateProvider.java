@@ -19,8 +19,6 @@ package com.google.androidxr.splitengine;
 import android.app.Activity;
 import android.util.DisplayMetrics;
 import androidx.annotation.Nullable;
-import androidx.xr.arcore.NativeData;
-import androidx.xr.arcore.NativeDataExt;
 import androidx.xr.arcore.RenderViewpoint;
 import androidx.xr.runtime.DeviceTrackingMode;
 import androidx.xr.runtime.FieldOfView;
@@ -44,7 +42,6 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
 
   private static final String TAG = SplitEngineViewUpdateProvider.class.getSimpleName();
   private final Activity activity;
-  private final NativeData nativeData;
   private final RenderViewpoint left;
   private final RenderViewpoint right;
 
@@ -55,7 +52,6 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
   public SplitEngineViewUpdateProvider(
       Session session, Activity activity, Node sceneNode, Node windowLeashNode) {
     this.activity = activity;
-    nativeData = NativeDataExt.getNativeData(session);
     left = RenderViewpoint.left(session);
     right = RenderViewpoint.right(session);
   }
@@ -95,16 +91,6 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
       return null;
     }
     return createViewUpdateParams(left, right);
-  }
-
-  // TODO: traorem - Remove this once SceneViewerXR can use JXR plane APIs directly.
-  public long getNativeSession() {
-    return nativeData.getNativeSessionPointer();
-  }
-
-  // TODO: traorem - Remove this once SceneViewerXR can use JXR plane APIs directly.
-  public long getNativeInstance() {
-    return nativeData.getNativeInstancePointer();
   }
 
   private ImpSplitEngine.ViewUpdateParams createViewUpdateParams(

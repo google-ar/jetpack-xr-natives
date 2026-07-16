@@ -14,6 +14,7 @@
 
 #include "core/view/platforms/xr_android/xr_session_host.h"
 
+#include "core/common/optional_error.h"
 #include "core/monitor/default_monitor_summary.h"
 #include "core/monitor/monitor_summary.h"
 
@@ -45,6 +46,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
@@ -56,6 +58,7 @@
 #include "filament/filament/include/filament/Sync.h"
 #include "filament/filament/include/filament/View.h"
 #include "filament/filament/include/filament/Viewport.h"
+#include "filament/filament/src/details/Engine.h"
 #include "filament/libs/utils/include/utils/Systrace.h"
 #include "core/async/executor.h"
 #include "core/common/enum_flags.h"
@@ -180,9 +183,8 @@ std::array<const char*, 2> kOpenXRExtensionsAndroidSys = {
 };
 
 #if IMP_PLATFORM(ANDROID)
-std::array<const char*, 2> kOpenXRExtensionAndroidXSpatialInteraction = {
+std::array<const char*, 1> kOpenXRExtensionAndroidXSpatialInteraction = {
     XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME,
-    XR_ANDROIDX_SPATIAL_INTERACTION_LIFECYCLE_EXTENSION_NAME,
 };
 #endif  // IMP_PLATFORM(ANDROID)
 
@@ -254,6 +256,8 @@ XrReferenceSpaceType XrReferenceSpaceTypeFromInt(int reference_space_type) {
   }
 }
 
+constexpr absl::Duration kXrCreateSessionTimeoutDuration = absl::Seconds(2);
+
 }  // namespace
 
 XrSessionHost::XrSessionHost(
@@ -294,21 +298,12 @@ XrSessionHost::XrSessionHost(
       is_global_passthrough_dimming_extensions_enabled_(
           setup_params.use_global_passthrough_dimming_extensions.Value()),
       is_hand_occlusion_extensions_enabled_(
-          setup_params.use_hand_occlusion_extensions.Value()) {
+          setup_params.use_hand_occlusion_extensions.Value()),
+      create_session_on_render_thread_(
+          setup_params.create_session_on_render_thread.Value()) {
   SetupXrTimingSummary(GetXrTimingSummary(), xr_performance_state_.metrics);
   if (is_varjo_foveated_rendering_enabled_) {
     eye_tracking_enabled_ = true;
-  }
-}
-
-XrSessionHost::~XrSessionHost() {
-  if (instance_ == XR_NULL_HANDLE) {
-    return;
-  }
-  imp::output::Xr("Calling xrDestroyInstance");
-  absl::Status status = ToStatus(xrDestroyInstance(instance_));
-  if (!status.ok()) {
-    IMP_LOG(imp::ERROR) << "Error calling xrDestroyInstance `" << status << "`";
   }
 }
 
@@ -362,13 +357,21 @@ absl::Status XrSessionHost::Setup(JNIEnv* env, JavaVM* vm, jobject context) {
   imp::output::Xr("Creating XrInstance.");
   MP_ASSIGN_OR_RETURN(instance_, CreateInstance(env, vm, context));
 
-  imp::output::Xr("Obtaining XrSystemId.");
-  MP_ASSIGN_OR_RETURN(system_id_, ObtainSystemId());
-
-  // Required by OpenXr to check graphics requirements before creating the
-  // XrSession.
-  imp::output::Xr("Checking Xr Graphics Requirements.");
-  MP_RETURN_IF_ERROR(CheckGraphicsRequirements());
+  // Initial attempt to obtain System ID
+  imp::output::Xr("Attempting to obtain XrSystemId.");
+  absl::StatusOr<XrSystemId> system_id = ObtainSystemId();
+  if (system_id.ok()) {
+    system_id_ = system_id.value();
+    init_state_ = XrInitState::kSystemIdObtained;
+    imp::output::Xr("Checking Xr Graphics Requirements.");
+    MP_RETURN_IF_ERROR(CheckGraphicsRequirements());
+  } else if (absl::IsUnavailable(system_id.status())) {
+    // Hardware not ready, enter polling state
+    init_state_ = XrInitState::kWaitingForSystem;
+    imp::output::Xr("HMD not available yet. Entering polling mode.");
+  } else {
+    return system_id.status();
+  }
 
   imp::output::Xr("Creating XrPlatform.");
   platform_ = std::make_unique<PlatformType>();
@@ -377,7 +380,9 @@ absl::Status XrSessionHost::Setup(JNIEnv* env, JavaVM* vm, jobject context) {
   // Pass the XrInstance and SystemId to the platform if we are using a vulkan
   // backend.
   platform_->setXrInstance(instance_);
-  platform_->setXrSystemId(system_id_);
+  if (system_id_ != XR_NULL_SYSTEM_ID) {
+    platform_->setXrSystemId(system_id_);
+  }
 #endif  // IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(VULKAN)
 
   imp::output::Xr("Calling Impress Setup.");
@@ -413,13 +418,73 @@ absl::Status XrSessionHost::Setup(JNIEnv* env, JavaVM* vm, jobject context) {
   display_state_statistics_ =
       std::make_unique<ValueMeasurement>(*monitor_, kXrDisplayEnabledStatistics,
                                          static_cast<int64_t>(display_state_));
-  imp::output::Xr("Completed calling Impress Setup.");
 
+  imp::output::Xr("Completed calling Impress Setup.");
   return absl::OkStatus();
+}
+
+OptionalError XrSessionHost::Cleanup() {
+  OptionalError result = ViewHost::Cleanup();
+
+  if (session_ != XR_NULL_HANDLE || instance_ != XR_NULL_HANDLE) {
+    imp::output::Xr("Destroying session and instance in Cleanup");
+    absl::Status status = DestroySession();
+    if (!status.ok()) {
+      IMP_LOG(imp::ERROR) << "Error calling DestroySession during cleanup: " << status;
+    }
+  }
+
+  if (instance_ != XR_NULL_HANDLE) {
+    imp::output::Xr("Calling xrDestroyInstance in Cleanup");
+    absl::Status status = ToStatus(xrDestroyInstance(instance_));
+    if (!status.ok()) {
+      IMP_LOG(imp::ERROR) << "Error calling xrDestroyInstance during cleanup: "
+                 << status;
+    }
+    instance_ = XR_NULL_HANDLE;
+  }
+
+  return result;
 }
 
 absl::Status XrSessionHost::onWindowAttached() {
   IMP_TRACE();
+  
+
+  is_window_attached_ = true;
+  imp::output::Xr("XR window attached.");
+
+  shown_state_ = ShownState::kShown;
+
+  // If System ID is not yet available, defer session creation to AdvanceFrame
+  if (init_state_ == XrInitState::kWaitingForSystem) {
+    imp::output::Xr(
+        "Window attached, but system not ready. Deferring session creation.");
+    // Create a placeholder, headless swapchain to allow AdvanceFrame() to be
+    // called and enter polling mode - if there are no existing swapchains.
+    //
+    // This headless swapchain will be replaced by the real swapchain when the
+    // system is ready. AdvanceFrame() is gated by init_state_ during polling
+    // mode, and initialization must complete before the first frame is
+    // rendered.
+    if (!HasSwapChain()) {
+      imp::output::Xr(
+          "Creating headless swapchain to enable AdvanceFrame() polling mode.");
+      MP_RETURN_IF_ERROR(CreateHeadlessSwapChain(2, 2, 0));
+    }
+    return absl::OkStatus();
+  }
+
+  if (ShouldCreateSession()) {
+    return InitializeSessionInternal();
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status XrSessionHost::InitializeSessionInternal() {
+  IMP_TRACE();
+  
   
 
   imp::output::Xr("Creating XrSession.");
@@ -466,8 +531,7 @@ absl::Status XrSessionHost::onWindowAttached() {
   // thread is already set to XR_ANDROID_THREAD_TYPE_RENDER_KHR.
   MP_RETURN_IF_ERROR(SetThreadType(XR_ANDROID_THREAD_TYPE_APPLICATION_MAIN_KHR));
 
-  shown_state_ = ShownState::kShown;
-
+  init_state_ = XrInitState::kSessionCreated;
   return absl::OkStatus();
 }
 
@@ -475,8 +539,32 @@ absl::Status XrSessionHost::AdvanceFrame() {
   IMP_TRACE();
   
 
+  if (init_state_ == XrInitState::kWaitingForSystem) {
+    auto system_id_or = ObtainSystemId();
+    if (system_id_or.ok()) {
+      system_id_ = system_id_or.value();
+      init_state_ = XrInitState::kSystemIdObtained;
+
+#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(VULKAN)
+      platform_->setXrSystemId(system_id_);
+#endif
+      MP_RETURN_IF_ERROR(CheckGraphicsRequirements());
+      imp::output::Xr("System ID obtained via polling.");
+
+      if (ShouldCreateSession()) {
+        MP_RETURN_IF_ERROR(InitializeSessionInternal());
+      }
+    } else if (absl::IsUnavailable(system_id_or.status())) {
+      // Still unavailable, skip this frame.
+      return absl::OkStatus();
+    } else {
+      // Error getting system ID.
+      return system_id_or.status();
+    }
+  }
+
   if (session_ == XR_NULL_HANDLE) {
-    return absl::InternalError("AdvanceFrame called when there is no session");
+    return absl::OkStatus();
   }
 
   MP_RETURN_IF_ERROR(PollEvents());
@@ -938,11 +1026,16 @@ absl::StatusOr<XrSystemId> XrSessionHost::ObtainSystemId() const {
       .next = nullptr,
       .formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY,
   };
-  MP_RETURN_IF_ERROR(ToStatus(xrGetSystem(instance_, &system_info, &system_id)));
+
+  XrResult result = xrGetSystem(instance_, &system_info, &system_id);
+  if (result == XR_ERROR_FORM_FACTOR_UNAVAILABLE) {
+    return absl::UnavailableError("System ID is not available yet.");
+  }
+
+  MP_RETURN_IF_ERROR(ToStatus(result));
   if (system_id == XR_NULL_SYSTEM_ID) {
     return absl::InternalError("Failed to get system id.");
   }
-
   return system_id;
 }
 
@@ -1004,10 +1097,113 @@ absl::StatusOr<XrSession> XrSessionHost::CreateSession() const {
       .next = reinterpret_cast<const XrBaseInStructure*>(&graphics_binding),
       .systemId = system_id_,
   };
-  MP_RETURN_IF_ERROR(
-      ToStatus(xrCreateSession(instance_, &session_create_info, &session)));
+
+  XrResult result;
+  auto create_session = [&]() {
+    imp::output::Xr("Calling xrCreateSession in thread: %s",
+                    imp::GetThreadName());
+    result = xrCreateSession(instance_, &session_create_info, &session);
+  };
+  if (create_session_on_render_thread_) {
+    absl::Notification notification;
+    // The following queueCommand call is not recommended for typical use by the
+    // Filament team. However, in this case it is being allowed as the simplest
+    // option to sync xrCreateSession with the render thread.
+    downcast(engine_)->getDriverApi().queueCommand(
+        [&create_session, &notification]() {
+          create_session();
+          notification.Notify();
+        });
+    downcast(engine_)->flush();
+    if (!notification.WaitForNotificationWithTimeout(
+            kXrCreateSessionTimeoutDuration)) {
+      return absl::InternalError(
+          "Timeout waiting for render thread to create XrSession.");
+    }
+  } else {
+    create_session();
+  }
+
+  MP_RETURN_IF_ERROR(ToStatus(result));
 
   return session;
+}
+
+absl::Status XrSessionHost::DestroySession() {
+  IMP_TRACE();
+  
+
+  if (reference_space_ != XR_NULL_HANDLE) {
+    xrDestroySpace(reference_space_);
+    reference_space_ = XR_NULL_HANDLE;
+  }
+
+  if (view_space_ != XR_NULL_HANDLE) {
+    xrDestroySpace(view_space_);
+    view_space_ = XR_NULL_HANDLE;
+  }
+
+  if (render_gaze_space_ != XR_NULL_HANDLE) {
+    xrDestroySpace(render_gaze_space_);
+    render_gaze_space_ = XR_NULL_HANDLE;
+  }
+
+  // Destruction of the underlying XrSwapchain is handled by the XrPlatform
+  // when the filament::SwapChain is destroyed.
+  swap_chain_standard_ = nullptr;
+  swap_chain_protected_ = nullptr;
+
+  absl::Status status = absl::OkStatus();
+  if (session_ != XR_NULL_HANDLE) {
+    status = ToStatus(xrDestroySession(session_));
+    session_ = XR_NULL_HANDLE;
+  }
+
+  system_id_ = XR_NULL_SYSTEM_ID;
+  return status;
+}
+
+absl::Status XrSessionHost::RestartSession() {
+  imp::output::Xr("Restarting XrSession.");
+
+  absl::Status destroy_status = DestroySession();
+  if (!destroy_status.ok()) {
+    IMP_LOG(imp::ERROR) << "Error destroying session during restart: " << destroy_status;
+  }
+
+  imp::output::Xr("Obtaining XrSystemId.");
+  auto system_id_or = ObtainSystemId();
+  if (!system_id_or.ok()) {
+    if (absl::IsUnavailable(system_id_or.status())) {
+      imp::output::Xr(
+          "XrSystemId not available during restart, will retry in "
+          "AdvanceFrame.");
+      init_state_ = XrInitState::kWaitingForSystem;
+      if (!HasSwapChain()) {
+        imp::output::Xr(
+            "Creating headless swapchain to enable AdvanceFrame() polling "
+            "mode.");
+        MP_RETURN_IF_ERROR(CreateHeadlessSwapChain(2, 2, 0));
+      }
+      return absl::OkStatus();
+    }
+    init_state_ = XrInitState::kFailed;
+    return system_id_or.status();
+  }
+  system_id_ = *system_id_or;
+  init_state_ = XrInitState::kSystemIdObtained;
+
+  imp::output::Xr("Recreating XrSession.");
+  if (ShouldCreateSession()) {
+    MP_RETURN_IF_ERROR(InitializeSessionInternal());
+  }
+
+  return absl::OkStatus();
+}
+
+bool XrSessionHost::ShouldCreateSession() const {
+  return init_state_ == XrInitState::kSystemIdObtained && is_window_attached_ &&
+         session_ == XR_NULL_HANDLE;
 }
 
 absl::StatusOr<XrSpace> XrSessionHost::ObtainXrSpace(
@@ -1133,6 +1329,9 @@ absl::Status XrSessionHost::PollEvents() {
             *reinterpret_cast<const XrEventDataInstanceLossPending*>(*event);
         imp::output::Xr("XR instance loss in %i",
                         instance_loss_pending.lossTime);
+        // TODO: The application should call xrDestroyInstance and
+        // relinquish any instance-specific resources. Then it may then retry
+        // xrCreateInstance in a loop.
         break;
       }
       case XR_TYPE_EVENT_DATA_EVENTS_LOST: {
@@ -1244,6 +1443,7 @@ absl::Status XrSessionHost::HandleSessionStateChanged(
     }
     case XR_SESSION_STATE_LOSS_PENDING: {
       imp::output::Xr("XrSessionState is loss pending.");
+      MP_RETURN_IF_ERROR(RestartSession());
       break;
     }
     default:
@@ -1293,6 +1493,12 @@ void XrSessionHost::SetEnvironmentBlendMode(
     XrEnvironmentBlendMode xr_environment_blend_mode) {
   environment_blend_mode_ = xr_environment_blend_mode;
 }
+
+#if IMP_PLATFORM(ANDROID)
+void XrSessionHost::SetDimmingLevel(float dimming_level) {
+  dimming_level_ = dimming_level;
+}
+#endif
 
 absl::Status XrSessionHost::SetShownState(ShownState new_state) {
   if (new_state == shown_state_) {
@@ -1760,9 +1966,24 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
         return a_weight > b_weight;
       });
 
+  const void* next_chain = next;
+#if IMP_PLATFORM(ANDROID)
+  bool use_dimming = dimming_level_.has_value() &&
+                     IsXrGlobalPassthroughDimmingExtensionsEnabled();
+
+  XrGlobalDimmingFrameEndInfoANDROID dimming_info = {
+      .type = XR_TYPE_GLOBAL_DIMMING_FRAME_END_INFO_ANDROID,
+      .next = next,
+      .globalDimmingLevel = dimming_level_.value_or(0.0f),
+  };
+  if (use_dimming) {
+    next_chain = &dimming_info;
+  }
+#endif
+
   XrFrameEndInfo frame_end_info{
       .type = XR_TYPE_FRAME_END_INFO,
-      .next = nullptr,
+      .next = next_chain,
       .displayTime = frame_info.display_time,
       .environmentBlendMode = environment_blend_mode_,
       .layerCount = static_cast<uint32_t>(layers.size()),
@@ -1889,9 +2110,24 @@ absl::Status XrSessionHost::BeginAndDiscardFrame(XrTime predictedDisplayTime) {
   if (skip_end_frame) {
     imp::output::Xr("Discard xrEndFrame skipped.");
   } else {
+    const void* next_chain = nullptr;
+#if IMP_PLATFORM(ANDROID)
+    bool use_dimming = dimming_level_.has_value() &&
+                       IsXrGlobalPassthroughDimmingExtensionsEnabled();
+
+    XrGlobalDimmingFrameEndInfoANDROID dimming_info = {
+        .type = XR_TYPE_GLOBAL_DIMMING_FRAME_END_INFO_ANDROID,
+        .next = nullptr,
+        .globalDimmingLevel = dimming_level_.value_or(0.0f),
+    };
+    if (use_dimming) {
+      next_chain = &dimming_info;
+    }
+#endif
+
     XrFrameEndInfo frame_end_info{
         .type = XR_TYPE_FRAME_END_INFO,
-        .next = nullptr,
+        .next = next_chain,
         .displayTime = predictedDisplayTime,
         .environmentBlendMode = environment_blend_mode_,
         .layerCount = 0,
@@ -1958,10 +2194,23 @@ void XrSessionHost::PerformEnhancedStereoscopicRender(
              "different pass camera is currently given. The pass camera will "
              "be ignored.";
     }
+    // TODO: We should restore the original projection matrices
+    // once the projection quad pass is done.
     SetCameraEyesForProjectionQuad(GetEngine(), main_camera,
                                    options.projection_quad.value(),
                                    latest_views_);
   } else {
+    // Initialize CameraComponent to be consistent with filament::Camera. This
+    // will be overwritten by the following Set* calls, but
+    // UpdateCameraFromXrView() makes sure the CameraComponent will also have a
+    // similar projection matrix (currently the left eye), and is in "custom"
+    // projection mode. See (broken link).
+    // TODO: Consider initializing the CameraComponent from the
+    // combined projection matrix instead of just the first view. Should also
+    // consider updating CameraComponent to infer the combined projection matrix
+    // from the eyes.
+    UpdateCameraFromXrView(latest_views_[0]);
+
     SetCustomEyeProjectionOnCamera(pass_camera, latest_views_);
     SetEyeModelMatrixOnCamera(GetEngine(), main_camera, pass_camera,
                               latest_views_);

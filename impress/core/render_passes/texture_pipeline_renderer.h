@@ -23,14 +23,19 @@
 
 #include "absl/status/status.h"
 #include "absl/types/optional.h"
+#if defined(__ANDROID__)
+#include "filament/filament/include/filament/Fence.h"
+#endif  // defined(__ANDROID__)
 #include "filament/filament/include/filament/RenderTarget.h"
 #include "filament/filament/include/filament/Renderer.h"
 #include "filament/filament/include/filament/View.h"
 #include "core/async/future.h"
+#include "core/camera/camera_component.h"
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_id.h"
 #include "core/ncsb/component_system.h"
 #include "core/ncsb/dispatcher/event.h"
@@ -113,6 +118,12 @@ class TexturePipelineRenderer : public Component {
   // number of passes, otherwise this returns an error.
   absl::Status ResizePassTexture(size_t pass_index, imp::uint2 size);
 
+  // Sets the camera for the given pass. If the camera component passed in is
+  // not valid, then the main camera will be used. `pass_index` must be less
+  // than the number of passes, otherwise this returns an error.
+  absl::Status SetPassCamera(size_t pass_index,
+                             ComponentHandle<CameraComponent> camera);
+
   // Returns the Filament view used for the given pass. `pass_index` must be
   // less than the number of passes, otherwise this returns nullptr.
   filament::View* GetFilamentView(size_t pass_index) const;
@@ -157,6 +168,16 @@ class TexturePipelineRenderer : public Component {
     // An empty (but not null) scene to use for passes that don't have any nodes
     // in their group.
     filament::Scene* empty_scene_ = nullptr;
+
+#if defined(__ANDROID__)
+    // `first_frame_fence_` and `is_first_frame_rendered_` are used together to
+    // track the completion of the first frame rendered by Filament. This is
+    // necessary to ensure that the GL context is fully available for off-screen
+    // rendering by waiting for the first frame to complete. See (broken link)
+    // for more context.
+    filament::Fence* first_frame_fence_ = nullptr;
+    bool is_first_frame_rendered_ = false;
+#endif  // defined(__ANDROID__)
   };
 
  private:

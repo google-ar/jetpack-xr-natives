@@ -35,14 +35,15 @@
 #include "core/common/flatbuffer_helpers.h"
 #include "core/materials/compiler/cache/material_cache.h"
 #include "core/materials/compiler/material_compiler_client.h"
+#include "core/materials/compiler/material_compiler_config.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
 #include "core/view/base_view.h"
 
 namespace imp {
 
 Future<filament::Material*> RuntimeMaterialCompiler::CompileMaterial(
-    absl::string_view source_material_string, Platform platform,
-    TargetApi target_api,
+    absl::string_view source_material_string,
+    const MaterialCompilerConfig& config,
     const MaterialPreCompileOptions& material_precompile_options) {
   // Check if material exists in the cache.
   MaterialHash hash = cache_->Hash(source_material_string);
@@ -57,10 +58,8 @@ Future<filament::Material*> RuntimeMaterialCompiler::CompileMaterial(
              // Copy the source material string to a std::string since the
              // lambda may outlives the memory under the source_material_string
              // parameter.
-             [this, source = std::string(source_material_string), platform,
-              target_api]() {
-               return native_client_->CompileMaterial(source, platform,
-                                                      target_api);
+             [this, source = std::string(source_material_string), config]() {
+               return native_client_->CompileMaterial(source, config);
              },
              {.executor = Executor::Type::kBackground})
       .Then(

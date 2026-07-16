@@ -31,6 +31,8 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/android/extensions/split_engine_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -79,8 +81,8 @@ class SplitEngineSharedMemoryBridgeClientNdk
                                              int32_t height) override;
 
   absl::Status SendRequest(
-      const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback) override;
+      absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) override;
 
   ndk::SpAIBinder GetBridgeHandle() const { return bridge_handle_; };
 

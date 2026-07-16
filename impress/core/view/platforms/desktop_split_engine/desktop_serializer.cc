@@ -32,6 +32,7 @@
 #include "third_party/grpc/include/grpcpp/create_channel.h"
 #include "third_party/grpc/include/grpcpp/security/credentials.h"
 #include "core/common/context.h"
+#include "core/common/owned_ptr.h"
 #include "core/config.h"
 #include "core/input/input_manager.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
@@ -45,6 +46,7 @@
 #include "core/split_engine/desktop/split_engine_desktop_bridge.grpc.pb.h"
 #include "core/split_engine/desktop/split_engine_desktop_bridge_client.h"
 #include "core/split_engine/split_engine_serializer_impl.h"
+#include "core/split_engine/split_engine_serializer_transport_legacy_impl.h"
 #include "core/view/framework/render/renderable_manager_wrapper.h"
 #include "core/view/framework/view.h"
 #include "core/view/utils/device.h"
@@ -132,10 +134,11 @@ absl::Status Main(int argc, char* argv[]) {
             << (api_level == android_xr::kSplitEngineExperimentalApiLevel
                     ? "experimental"
                     : absl::StrCat(api_level));
+  auto transport = imp::MakeOwned<SplitEngineSerializerTransportLegacyImpl>(
+      std::move(bridge), std::move(bridge_sender));
 
   auto split_engine_serializer = std::make_unique<SplitEngineSerializerImpl>(
-      *view, api_level, std::move(bridge), std::move(bridge_sender),
-      kBridgeBufferSizeBytes);
+      *view, api_level, std::move(transport), kBridgeBufferSizeBytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 
@@ -176,9 +179,11 @@ absl::Status MultimachineMain(int argc, char* argv[]) {
                     ? "experimental"
                     : absl::StrCat(api_level));
 
+  auto transport = imp::MakeOwned<SplitEngineSerializerTransportLegacyImpl>(
+      std::move(bridge), std::move(bridge_sender));
+
   auto split_engine_serializer = std::make_unique<SplitEngineSerializerImpl>(
-      *view, api_level, std::move(bridge), std::move(bridge_sender),
-      kBridgeBufferSizeBytes);
+      *view, api_level, std::move(transport), kBridgeBufferSizeBytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 

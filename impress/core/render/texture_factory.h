@@ -110,6 +110,8 @@ class TextureFactory {
     std::optional<intptr_t> native_texture_id;
     // Sampler options for the texture.
     std::optional<TextureSamplerOptions> sampler_options;
+    // Optional name for the texture.
+    std::optional<absl::string_view> name;
   };
 
   TextureFactory(BaseView& view);
@@ -160,11 +162,13 @@ class TextureFactory {
 
   // Creates an empty texture of specified size and format.
   // TODO: This does not send the texture data to split engine.
+  ABSL_DEPRECATED("Use CreateTexture(TextureCreationSettings) instead.")
   TexturePtr CreateTexture(
       int width, int height, Format format,
       std::optional<absl::string_view> name = std::nullopt);
 
   // Creates an empty texture of specified size, format, and usage.
+  ABSL_DEPRECATED("Use CreateTexture(TextureCreationSettings) instead.")
   TexturePtr CreateTexture(int width, int height, Format format, Usage usage);
 
   // Creates an empty texture of specified size, format, usage, and options.
@@ -174,6 +178,7 @@ class TextureFactory {
       std::optional<absl::string_view> name = std::nullopt);
 
   // Creates an empty texture of specified size, format, usage, and options.
+  ABSL_DEPRECATED("Use CreateTexture(TextureCreationSettings) instead.")
   TexturePtr CreateTexture(
       int width, int height, Format format, Usage usage,
       TextureSamplerOptions sampler_options,
@@ -185,13 +190,14 @@ class TextureFactory {
   // will release ownership of the texture object when the Filament texture
   // is destroyed. The width, height, levels, and format should match what the
   // metal texture returns.
+  ABSL_DEPRECATED("Use CreateTexture(TextureCreationSettings) instead.")
   TexturePtr CreateTexture(intptr_t id, uint32_t width, uint32_t height,
                            uint8_t levels, Format format,
                            Usage usage = Usage::DEFAULT);
 
   // Creates an empty texture of specified size, levels, format, sampler type,
   // usage, options and native texture id.
-  TexturePtr CreateTexture(TextureCreationSettings settings);
+  OwnedTexturePtr CreateTexture(TextureCreationSettings settings);
 
   // Creates a 2d texture array by passing in a span of image assets.
   // Returns a 3d texture that contains layers of 2d textures.

@@ -86,10 +86,10 @@ class StereoSurfaceManagerImpl : public StereoSurfaceManager {
       int32_t node_id, int64_t alpha_mask_token) override;
   absl::Status SetContentColorMetadataForStereoSurfaceEntity(
       int32_t node_id, MediaColorSpace color_space = {}) override;
-  absl::Status SetSubViewConfigForStereoSurfaceEntity(int32_t node_id,
-                                                      float bottom, float left,
-                                                      float right,
-                                                      float top) override;
+  absl::Status SetSubViewConfigForStereoSurfaceEntity(
+      int32_t node_id, float left_bottom, float left_left, float left_right,
+      float left_top, float right_bottom, float right_left, float right_right,
+      float right_top) override;
 
  private:
   ImpressApiView& view_;
@@ -213,15 +213,17 @@ StereoSurfaceManagerImpl::SetContentColorMetadataForStereoSurfaceEntity(
 }
 
 absl::Status StereoSurfaceManagerImpl::SetSubViewConfigForStereoSurfaceEntity(
-    int32_t node_id, float bottom, float left, float right, float top) {
+    int32_t node_id, float left_bottom, float left_left, float left_right,
+    float left_top, float right_bottom, float right_left, float right_right,
+    float right_top) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
-  float offset_x = left;
-  float offset_y = std::min(top, bottom);
-  float width = right - left;
-  float height = std::abs(top - bottom);
-  stereo_surface->SetSubViewRects({offset_x, offset_y, width, height},
-                                  {offset_x, offset_y, width, height});
+  float4 left_rect = {left_left, std::min(left_top, left_bottom),
+                      left_right - left_left, std::abs(left_top - left_bottom)};
+  float4 right_rect = {right_left, std::min(right_top, right_bottom),
+                       right_right - right_left,
+                       std::abs(right_top - right_bottom)};
+  stereo_surface->SetSubViewRects(left_rect, right_rect);
   return absl::OkStatus();
 }
 

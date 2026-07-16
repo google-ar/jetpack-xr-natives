@@ -38,6 +38,13 @@ single_version_override(
     patches = ["//:bazel/patches/com_google_protobuf.patch"],
 )
 
+bazel_dep(name = "miniply", version = "0.0.0-20220915-1a235c7")
+single_version_override(
+    module_name = "miniply",
+    patch_strip = 1,
+    patches = ["//:bazel/patches/miniply.patch"],
+)
+
 # Bazel modules
 bazel_dep(name = "apple_support", version = "1.15.1", repo_name = "build_bazel_apple_support")
 bazel_dep(name = "aspect_bazel_lib", version = "1.16.3")

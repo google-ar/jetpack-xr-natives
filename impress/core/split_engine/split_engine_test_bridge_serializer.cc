@@ -17,7 +17,6 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdlib>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -34,6 +33,7 @@
 #include "absl/synchronization/notification.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/executor.h"
@@ -98,8 +98,8 @@ absl::Status SplitEngineTestBridgeSerializer::SendCommand(
 }
 
 absl::Status SplitEngineTestBridgeSerializer::SendRequest(
-    BridgeId bridge_id, const std::vector<uint8_t>& data,
-    std::function<void(const std::vector<uint8_t>&)> callback, bool save) {
+    BridgeId bridge_id, absl::Span<const uint8_t> data,
+    imp::Invocable<void(absl::Span<const uint8_t>)> callback, bool save) {
   if (!snapshot_.has_value()) {
     IMP_LOG(imp::FATAL) << "Call to SendCommand outside of RunAndCaptureTask.";
   }
@@ -107,13 +107,20 @@ absl::Status SplitEngineTestBridgeSerializer::SendRequest(
     // First, store the message in the current sequence.
     SaveMessage(bridge_id, android_xr::schemas::MessageType::Request, data);
   }
+  std::vector<uint8_t> data_vector(data.begin(), data.end());
+  auto callback_ptr =
+      new imp::Invocable<void(absl::Span<const uint8_t>)>(std::move(callback));
   // Next, pass the message to the bridge service to be processed.
-  return bridge_service_.SendRequest(bridge_id, data, callback);
+  return bridge_service_.SendRequest(
+      bridge_id, data_vector, [callback_ptr](const std::vector<uint8_t>& data) {
+        (*callback_ptr)(data);
+        delete callback_ptr;
+      });
 }
 
 void SplitEngineTestBridgeSerializer::SaveMessage(
     BridgeId bridge_id, android_xr::schemas::MessageType type,
-    const std::vector<uint8_t>& message) {
+    absl::Span<const uint8_t> message) {
   snapshot_->message_sequence.push_back(android_xr::schemas::CreateMessage(
       *snapshot_->fbb, bridge_id, type,
       snapshot_->fbb->CreateVector(message.data(), message.size())));
@@ -236,7 +243,7 @@ void SplitEngineTestBridgeSerializer::PlaybackSnapshot() {
       absl::Notification notification;
       absl::Status result = SendRequest(
           message->bridge_id(), data,
-          [&notification](const std::vector<uint8_t>&) {
+          [&notification](absl::Span<const uint8_t> response_data) {
             notification.Notify();
           },
           false);

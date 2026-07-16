@@ -30,6 +30,7 @@
 #include "filament/filament/include/filament/TextureSampler.h"
 #include "filament/libs/math/include/math/mathfwd.h"
 #include "core/assets/asset_ptr.h"
+#include "core/async/executor.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
 #include "core/common/small_source_location.h"
@@ -43,13 +44,19 @@
 namespace imp {
 
 CustomMaterial::CustomMaterial(filament::MaterialInstance* material_instance,
-                               AssetPtr<MaterialAsset> material_asset)
+                               AssetPtr<MaterialAsset> material_asset,
+                               bool is_destruction_check_enabled)
     : name_(material_instance->getName()),
       engine_(BaseView::GetSharedEngine()),
       material_instance_(material_instance),
-      material_asset_(material_asset) {}
+      material_asset_(material_asset),
+      is_destruction_check_enabled_(is_destruction_check_enabled) {}
 
 CustomMaterial::~CustomMaterial() {
+  if (is_destruction_check_enabled_) {
+    
+  }
+
   // Ensure to call OnUnassignedFromMaterial on all textures before destroying
   // the material instance.
   for (auto& [parameter_name, texture] :

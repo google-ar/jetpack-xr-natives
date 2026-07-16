@@ -26,6 +26,7 @@
 #include "absl/status/status.h"
 #include "filament/libs/utils/include/utils/ashmem.h"
 #include "core/async/background_scheduler.h"
+#include "core/async/executor.h"
 #include "core/common/trace.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 
@@ -64,22 +65,37 @@ BridgeBuffer::BridgeBuffer(BufferHandleFactory& handle_factory,
 
 BridgeBuffer::~BridgeBuffer() {
   IMP_TRACE();
+
   if (mmapped_ptr_ == nullptr) {
     return;
   }
 
-  // munmap is blocking and might be expensive to run on the main thread.
-  //
-  // We do care about the order of execution here, because we should let
-  // SendMessage calls to complete so that associated FlatbufferBuilders are
-  // destroyed before the memory is unmapped.
-  scheduler_.Schedule([ptr = mmapped_ptr_, size = size_in_bytes_,
-                       fd = shared_memory_region_fd_]() {
-    ::munmap(ptr, size);
-    close(fd);
+  if (Executor::CurrentExecutor() == Executor::ForegroundExecutor()) {
+    // We're on the foreground thread.
+    // This happens during SplitEngineSharedMemoryBridgeSenderBase destruction.
+    //
+    // munmap is blocking and might be expensive to run on the main thread.
+    //
+    // We do care about the order of execution here, because we should let
+    // SendMessage calls to complete so that associated FlatbufferBuilders are
+    // destroyed before the memory is unmapped.
+    scheduler_.Schedule([ptr = mmapped_ptr_, size = size_in_bytes_,
+                         fd = shared_memory_region_fd_]() {
+      ::munmap(ptr, size);
+      close(fd);
 
-    return absl::OkStatus();
-  });
+      return absl::OkStatus();
+    });
+  } else {
+    // We're on the background thread.
+    // This happens during "normal" operations when MessageGroup is released.
+    // It's safe to unmap the memory here because there's nobody using it
+    // anymore.
+    //
+    IMP_LOG(imp::INFO) << "Unmapping BridgeBuffer on the background thread.";
+    ::munmap(mmapped_ptr_, size_in_bytes_);
+    close(shared_memory_region_fd_);
+  }
 
   // The work scheduled in the constructor captures `this`.
   //

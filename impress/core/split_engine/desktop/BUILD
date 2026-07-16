@@ -86,8 +86,8 @@ cc_library(
     deps = [
         ":split_engine_desktop_bridge_cc_grpc",
         ":split_engine_desktop_bridge_cc_proto",
+        "//core/common:invocable",
         "//core/split_engine:message_group_monitor",
-        "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/android:split_engine_shared_memory_bridge_client",
         "//core/split_engine/desktop/utils:message_group_completion_client_reactor",
@@ -102,6 +102,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ],

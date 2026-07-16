@@ -21,12 +21,13 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
@@ -71,8 +72,8 @@ class SplitEngineSharedMemoryBridgeClient {
   // Sends a flatbuffer request to the backend with a handler for a flatbuffer
   // response.
   virtual absl::Status SendRequest(
-      const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback) = 0;
+      absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) = 0;
 };
 
 }  // namespace imp::split_engine

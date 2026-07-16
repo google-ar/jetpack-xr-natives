@@ -228,6 +228,7 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddMorphTargetBufferInfo() {
   return AddTable({
       8,               // vertex_count
       kReferenceSize,  // targets
+      1                // enable_custom_morphing
   });
 }
 

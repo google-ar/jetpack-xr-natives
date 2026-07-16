@@ -112,7 +112,7 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
   public void onConnected(WebSocket conn) {}
 
   @Override
-  public void onDisconnected() {}
+  public void onDisconnected(WebSocket conn) {}
 
   @Override
   public void onStringMessage(String message) {}
@@ -170,7 +170,7 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
   @UsedByNative("android_remote_editor_script_api_bridge_wrapper.cc")
   public void postMessageToScript(String response) {
     if (webSocketServer != null) {
-      webSocketServer.send(response);
+      webSocketServer.broadcast(response);
     }
   }
 

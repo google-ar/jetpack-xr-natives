@@ -100,6 +100,7 @@ class SceneViewerComponent : public imp::Component,
   float ConstrainElastically(float value, svxr::AxisBounds range,
                              float scale) override;
   svxr::UiEventListener* GetUiEventListener() override;
+  void TriggerShutdownCallback() override;
 
   // Translation State Dependencies
   std::optional<imp::float3> GetAnchorSnapPosition(
@@ -244,6 +245,7 @@ class SceneViewerComponent : public imp::Component,
   imp::ComponentHandle<imp::AudioPlayer> release_audio_player_;
   bool dropped_ = false;  // Indicates if the model was dropped onto a plane.
 
+  imp::Box GetModelBounds() const;
   bool DoesRayIntersectModel(imp::Ray ray);
   bool IsInputEventHovering(const android_xr::SplitEngineInputEvent& event);
   bool is_previous_left_ray_hovering_ = false;

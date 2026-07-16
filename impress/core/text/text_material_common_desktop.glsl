@@ -17,12 +17,7 @@
 
 #include "text_colors.glsl"
 
-// This file is included by both FL0 and 1 materials.
-#if FILAMENT_EFFECTIVE_VERSION == 100
-#define TEX texture2D
-#else
 #define TEX texture
-#endif
 
 vec4 getGlyphSample(highp vec2 uv_neg) {
   vec2 uv = abs(uv_neg);

@@ -128,8 +128,9 @@ void RemoteEditorRenderer::SetRenderTargetWindow(void* native_window, int width,
       remote_window_ != native_window || texture_needs_recreation;
 
   if (!resources_need_recreation) {
-    VIMP_LOG(imp::1) << "SetRenderTargetWindow: Window and texture size are unchanged; "
-               "skipping resource recreation.";
+    IMP_LOG(imp::WARNING)
+        << "SetRenderTargetWindow: Window and texture size are unchanged; "
+           "skipping resource recreation.";
     return;
   }
 

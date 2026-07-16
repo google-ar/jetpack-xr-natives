@@ -170,19 +170,26 @@ JNI_METHOD_AOSP(void, nReleaseGltfAsset)
       env, view->GetModelManager().ReleaseGltfAsset(gltf_token));
 }
 
-JNI_METHOD_AOSP(int32_t, nInstanceGltfModel)
-(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong gltf_token,
- jboolean enable_collider) {
+JNI_METHOD_AOSP(int32_t, nInstanceGltfModel__JJ)
+(JNIEnv* env, jclass clazz, jlong view_handle, jlong gltf_token) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   if (!IsValidView(view)) return -1;
 
   absl::StatusOr<int32_t> result =
-      view->GetModelManager().InstanceGltfModel(gltf_token, enable_collider);
+      view->GetModelManager().InstanceGltfModel(gltf_token);
   if (!imp::android::ThrowIfError(env, result).ok()) {
     // Returned value does not matter since an exception was thrown.
     return -1;
   }
   return *result;
+}
+
+// TODO: Remove this method once the Java side is updated.
+JNI_METHOD_AOSP(int32_t, nInstanceGltfModel__JJZ)
+(JNIEnv* env, jclass clazz, jlong view_handle, jlong gltf_token,
+ jboolean enable_collider) {
+  return Java_androidx_xr_scenecore_impl_impress_ImpressApiImpl_nInstanceGltfModel__JJ(  // NOLINT
+      env, clazz, view_handle, gltf_token);
 }
 
 // TODO: (broken link) - impress_node is a jint in the Java side.
@@ -205,6 +212,17 @@ JNI_METHOD_AOSP(void, nSetGltfReformAffordanceEnabled)
 
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfReformAffordanceEnabled(
+               impress_node, enable_affordance, system_movable));
+}
+
+JNI_METHOD_AOSP(void, nSetCustomMeshReformAffordanceEnabled)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jboolean enable_affordance, jboolean system_movable) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  (void)imp::android::ThrowIfError(
+      env, view->GetMeshManager().SetCustomMeshReformAffordanceEnabled(
                impress_node, enable_affordance, system_movable));
 }
 
@@ -801,18 +819,18 @@ JNI_METHOD_AOSP(void, nSetAuxiliaryAlphaMaskForStereoSurfaceEntity)
                                                             alpha_mask_token));
 }
 
-// TODO: Add support for StereoSubViews which would take separate
-// rectangles for the left and right eye.
 JNI_METHOD_AOSP(void, nSetSubViewConfigForStereoSurfaceEntity)
-(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jfloat bottom,
- jfloat left, jfloat right, jfloat top) {
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
+ jfloat left_bottom, jfloat left_left, jfloat left_right, jfloat left_top,
+ jfloat right_bottom, jfloat right_left, jfloat right_right, jfloat right_top) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   if (!IsValidView(view)) return;
 
   auto unused = imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetSubViewConfigForStereoSurfaceEntity(
-          node_id, bottom, left, right, top));
+          node_id, left_bottom, left_left, left_right, left_top, right_bottom,
+          right_left, right_right, right_top));
 }
 
 JNI_METHOD_AOSP(void, nLoadTexture)
@@ -1522,12 +1540,34 @@ JNI_METHOD_AOSP(void, nDisposeAllResources)
 }
 
 // Creates a mesh buffer with the given options.
-// The parameters are the same as the BindingsMeshBuffer::CreateOptions struct.
+//
+// Parameters:
+//   * view_handle: the handle to the ImpressApiView
+//   * attribute_ids: array of VertexAttribute mapping for each layout attribute
+//     (e.g. kPosition, kNormal, etc.)
+//   * attribute_types: array of VertexAttributeType for each layout attribute
+//     (e.g. kFloat3, kFloat2, etc.)
+//   * buffer_indices: array of buffer indices for each layout attribute
+//   * max_vertices: maximum number of vertices the buffer can hold. Zero means
+//     that the BindingsMeshBuffer object will calculate max vertices
+//     automatically based on the provided data size.
+//   * max_indices: maximum number of indices the buffer can hold. Zero means
+//     that the BindingsMeshBuffer object will calculate max indices
+//     automatically based on the provided data size.
+//   * vertex_data: array of direct byte buffers with initial vertex data, one
+//     buffer per vertex buffer.
+//   * vertex_data_offsets: offsets in bytes into each vertex_data buffer
+//   * vertex_data_sizes: sizes in bytes for the initial vertex data in each
+//     buffer
+//   * index_data: direct byte buffer with initial index data
+//   * index_data_offset: offset in bytes into the index_data buffer
+//   * index_data_size: size in bytes for the initial index data
 JNI_METHOD_AOSP(jlong, nCreateMeshBuffer)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jintArray attribute_ids,
  jintArray attribute_types, jbyteArray buffer_indices, jint max_vertices,
- jint max_indices, jobjectArray vertex_data, jintArray vertex_data_sizes,
- jobject index_data, jint index_data_size) {
+ jint max_indices, jobjectArray vertex_data, jintArray vertex_data_offsets,
+ jintArray vertex_data_sizes, jobject index_data, jint index_data_offset,
+ jint index_data_size) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   if (!IsValidView(view)) return -1;
 
@@ -1627,7 +1667,17 @@ JNI_METHOD_AOSP(jlong, nCreateMeshBuffer)
         return -1;
       }
     }
-    if (env->GetArrayLength(vertex_data_sizes) != num_vertex_buffers) {
+    if (vertex_data_offsets == nullptr) {
+      if (!imp::android::ThrowIfError(
+               env, absl::InvalidArgumentError(
+                        "Vertex data offsets must be provided if vertex "
+                        "data is provided."))
+               .ok()) {
+        return -1;
+      }
+    }
+    if (env->GetArrayLength(vertex_data_sizes) != num_vertex_buffers ||
+        env->GetArrayLength(vertex_data_offsets) != num_vertex_buffers) {
       if (!imp::android::ThrowIfError(
                env, absl::InvalidArgumentError(
                         "Vertex data arrays must have the same length."))
@@ -1640,6 +1690,10 @@ JNI_METHOD_AOSP(jlong, nCreateMeshBuffer)
     env->GetIntArrayRegion(vertex_data_sizes, 0, num_vertex_buffers,
                            sizes.data());
 
+    std::vector<jint> offsets(num_vertex_buffers);
+    env->GetIntArrayRegion(vertex_data_offsets, 0, num_vertex_buffers,
+                           offsets.data());
+
     options.initial_vertex_data.resize(num_vertex_buffers);
     for (size_t i = 0; i < num_vertex_buffers; ++i) {
       jobject buffer = env->GetObjectArrayElement(vertex_data, i);
@@ -1647,7 +1701,20 @@ JNI_METHOD_AOSP(jlong, nCreateMeshBuffer)
         uint8_t* bytes =
             static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
         if (bytes != nullptr) {
-          options.initial_vertex_data[i] = absl::MakeSpan(bytes, sizes[i]);
+          jlong capacity = env->GetDirectBufferCapacity(buffer);
+          if (offsets[i] < 0 || sizes[i] < 0 ||
+              static_cast<long>(offsets[i]) + sizes[i] > capacity) {
+            if (!imp::android::ThrowIfError(
+                     env,
+                     absl::InvalidArgumentError("Vertex data buffer offset and "
+                                                "size are out of bounds."))
+                     .ok()) {
+              env->DeleteLocalRef(buffer);
+              return -1;
+            }
+          }
+          options.initial_vertex_data[i] =
+              absl::MakeSpan(bytes + offsets[i], sizes[i]);
         } else {
           if (!imp::android::ThrowIfError(
                    env, absl::InvalidArgumentError(
@@ -1666,7 +1733,19 @@ JNI_METHOD_AOSP(jlong, nCreateMeshBuffer)
     uint8_t* bytes =
         static_cast<uint8_t*>(env->GetDirectBufferAddress(index_data));
     if (bytes != nullptr) {
-      options.initial_index_data = absl::MakeSpan(bytes, index_data_size);
+      jlong capacity = env->GetDirectBufferCapacity(index_data);
+      if (index_data_offset < 0 || index_data_size < 0 ||
+          static_cast<long>(index_data_offset) + index_data_size > capacity) {
+        if (!imp::android::ThrowIfError(
+                 env,
+                 absl::InvalidArgumentError("Index data buffer offset and size "
+                                            "are out of bounds."))
+                 .ok()) {
+          return -1;
+        }
+      }
+      options.initial_index_data =
+          absl::MakeSpan(bytes + index_data_offset, index_data_size);
     } else {
       if (!imp::android::ThrowIfError(
                env, absl::InvalidArgumentError(
@@ -1802,6 +1881,34 @@ JNI_METHOD_AOSP(jlong, nCreateCustomMesh)
   return *result;
 }
 
+JNI_METHOD_AOSP(void, nGetCustomMeshAabb)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong custom_mesh_handle,
+ jfloatArray out_aabb) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  absl::StatusOr<imp::Box> result = view->GetMeshManager().GetCustomMeshAabb(
+      static_cast<std::intptr_t>(custom_mesh_handle));
+  if (!imp::android::ThrowIfError(env, result).ok()) {
+    return;
+  }
+
+  if (out_aabb == nullptr || env->GetArrayLength(out_aabb) != 6) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError(
+                 "out_aabb must be a non-null float array with a length of 6."))
+             .ok()) {
+      return;
+    }
+  }
+
+  float raw_data[6] = {result->center[0],     result->center[1],
+                       result->center[2],     result->halfExtent[0],
+                       result->halfExtent[1], result->halfExtent[2]};
+  env->SetFloatArrayRegion(out_aabb, 0, 6, raw_data);
+}
+
 JNI_METHOD_AOSP(void, nDestroyCustomMesh)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong custom_mesh_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
@@ -1823,9 +1930,20 @@ JNI_METHOD_AOSP(void, nSetCustomMeshNodeMaterial)
           node_id, submesh_index, static_cast<std::intptr_t>(material_handle)));
 }
 
+JNI_METHOD_AOSP(void, nSetCustomMeshNodeColliderEnabled)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
+ jboolean enable_collider) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  (void)imp::android::ThrowIfError(
+      env, view->GetMeshManager().SetCustomMeshNodeColliderEnabled(
+               node_id, enable_collider));
+}
+
 JNI_METHOD_AOSP(jint, nCreateCustomMeshNode)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong custom_mesh_handle,
- jlongArray material_handles, jint bone_count) {
+ jlongArray material_handles, jint bone_count, jboolean enable_collider) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   if (!IsValidView(view)) return -1;
 
@@ -1850,7 +1968,7 @@ JNI_METHOD_AOSP(jint, nCreateCustomMeshNode)
 
   absl::StatusOr<int32_t> result = view->GetMeshManager().CreateCustomMeshNode(
       static_cast<std::intptr_t>(custom_mesh_handle), native_handles,
-      bone_count);
+      bone_count, enable_collider);
   if (!imp::android::ThrowIfError(env, result).ok()) {
     return -1;
   }

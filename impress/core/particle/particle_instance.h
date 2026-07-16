@@ -22,8 +22,8 @@
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
-#include "core/particle/particle_format.h"
 #include "core/particle/utils/data_provider.h"
+#include "core/particle/utils/particle_format.h"
 
 namespace imp {
 
@@ -36,8 +36,8 @@ class ParticleInstance {
  public:
   // TODO: (broken link) - Remove internal implementation from public API.
   ParticleInstance(imp_particle::DataProvider& data_provider,
-                   const ParticleFormat& format, int32_t particle_index,
-                   NodeHandle emitter_node);
+                   const imp_particle::ParticleFormat& format,
+                   int32_t particle_index, NodeHandle emitter_node);
 
   // The index of the particle represented. This index is used internally by
   // the ParticleService, and may be reused when a particle expires and its
@@ -84,7 +84,7 @@ class ParticleInstance {
 
  private:
   imp_particle::DataProvider& data_provider_;
-  const ParticleFormat& particle_format_;
+  const imp_particle::ParticleFormat& particle_format_;
   int32_t particle_index_ = 0;
   int32_t float_offset_ = 0;
   NodeHandle emitter_node_;

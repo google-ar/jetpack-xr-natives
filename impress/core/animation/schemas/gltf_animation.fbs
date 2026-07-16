@@ -88,6 +88,7 @@ file_identifier "ImNA";
 
 table MorphTargetAnimation {
   weights : ChannelFloatVector (required);
+  additive_weight_index: int = null;  // optional
 }
 root_type MorphTargetAnimation;
 file_identifier "IMTA";

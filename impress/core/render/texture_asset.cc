@@ -15,8 +15,12 @@
 #include "core/render/texture_asset.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+
+#include "core/common/log.h"
+#include "core/async/executor.h"
 #if IMP_PLATFORM(WASM)
 #include <cstdint>
 #endif
@@ -29,6 +33,7 @@
 #include "core/config.h"
 #include "core/image/decode_image.h"
 #include "core/image/image_contents.h"
+#include "core/render/image_helpers.h"
 #if IMP_PLATFORM(WASM)
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "core/image/wasm_decode_image.h"
@@ -45,37 +50,54 @@ Future<std::unique_ptr<TextureAsset>> TextureAsset::Load(
     BaseView* view, absl::string_view asset_url,
     Future<resources::Resource> resource_future,
     TextureGenerationOptions options) {
-  return resource_future.Then([view, asset_url_copy = std::string(asset_url),
-                               options](resources::Resource resource)
-                                  -> Future<std::unique_ptr<TextureAsset>> {
+  if (!Executor::IsOnForegroundExecutor()) {
+    IMP_LOG(imp::FATAL) << "TextureAsset::Load must be called on the foreground thread.";
+  }
+
+  return resource_future.Then(
+      [ctx = view->GetContext(), asset_url_copy = std::string(asset_url),
+       options, view](resources::Resource resource)
+          -> Future<std::unique_ptr<TextureAsset>> {
 #if IMP_PLATFORM(WASM)
-    filament::backend::TextureFormat format =
-        options.texture_format_override.value_or(
-            filament::backend::TextureFormat::SRGB8_A8);
-    return image::details::WasmDecodeImageToTexture(asset_url_copy, resource,
-                                                    format)
-        .Then([view, asset_url_copy,
-               options](WasmTextureContents texture_contents)
-                  -> std::unique_ptr<TextureAsset> {
-          return std::make_unique<TextureAsset>(
-              view, asset_url_copy, std::move(texture_contents), options);
-        });
+        filament::backend::TextureFormat format =
+            options.texture_format_override.value_or(
+                filament::backend::TextureFormat::SRGB8_A8);
+        return image::details::WasmDecodeImageToTexture(asset_url_copy,
+                                                        resource, format)
+            .Then([view, asset_url_copy,
+                   options](WasmTextureContents texture_contents)
+                      -> std::unique_ptr<TextureAsset> {
+              return std::make_unique<TextureAsset>(
+                  view, asset_url_copy, std::move(texture_contents), options);
+            });
 #else
-    return image::DecodeImage(view->GetContext(), asset_url_copy, resource)
-        .Then([view, asset_url_copy,
-               options](std::unique_ptr<image::ImageContents> image_contents)
-                  -> std::unique_ptr<TextureAsset> {
-          return std::make_unique<TextureAsset>(
-              view, asset_url_copy, std::move(image_contents), options);
-        });
+        return image::DecodeImage(ctx, asset_url_copy, resource)
+            .Then([view, asset_url_copy, options](
+                      std::unique_ptr<image::ImageContents> image_contents)
+                      -> std::unique_ptr<TextureAsset> {
+              return std::make_unique<TextureAsset>(
+                  view, asset_url_copy, std::move(image_contents), options);
+            });
 #endif
-  });
+      },
+#if IMP_PLATFORM(WASM)
+      // On Wasm, the WebGL context is not available on background threads.
+      // Actual decoding is offloaded to the browser in JS.
+      Executor::Type::kForeground
+#else
+      Executor::Type::kBackground
+#endif
+  );
 }
 
 TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
                            std::unique_ptr<image::ImageContents> image_contents,
                            TextureGenerationOptions options)
     : view_(view), texture_name_(texture_name) {
+  if (!Executor::IsOnForegroundExecutor()) {
+    IMP_LOG(imp::FATAL) << "Texture asset needs to be created on the main thread.";
+  }
+
   filament::Engine* engine = view_->GetSharedEngine();
 
   TextureBuilder texture_builder(*view_);
@@ -88,11 +110,16 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
       image_contents->GetTextureFormat()));
   texture_builder.Width(image_contents->GetWidth());
   texture_builder.Height(image_contents->GetHeight());
+  uint8_t levels = 1;
   if (options.generated_mipmap_levels.has_value()) {
-    texture_builder.Levels(options.generated_mipmap_levels.value());
+    levels = options.generated_mipmap_levels.value();
+  } else if (options.generate_mipmaps) {
+    levels = GetMipmapLevelCount(image_contents->GetWidth(),
+                                 image_contents->GetHeight());
   }
+  texture_builder.Levels(levels);
   texture_builder.Image(*engine, *image_contents, {});
-  if (options.generated_mipmap_levels.has_value()) {
+  if (levels > 1) {
     texture_builder.GenerateMipmaps(*engine);
   }
   texture_ = texture_builder.Build(*engine);
@@ -103,16 +130,19 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
                            WasmTextureContents texture_contents,
                            TextureGenerationOptions options)
     : view_(view), texture_name_(texture_name) {
+  if (!Executor::IsOnForegroundExecutor()) {
+    IMP_LOG(imp::FATAL) << "Texture asset needs to be created on the main thread.";
+  }
+
   if (!texture_name.empty()) {
     texture_name_ =
         absl::StrFormat("%s_tex", GetLocalFilenameFromFilename(texture_name));
   }
   filament::Engine* engine = view_->GetSharedEngine();
 
-  filament::Texture::Builder texture_builder{};
+  TextureBuilder texture_builder(*view_);
   if (!texture_name.empty()) {
-    texture_builder =
-        texture_builder.name(texture_name_.data(), texture_name.length());
+    texture_builder.Name(texture_name_);
   }
 
   filament::Texture::InternalFormat format =
@@ -123,19 +153,18 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
     levels = options.generated_mipmap_levels.value();
   } else if (options.generate_mipmaps) {
     // We use the dimensions of the image to estimate the number of mip levels.
-    levels = static_cast<uint8_t>(std::floor(std::log2(std::max(
-                 texture_contents.GetWidth(), texture_contents.GetHeight())))) +
-             1;
+    levels = GetMipmapLevelCount(texture_contents.GetWidth(),
+                                 texture_contents.GetHeight());
   }
 
-  texture_ = texture_builder.width(texture_contents.GetWidth())
-                 .height(texture_contents.GetHeight())
-                 .levels(levels)
-                 .format(format)
-                 .sampler(filament::Texture::Sampler::SAMPLER_2D)
-                 .import(texture_contents.GetTextureId())
-                 .usage(filament::Texture::Usage::DEFAULT)
-                 .build(*engine);
+  texture_ = texture_builder.Width(texture_contents.GetWidth())
+                 .Height(texture_contents.GetHeight())
+                 .Levels(levels)
+                 .Format(format)
+                 .Sampler(filament::Texture::Sampler::SAMPLER_2D)
+                 .Import(texture_contents.GetTextureId())
+                 .Usage(filament::Texture::Usage::DEFAULT)
+                 .Build(*engine);
   if (levels > 1) {
     texture_->generateMipmaps(*engine);
   }
@@ -143,6 +172,9 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
 #endif
 
 TextureAsset::~TextureAsset() {
+  if (!Executor::IsOnForegroundExecutor()) {
+    IMP_LOG(imp::FATAL) << "Texture asset needs to be destroyed on the main thread.";
+  }
   if (view_ != nullptr && view_->GetSharedEngine() != nullptr &&
       texture_ != nullptr) {
     view_->GetSharedEngine()->destroy(texture_);

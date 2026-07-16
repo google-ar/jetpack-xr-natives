@@ -86,6 +86,8 @@ if (FILAMENT_SUPPORTS_OPENGL AND NOT FILAMENT_USE_EXTERNAL_GLES3)
             src/opengl/OpenGLBlobCache.h
             src/opengl/OpenGLContext.cpp
             src/opengl/OpenGLContext.h
+            src/opengl/OpenGLState.cpp
+            src/opengl/OpenGLState.h
             src/opengl/OpenGLDriver.cpp
             src/opengl/OpenGLDriver.h
             src/opengl/OpenGLDriverFactory.h
@@ -600,6 +602,7 @@ if (FILAMENT_BUILD_TESTING)
             test/test_CircularBuffer.cpp
             test/test_CommandBufferQueue.cpp
             test/test_Template.cpp
+            test/test_Platform.cpp
         )
         if (FILAMENT_SUPPORTS_WEBGPU)
             list(APPEND BACKEND_TEST_SRC
@@ -615,7 +618,6 @@ if (FILAMENT_BUILD_TESTING)
         set(BACKEND_TEST_LIBS
             absl::str_format
             backend
-            getopt
             gtest
             imageio
             filamat
@@ -724,7 +726,6 @@ if (FILAMENT_BUILD_TESTING)
 
         target_link_libraries(metal_utils_test PRIVATE
                 backend
-                getopt
                 gtest
                 )
 

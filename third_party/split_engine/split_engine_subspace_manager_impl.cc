@@ -27,6 +27,7 @@
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
+#include "core/config.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node.h"
@@ -34,6 +35,10 @@
 #include "split_engine/input/split_engine_input_event.h"
 #include "split_engine/subspace_events.h"
 #include "split_engine/subspace_root.h"
+
+#if IMP_RUNTIME(DEV)
+#include "core/editor/editor.h"
+#endif  // IMP_RUNTIME(DEV)
 
 namespace android_xr {
 
@@ -97,6 +102,15 @@ void SplitEngineSubspaceManagerImpl::CreateSubspace(
         it->second.SetSubspaceName(app_name);
         auto event = OnSubspaceCreatedEvent{app_name, it->second, subspace_id};
         view_.GetDispatcher().Send(event);
+#if IMP_RUNTIME(DEV)
+        // Attach the editor root node to the subspace root node, so that it can
+        // be visible in the editor.
+        // Note that the editor is attached to the last created subspace. If the
+        // subspace is destroyed, the editor panels will no longer be visible.
+        imp::editor::Editor& editor =
+            view_.GetRegistry().Get<imp::editor::Editor>()->get();
+        event.subspace_root.AttachToRoot(editor.GetEditorRoot());
+#endif  // IMP_RUNTIME(DEV)
         return absl::OkStatus();
       },
       {.executor = foreground_executor_})
@@ -115,6 +129,17 @@ void SplitEngineSubspaceManagerImpl::DestroySubspace(
         auto event = OnSubspaceDestroyedEvent{subspace_id};
         view_.GetDispatcher().Send(event);
 
+#if IMP_RUNTIME(DEV)
+        // Detach the editor root node from the subspace root node, preventing
+        // it from being destroyed. But the editor panels will still become
+        // invisible.
+        imp::editor::Editor& editor =
+            view_.GetRegistry().Get<imp::editor::Editor>()->get();
+        imp::NodeHandle editor_root = editor.GetEditorRoot();
+        if (it->second.GetNode() == editor_root->GetParent()) {
+          editor_root->SetParent(imp::NodeHandle());
+        }
+#endif  // IMP_RUNTIME(DEV)
         subspace_map_.erase(it);
         return absl::OkStatus();
       },

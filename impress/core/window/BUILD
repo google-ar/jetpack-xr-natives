@@ -126,14 +126,19 @@ cc_library(
         "//core:config",
         "//core/common",
         "//core/common:debug_draw",
+        "//core/common:registry",
         "//core/common:trace",
         "//core/common:typed_ids",
+        "//core/editor",
+        "//core/editor:editor_info",
         "//core/input",
         "//core/math",
         "//core/split_engine:split_engine_serializer",
+        "//core/video:video_writer",
         "//core/view:base_view",
         "//core/window/clipboard:clipboard_handler",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
@@ -146,7 +151,9 @@ cc_library(
         [
             ":open_gl_imgui_renderer",
         ],
-    ),
+    ) + if_dev_runtime([
+        "//core/editor/remote_editor",
+    ]),
     alwayslink = 1,
 )
 
@@ -393,9 +400,7 @@ cc_library(
         ":sdl_input_processor",
         "//core:config",
         "//core/common",
-        "//core/common:enum_flags",
         "//core/common:filament_engine_helpers",
-        "//core/common:platform_helpers",
         "//core/input",
         "//core/view/platforms/desktop/clipboard:sdl_clipboard_handler",
         "//core/view/utils:device",
@@ -404,6 +409,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//filament/libs:math_hdrs",
     ],
     alwayslink = 1,
 )

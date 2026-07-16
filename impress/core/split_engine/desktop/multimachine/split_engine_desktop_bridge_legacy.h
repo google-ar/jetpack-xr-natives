@@ -16,11 +16,11 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_DESKTOP_MULTIMACHINE_SPLIT_ENGINE_DESKTOP_BRIDGE_LEGACY_H_
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <utility>
-#include <vector>
 
+#include "absl/types/span.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_client.h"
 
@@ -36,8 +36,8 @@ class SplitEngineMMDesktopBridgeLegacy
   ~SplitEngineMMDesktopBridgeLegacy() override = default;
 
   bool SendRequest(
-      const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback) override;
+      absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) override;
 
  private:
   std::unique_ptr<SplitEngineMMDesktopBridgeClient> client_;

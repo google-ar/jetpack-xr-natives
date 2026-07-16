@@ -73,10 +73,19 @@ constexpr auto kSmoothFastResolvingPositionParameters =
 
 constexpr auto kSmoothResetScaleParameters =
     imp::SmoothParameters(25.f, 50.f, 50.f);
+constexpr auto kSmoothFastPopInScaleParameters =
+    imp::SmoothParameters(20.f, 50.f, 50.f);
+constexpr auto kSmoothSlowPopInScaleParameters =
+    imp::SmoothParameters(18.f, 1000.f, 1000.f);
 constexpr auto kSmoothManualScaleParameters =
     imp::SmoothParameters(400.f, 800.f, 800.f);
 constexpr auto kSmoothRotationParameters =
     imp::SmoothParameters(50.f, 250.f, 25.f);
+
+constexpr auto kOpeningAnimationDuration = absl::Milliseconds(420);
+constexpr auto kShutdownAnimationDuration = absl::Milliseconds(150);
+constexpr float kShutdownTargetLogScale = -6.907755f;
+constexpr float kScaleArrivalThreshold = 0.1f;
 
 }  // namespace svxr
 

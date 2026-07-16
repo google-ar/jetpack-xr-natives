@@ -35,6 +35,7 @@
 #include "core/async/future.h"
 #include "core/common/trace.h"
 #include "core/config.h"
+#include "core/materials/compiler/material_compiler_config.h"
 #include "core/materials/compiler/runtime_material_compiler.h"
 #include "core/materials/compiler/runtime_material_compiler_creator.h"
 #include "core/split_engine/flatbuffer_utils.h"
@@ -123,23 +124,25 @@ AddCustomMaterialHandler::CreateFilamentMaterial(
   }
   IMP_TRACE();
 
+  MaterialCompilerConfig config;
+
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(WASM) || IMP_PLATFORM(IOS) || \
     IMP_PLATFORM(IOS_SIMULATOR)
-  auto platform = RuntimeMaterialCompiler::Platform::Mobile;
+  config.platform = RuntimeMaterialCompiler::Platform::Mobile;
 #else
-  auto platform = RuntimeMaterialCompiler::Platform::Desktop;
+  config.platform = RuntimeMaterialCompiler::Platform::Desktop;
 #endif
 
 #if IMP_MATERIAL_API(OPENGL)
-  auto target_api = RuntimeMaterialCompiler::TargetApi::OpenGL;
+  config.target_api = RuntimeMaterialCompiler::TargetApi::OpenGL;
 #elif IMP_MATERIAL_API(VULKAN)
-  auto target_api = RuntimeMaterialCompiler::TargetApi::Vulkan;
+  config.target_api = RuntimeMaterialCompiler::TargetApi::Vulkan;
 #elif IMP_MATERIAL_API(METAL)
-  auto target_api = RuntimeMaterialCompiler::TargetApi::Metal;
+  config.target_api = RuntimeMaterialCompiler::TargetApi::Metal;
 #endif
 
   return GetOrCreateMaterialCompiler(view).Then(
-      [this, &spec, platform, target_api](RuntimeMaterialCompiler* compiler)
+      [this, &spec, config](RuntimeMaterialCompiler* compiler)
           -> Future<OwnedFilamentMaterialPtr> {
         MaterialPreCompileOptions precompile_options;
         if (spec.precompile_options()) {
@@ -147,8 +150,8 @@ AddCustomMaterialHandler::CreateFilamentMaterial(
         }
         absl::Time start = absl::Now();
         return compiler
-            ->CompileMaterial(spec.source()->string_view(), platform,
-                              target_api, precompile_options)
+            ->CompileMaterial(spec.source()->string_view(), config,
+                              precompile_options)
             .Then([this, start](absl::StatusOr<filament::Material*> material)
                       -> absl::StatusOr<OwnedFilamentMaterialPtr> {
               if (!material.ok()) {

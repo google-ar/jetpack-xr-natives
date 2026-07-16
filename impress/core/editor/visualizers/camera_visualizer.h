@@ -17,7 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_VISUALIZERS_CAMERA_VISUALIZER_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_VISUALIZERS_CAMERA_VISUALIZER_H_
 
+#include "core/async/future.h"
 #include "core/editor/visualizers/visualizer.h"
+#include "core/materials/material.h"
+#include "core/ncsb/node_handle.h"
+#include "core/view/utils/frame_time.h"
 
 namespace imp::editor {
 
@@ -26,7 +30,20 @@ namespace imp::editor {
 class CameraVisualizer : public Visualizer {
  public:
   void Setup(NodeHandle camera) override;
+  void Cleanup();
   void Update(const FrameTime& frame_time) override;
+
+ private:
+  // Loads the camera visualizer ISF file.
+  imp::Future<NodeHandle> LoadCameraIsf();
+
+  // Loads the materials for the camera visualizer.
+  imp::Future<NodeHandle> LoadMaterials(NodeHandle model);
+
+  // Materials that belong to this camera visualizer.
+  OwnedMaterialPtr opaque_material_;
+  OwnedMaterialPtr overlay_material_;
+  NodeHandle visualizer_model_;
 };
 
 }  // namespace imp::editor

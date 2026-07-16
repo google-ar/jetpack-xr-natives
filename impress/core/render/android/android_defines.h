@@ -19,6 +19,8 @@
 
 #include <cstdint>
 
+#include "core/math/vec.h"
+
 namespace imp {
 
 // Enumerates the surface view types supported by external texture surface.
@@ -32,18 +34,15 @@ enum class SurfaceViewType : uint32_t {
   kAuxiliaryViewDepth = 3,
 };
 
-// Maximum view dimensions to guide adaptive codec (e.g., HEVC) decoding on
-// Android. This aids decoders in adjusting to view size changes, but doesn't
-// restrict actual buffer allocation or image sizes produced by the ImageReader.
-inline constexpr int kMaxViewWidth = 4096;
-inline constexpr int kMaxViewHeight = 4096;
+// Default width and height for the ImageReader.
+inline constexpr int2 kImageReaderDefaultSize = {1, 1};
 
 // Maximum images held in the ImageReader buffer queue. ImageReader's max queue
 // size is 62 (64 - 2 reserved).
-inline constexpr int kImageReaderBufferSize = 16;
+inline constexpr int kImageReaderBufferSize = 4;
 
 // Maximum images explicitly kept alive to be used in the renderer thread.
-inline constexpr int kMaxImagesKeptAlive = 4;
+inline constexpr int kMaxImagesKeptAlive = 2;
 
 }  // namespace imp
 #endif  // THIRD_PARTY_IMPRESS_CORE_RENDER_ANDROID_ANDROID_DEFINES_H_

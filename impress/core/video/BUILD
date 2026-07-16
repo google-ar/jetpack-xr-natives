@@ -401,7 +401,11 @@ cc_library(
         "//core/math",
         "//core/window:filament_host",
         "@com_google_absl//absl/status",
-    ],
+        "@com_google_absl//absl/strings:string_view",
+    ] + if_ios(
+        [":video_writer_ios"],
+        otherwise = [":video_writer_noop"],
+    ),
     alwayslink = 1,
 )
 
@@ -451,6 +455,7 @@ cc_library(
         "//core/math",
         "//core/window:filament_host",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
     ],
     alwayslink = 1,
 )
@@ -458,10 +463,13 @@ cc_library(
 objc_library(
     name = "video_writer_ios",
     srcs = [
+        "video_file_writer_ios.mm",
         "video_writer_ios.mm",
+        "web_server_video_stream_writer_ios.mm",
     ],
     hdrs = [
         "video_writer.h",
+        "video_writer_frame.h",
     ],
     copts = imp_google3_copts(),
     features = ["-layering_check"],
@@ -469,14 +477,18 @@ objc_library(
         "//core/async:future",
         "//core/common",
         "//core/math",
-        "//core/media",
+        "//core/ui_stream:web_server_ios",
         "//core/window:filament_host",
         "//third_party/apple_frameworks:AVFoundation",
-        "//third_party/apple_frameworks:Accelerate",
         "//third_party/apple_frameworks:CoreMedia",
-        "//third_party/apple_frameworks:Photos",
+        "//third_party/apple_frameworks:CoreVideo",
+        "//third_party/apple_frameworks:VideoToolbox",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:optional",
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:backend_hdrs",

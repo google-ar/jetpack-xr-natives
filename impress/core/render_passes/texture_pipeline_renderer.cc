@@ -30,12 +30,17 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
+#include "filament/filament/include/filament/Camera.h"
+#if defined(__ANDROID__)
+#include "filament/filament/include/filament/Fence.h"
+#endif  // defined(__ANDROID__)
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "filament/filament/include/filament/Renderer.h"
 #include "filament/filament/include/filament/Scene.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/Viewport.h"
 #include "core/async/future.h"
+#include "core/camera/camera_component.h"
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
@@ -47,6 +52,7 @@
 #include "core/render/texture_options.h"
 #include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
+#include "core/scene_handles/scene_handles.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -368,6 +374,26 @@ absl::Status TexturePipelineRenderer::ResizePassTexture(size_t pass_index,
   return absl::OkStatus();
 }
 
+absl::Status TexturePipelineRenderer::SetPassCamera(
+    size_t pass_index, ComponentHandle<CameraComponent> camera) {
+  if (pass_index >= runtime_passes_.size()) {
+    return absl::InvalidArgumentError("Pass index out of bounds");
+  }
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    IMP_LOG(imp::FATAL) << "SetPassCamera is not supported in Split Engine.";
+  }
+
+  state_.passes[pass_index].camera =
+      camera ? ComponentSceneHandle<CameraComponent>(camera)
+             : ComponentSceneHandle<CameraComponent>();
+  filament::Camera* filament_camera =
+      camera ? camera->GetCamera()
+             : GetView().GetCameraManager().GetCamera()->GetCamera();
+  runtime_passes_[pass_index].view->setCamera(filament_camera);
+  return absl::OkStatus();
+}
+
 filament::View* TexturePipelineRenderer::GetFilamentView(
     size_t pass_index) const {
   if (pass_index >= runtime_passes_.size()) {
@@ -453,9 +479,17 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
       color_texture = GetView().GetTextureFactory().CreateTexture(settings);
     } else {
       color_texture = GetView().GetTextureFactory().CreateTexture(
-          texture_size.x, texture_size.y, color_format,
-          filament::Texture::Usage::COLOR_ATTACHMENT |
-              filament::Texture::Usage::SAMPLEABLE);
+          imp::TextureFactory::TextureCreationSettings{
+              .width = texture_size.x,
+              .height = texture_size.y,
+              .format = color_format,
+              .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                       filament::Texture::Usage::SAMPLEABLE,
+          });
+    }
+
+    if (!color_texture) {
+      return absl::InternalError("Failed to create color texture.");
     }
 
     if (color_texture_proto.name.empty()) {
@@ -516,13 +550,22 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
       depth_texture = GetView().GetTextureFactory().CreateTexture(settings);
     } else {
       depth_texture = GetView().GetTextureFactory().CreateTexture(
-          texture_size.x, texture_size.y, depth_format,
-          filament::Texture::Usage::DEPTH_ATTACHMENT |
-              filament::Texture::Usage::SAMPLEABLE,
-          TextureSamplerOptions{
-              .mag_filter = TextureSamplerOptions::MagFilter::NEAREST,
-              .min_filter = TextureSamplerOptions::MinFilter::NEAREST,
+          imp::TextureFactory::TextureCreationSettings{
+              .width = texture_size.x,
+              .height = texture_size.y,
+              .format = depth_format,
+              .usage = filament::Texture::Usage::DEPTH_ATTACHMENT |
+                       filament::Texture::Usage::SAMPLEABLE,
+              .sampler_options =
+                  TextureSamplerOptions{
+                      .mag_filter = TextureSamplerOptions::MagFilter::NEAREST,
+                      .min_filter = TextureSamplerOptions::MinFilter::NEAREST,
+                  },
           });
+    }
+
+    if (!depth_texture) {
+      return absl::InternalError("Failed to create depth texture.");
     }
 
     if (texture_proto.name.empty()) {
@@ -752,15 +795,84 @@ void TexturePipelineRenderer::System::BeforeFirstComponentAdded() {
   // correct point in the lifecycle of a frame.
   GetView().GetDispatcher().Connect(
       [this](const ViewPreRenderEvent& pre_render_event) {
+#if defined(__ANDROID__)
+        // TODO: (broken link) - first frame check using an app config flag.
+        if (GetView()
+                .GetConfig()
+                .experimental_feature_flags
+                ->enable_texture_pipeline_renderer_first_frame_fence.Value()) {
+          if (!is_first_frame_rendered_) {
+            // Defer TexturePipelineRenderer offscreen rendering until the first
+            // main rendering has successfully spawned its GL context. Executing
+            // heavy off-screen GL operations on a surfaceless EGL context
+            // before the main window completes its first eglSwapBuffers() can
+            // crash the graphics driver into an unrecoverable state (resulting
+            // in a black screen, (broken link)). We wait for a fence created
+            // after the first main frame is issued.
+            if (first_frame_fence_) {
+              filament::Fence::FenceStatus status =
+                  first_frame_fence_->wait(filament::Fence::Mode::FLUSH, 0);
+              if (status == filament::Fence::FenceStatus::CONDITION_SATISFIED) {
+                is_first_frame_rendered_ = true;
+                BaseView::GetSharedEngine()->destroy(first_frame_fence_);
+                first_frame_fence_ = nullptr;
+                IMP_LOG(imp::INFO)
+                    << "[TPR] first frame rendered, now okay to perform TPR";
+              } else {
+                IMP_LOG(imp::INFO) << "[TPR] fence not ready yet, status: "
+                          << (int)status;
+              }
+            }
+            if (!is_first_frame_rendered_) {
+              IMP_LOG(imp::INFO) << "[TPR] skipping render";
+              return;
+            }
+          }
+        }
+#endif  // defined(__ANDROID__)
         RunTexturePipelines(pre_render_event.GetRenderer());
       },
       this);
+
+#if defined(__ANDROID__)
+  // TODO: (broken link) - first frame check using an app config flag.
+  if (GetView()
+          .GetConfig()
+          .experimental_feature_flags
+          ->enable_texture_pipeline_renderer_first_frame_fence.Value()) {
+    // Create a fence after the first frame is rendered to ensure that offscreen
+    // rendering in `RunTexturePipelines` only starts after the main view's
+    // initial rendering setup is complete.
+    GetView().GetDispatcher().Connect(
+        [this](const ViewPostRenderEvent& post_render_event) {
+          if (!is_first_frame_rendered_ && !first_frame_fence_) {
+            first_frame_fence_ = BaseView::GetSharedEngine()->createFence();
+            IMP_LOG(imp::INFO) << "[TPR] created first frame fence";
+            GetView().GetDispatcher().Disconnect<ViewPostRenderEvent>(this);
+          }
+        },
+        this);
+  }
+#endif  // defined(__ANDROID__)
 }
 
 void TexturePipelineRenderer::System::AfterLastComponentRemoved() {
   GetView().GetDispatcher().DisconnectAll(this);
   BaseView::GetSharedEngine()->destroy(empty_scene_);
   empty_scene_ = nullptr;
+#if defined(__ANDROID__)
+  // TODO: (broken link) - first frame check using an app config flag.
+  if (GetView()
+          .GetConfig()
+          .experimental_feature_flags
+          ->enable_texture_pipeline_renderer_first_frame_fence.Value()) {
+    if (first_frame_fence_) {
+      BaseView::GetSharedEngine()->destroy(first_frame_fence_);
+      first_frame_fence_ = nullptr;
+      IMP_LOG(imp::INFO) << "[TPR] destroyed first frame fence";
+    }
+  }
+#endif  // defined(__ANDROID__)
 }
 
 void TexturePipelineRenderer::System::RunTexturePipelines(

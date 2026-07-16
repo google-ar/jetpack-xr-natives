@@ -31,7 +31,6 @@
 #include "core/math/vec.h"
 #include "core/model/model_data.h"
 #include "core/model/skeleton_data.h"
-#include "core/ncsb/base_node.h"
 #include "core/ncsb/node.h"
 
 namespace imp {

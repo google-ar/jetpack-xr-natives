@@ -42,7 +42,9 @@
 #include "core/assets/material/material_asset.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/math/math.h"
+#include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
 #include "core/text/glyph_atlas_slice.h"
@@ -50,6 +52,7 @@
 #include "core/text/sliced_glyph_atlas_helpers.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
+#include "core/view/framework/assets/material_factory.h"
 
 namespace imp {
 namespace sliced_glyph_atlas {
@@ -227,8 +230,8 @@ SlicedGlyphTextureManager::SlicedGlyphTextureManager(
     slice_view->setPostProcessingEnabled(false);
     slice_view->setFrustumCullingEnabled(false);
 
-    blit_material_instances_.push_back(
-        blit_material_->GetFilamentMaterial()->createInstance());
+    blit_materials_.push_back(
+        view.GetMaterialFactory().CreateMaterial(blit_material_));
 
     blit_entities_.push_back(entity_manager.create());
     blit_scenes_.back()->addEntity(blit_entities_.back());
@@ -240,7 +243,7 @@ SlicedGlyphTextureManager::SlicedGlyphTextureManager(
         .priority(1)
         .geometry(0, filament::RenderableManager::PrimitiveType::TRIANGLES,
                   blit_vertex_buffer_, blit_index_buffer_)
-        .material(0, blit_material_instances_.back())
+        .material(0, blit_materials_.back()->GetFilamentMaterialInstance())
         .build(engine_, blit_entities_.back());
   }
 }
@@ -255,10 +258,7 @@ SlicedGlyphTextureManager::~SlicedGlyphTextureManager() {
   engine_.destroyCameraComponent(camera_entity);
   entity_manager.destroy(camera_entity);
 
-  for (filament::MaterialInstance* material_instance :
-       blit_material_instances_) {
-    engine_.destroy(material_instance);
-  }
+  blit_materials_.clear();
   engine_.destroy(blit_index_buffer_);
   engine_.destroy(blit_vertex_buffer_);
   engine_.destroy(linear_color_grading_);
@@ -277,12 +277,12 @@ void SlicedGlyphTextureManager::RenderSlice(filament::Renderer& renderer,
   renderer.render(blit_views_[slice]);
 }
 
-void SlicedGlyphTextureManager::PrepareBlit(SliceId slice, Texture* texture) {
-  using TextureSampler = filament::TextureSampler;
+void SlicedGlyphTextureManager::PrepareBlit(SliceId slice,
+                                            BorrowedTexturePtr texture) {
   if (texture) {
-    blit_material_instances_[slice]->setParameter(
-        "Slice", texture->GetTexture(),
-        TextureSampler(TextureSampler::MagFilter::NEAREST));
+    blit_materials_[slice]->SetParameter(
+        "Slice", texture,
+        filament::TextureSampler(filament::TextureSampler::MagFilter::NEAREST));
   }
 }
 

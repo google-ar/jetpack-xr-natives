@@ -24,6 +24,7 @@
 #include <optional>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -89,9 +90,8 @@ enum class BuiltInMaterialParameters : uint8_t {
   BuiltInMaterialTextureExternalParameters = 8,
   BuiltInMaterialbd7fe08cParameters = 9,
   BuiltInMaterialGsplatParameters = 10,
-  BuiltInMaterialGsplatBackgroundParameters = 11,
   MIN = NONE,
-  MAX = BuiltInMaterialGsplatBackgroundParameters
+  MAX = BuiltInMaterialGsplatParameters
 };
 // LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_material.fbs)
 
@@ -119,6 +119,8 @@ class SplitEngineSerializer {
   virtual int32_t GetApiLevel() const = 0;
 
   // Returns the bridge that this serializer uses to serialize data.
+  ABSL_DEPRECATED(
+      "This method is deprecated and will be removed in the future.")
   virtual SplitEngineAndroidBridge& GetBridge() = 0;
 
   // Returns true if the serializer is ready for the next frame, i.e. if the
@@ -184,8 +186,10 @@ class SplitEngineSerializer {
 
   // Creates a node for the given entity on the remote renderer.
   virtual void CreateNode(utils::Entity entity) = 0;
-  // Destroys a previously-created node on the remote renderer.
-  virtual void DestroyNode(utils::Entity entity) = 0;
+  // Destroys a previously-created node (`entity`) on the remote renderer.
+  // Implementation shall use `dependencies` to batch commands properly.
+  virtual void DestroyNode(utils::Entity entity,
+                           const std::vector<utils::Entity>& dependencies) = 0;
   // Sets a node to enabled/disabled on the remote renderer.
   virtual void SetEnabled(utils::Entity entity, bool enabled) = 0;
   // Sets the name of a node on the remote renderer.

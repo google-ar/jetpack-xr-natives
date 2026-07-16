@@ -267,9 +267,6 @@ def imp_google3_copts():
         "-Wno-c++20-designator",
         # We don't use exceptions.
         "-fno-exceptions",
-
-        # Disable mac-specific warnings in our FormatString wrapper.
-        "-Wno-format-security",
     ] + if_optimized([], otherwise = [
         "-g",
         # Optimize for small code size in non-opt builds.

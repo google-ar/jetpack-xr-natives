@@ -19,11 +19,7 @@
 
 vec4 getGlyphSample(highp vec2 uv) {
   // This file is included by both FL0 and 1 materials.
-#if FILAMENT_EFFECTIVE_VERSION == 100
-  return texture2D(materialParams_GlyphAtlas, abs(uv));
-#else
   return texture(materialParams_GlyphAtlas, abs(uv));
-#endif
 }
 
 // This function returns the glyph color with alpha pre-multiplied.

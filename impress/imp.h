@@ -32,6 +32,8 @@
 
 // IWYU pragma: begin_exports
 #include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
+#include "core/assets/gltf/gltf_asset_loader.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
@@ -91,8 +93,6 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/animation/gltf_animator.h"
 #include "core/view/framework/assets/asset_manager.h"
-#include "core/view/framework/assets/gltf_asset.h"
-#include "core/view/framework/assets/gltf_asset_loader.h"
 #include "core/view/framework/assets/gltf_collider.h"
 #include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"

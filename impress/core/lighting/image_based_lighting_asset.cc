@@ -71,7 +71,7 @@ constexpr std::array<absl::string_view, 6> kCubemapFaceSuffixes = {
 constexpr absl::string_view kCubemapFileExtension = ".rgb32f";
 
 struct Cubemap {
-  TexturePtr texture;
+  OwnedTexturePtr texture;
   std::vector<CubemapLevel> levels;
 };
 
@@ -93,16 +93,15 @@ bool HasMipmapLevel(
 }
 
 void MovePixelsToTexture(
-    filament::Engine& engine, Texture* texture, uint8_t level,
+    filament::Engine& engine, filament::Texture* texture, uint8_t level,
     CubemapLevel& cubemap_level,
     std::unique_ptr<image::ImageContents> stitched_face_image) {
   auto mipmap_descriptors =
       stitched_face_image->CreatePixelBufferDescriptorLevels(
           nullptr, /* is_r11_g11_b10 = */ true);
   for (int mipmap = 0; mipmap < mipmap_descriptors.size(); ++mipmap) {
-    texture->GetTexture()->setImage(engine, level,
-                                    std::move(mipmap_descriptors[mipmap]),
-                                    cubemap_level.face_offsets);
+    texture->setImage(engine, level, std::move(mipmap_descriptors[mipmap]),
+                      cubemap_level.face_offsets);
   }
 }
 
@@ -126,7 +125,7 @@ OwnedTexturePtr CreateIblCubemapTexture(CubemapImageContents& cubemaps,
     CubemapLevel& cubemap_level = cubemaps.cubemap->levels[level];
     std::unique_ptr<image::ImageContents>& stitched_face_image =
         cubemaps.stitched_face_images[level];
-    MovePixelsToTexture(engine, cubemaps.cubemap->texture.get(), level,
+    MovePixelsToTexture(engine, cubemaps.cubemap->texture->GetTexture(), level,
                         cubemap_level, std::move(stitched_face_image));
   }
 
@@ -150,7 +149,7 @@ OwnedTexturePtr CreateSkyboxCubemapTexture(CubemapLevelImageContents& cubemap,
     return {};
   }
 
-  MovePixelsToTexture(engine, skybox_cubemap->texture.get(), 0,
+  MovePixelsToTexture(engine, skybox_cubemap->texture->GetTexture(), 0,
                       skybox_cubemap->levels.front(),
                       std::move(cubemap.stitched_face_image));
 

@@ -13,7 +13,12 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "if_android_external_texture_surface_uses_image_reader", "imp_defines", "imp_google3_copts")
+load(
+    "//build_tools:imp.bzl",
+    "if_android_external_texture_surface_uses_image_reader",
+    "imp_defines",
+    "imp_google3_copts",
+)
 
 package(
     default_visibility = ["//visibility:public"],
@@ -27,6 +32,7 @@ licenses(["notice"])
 cc_library(
     name = "definitions",
     hdrs = ["android_defines.h"],
+    deps = ["//core/math"],
     alwayslink = 1,
 )
 
@@ -123,16 +129,14 @@ cc_library(
 
 cc_library(
     name = "image_reader_android_external_texture_surface",
-    srcs = [] + if_android_external_texture_surface_uses_image_reader(
-        [
-            ":image_reader_android_external_texture_surface.cc",
-        ],
-    ),
-    hdrs = [] + if_android_external_texture_surface_uses_image_reader(
-        [
-            ":image_reader_android_external_texture_surface.h",
-        ],
-    ),
+    srcs = select({
+        "//core:android": ["image_reader_android_external_texture_surface.cc"],
+        "//conditions:default": [],
+    }),
+    hdrs = select({
+        "//core:android": ["image_reader_android_external_texture_surface.h"],
+        "//conditions:default": [],
+    }),
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [

@@ -67,6 +67,10 @@ class SplitEngineBuiltinMaterial : public SplitEngineMaterial {
       flatbuffers::FlatBufferBuilder& fbb,
       BuiltInTextureParameterCreator& texture_parameter_creator) const = 0;
 
+  // Indicates whether this material respects local mode. If it's false, it
+  // respects local mode, otherwise it always uses the remote material.
+  virtual bool IsAlwaysRemote() const { return false; }
+
   // Marks the parameters as dirty, which will cause them to be serialized
   // again at the end of the frame.
   void MarkParametersDirty(bool dirty = true) const;

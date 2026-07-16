@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <thread>  // NOLINT: Need to use threads available in bazel.
 #include <utility>
 
@@ -305,7 +306,6 @@ OptionalError FilamentHost::InternalSetup() {
   if (owns_filament_) {
     render_view_.Get()->setScene(scene_);
   }
-
   MP_RETURN_IF_ERROR(state_->Setup(this));
 
   life_cycle_state_ = LifeCycleState::kRunning;
@@ -458,6 +458,18 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
   MP_RETURN_IF_ERROR(PreBeginRender());
 
   {
+    // called before the filament::Engine::beginFrame if we are writing to a
+    // an offscreen image that will be written to a video file or remote editor
+    // Check if dev runtime and remote display mode is enabled before calling
+    // PreRenderToWriter. Some of the existing tests run in dev mode so the
+    // scuba tests do not match since they are being rendered to a remote
+    // screen.
+#if IMP_RUNTIME(DEV) && IMP_PLATFORM(IOS)
+    if (dev_mode_extension_) {
+      dev_mode_extension_->RerouteUiRendering();
+    }
+#endif  // IMP_DEV_RUNTIME
+
     IMP_TRACE_NAME("FilamentHost::FilamentRenderPass");
     ScopedDurationMeasurement filament_frame_duration(GetMonitor(),
                                                       kFilamentFrameTiming);
@@ -505,7 +517,7 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
 
       MP_RETURN_IF_ERROR(state_->MultiPassRender());
 
-      if (dev_mode_extension_) {
+      if (dev_mode_extension_ && !dev_mode_extension_->RemoteUiEnabled(this)) {
         dev_mode_extension_->Render();
       }
 
@@ -878,6 +890,21 @@ FilamentHost::DevModeExtension* FilamentHost::TryGetExtension() {
 void FilamentHost::SetEditorCameraOverride(PassKey<editor::EditorImpl> key,
                                            filament::Camera* camera) {
   editor_camera_override_ = camera;
+}
+
+void FilamentHost::SetEditorRenderTargetOverride(
+    PassKey<editor::EditorImpl> key, filament::RenderTarget* render_target) {
+  if (editor_render_target_override_ == render_target) return;
+  editor_render_target_override_ = render_target;
+  EnsureNextRenderCompletes();
+}
+
+void FilamentHost::SetEditorViewportOverride(
+    PassKey<editor::EditorImpl> key,
+    std::optional<filament::Viewport> viewport) {
+  if (editor_viewport_override_ == viewport) return;
+  editor_viewport_override_ = viewport;
+  EnsureNextRenderCompletes();
 }
 
 void FilamentHost::SetClipboardHandler(

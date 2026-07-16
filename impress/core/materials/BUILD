@@ -38,6 +38,7 @@ cc_library(
     deps = [
         "//core/assets",
         "//core/assets/material:material_asset",
+        "//core/async:executor",
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:owned_or_unowned_memory",
         "//core/common:owned_ptr",

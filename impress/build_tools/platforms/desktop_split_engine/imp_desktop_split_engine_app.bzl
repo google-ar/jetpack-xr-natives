@@ -30,6 +30,7 @@ def imp_desktop_split_engine_app(
         name,
         impress_library,
         extra_linkopts = [],
+        tags = [],
         **kwargs):
     """Helper to generate targets specific to the desktop platform with split engine variant.
 
@@ -38,6 +39,7 @@ def imp_desktop_split_engine_app(
             <name>_desktop_split_engine.
       impress_library: The cc_library containing the native impress code.
       extra_linkopts: (Optional) additional linkopts to include in the generated cc_binary target.
+      tags: (Optional) tags to use on the cc_binary rule.
       **kwargs: Additional keyword args that will be passed through to the cc_binary rule.
     """
     for target_type, testonly in (("desktop_split_engine", False), ("desktop_split_engine", True)):
@@ -64,6 +66,8 @@ def imp_desktop_split_engine_app(
                    ] +
                    if_dev_runtime(["@com_google_impress//core/performance:editor_malloc"]),
             testonly = testonly,
+            # Ensure the desktop_split_engine targets get built with the correct config.
+            tags = ["desktop_split_engine"] + tags,
             **kwargs
         )
     platform_name = name + "_desktop_split_engine"

@@ -20,16 +20,17 @@
 #include <jni.h>
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/types/span.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
@@ -67,8 +68,8 @@ class SplitEngineAndroidBridge {
   // Sends a flatbuffer request to the backend with a handler for a flatbuffer
   // response.
   virtual bool SendRequest(
-      const std::vector<uint8_t>& data,
-      std::function<void(const std::vector<uint8_t>&)> callback) = 0;
+      absl::Span<const uint8_t> data,
+      imp::Invocable<void(absl::Span<const uint8_t>)> callback) = 0;
 };
 
 // Helper method to send a request to the Split Engine backend and return a
@@ -81,54 +82,59 @@ Future<ResponseT> SendRequest(SplitEngineAndroidBridge& bridge,
       android_xr::schemas::CreateRequest(
           fbb, android_xr::schemas::RequestTypesTraits<RequestT>::enum_value,
           request_offset.Union());
-  std::vector<uint8_t> data = SerializeTable(fbb, request);
+  fbb.Finish(request);
   Future<ResponseT> result;
-  if (!bridge.SendRequest(data, [result](
-                                    const std::vector<uint8_t>& response_data) {
-        flatbuffers::Verifier verifier(response_data.data(),
-                                       response_data.size());
-        if (!verifier.VerifyBuffer<android_xr::schemas::Response>()) {
-          result.Return(absl::InternalError(
-              "Invalid flatbuffer schema passed to SendRequest()"));
-        }
-        auto response_data_copy =
-            std::make_unique<std::vector<uint8_t>>(response_data);
-        std::vector<uint8_t>* response_data_copy_ptr = response_data_copy.get();
-        const android_xr::schemas::Response* response =
-            flatbuffers::GetRoot<android_xr::schemas::Response>(
-                response_data_copy_ptr->data());
-        if (!response) {
-          result.Return(
-              absl::InternalError("Failed to parse response from data"));
-          return;
-        }
-        // If this is an ErrorResponse, convert and return the error status.
-        if (response->response_type() ==
-            android_xr::schemas::ResponseTypes::ErrorResponse) {
-          const android_xr::schemas::ErrorResponse* error_response =
-              response->response_as<android_xr::schemas::ErrorResponse>();
-          absl::Status status =
-              ErrorCodeToStatus(error_response->error_code(),
-                                error_response->error_message()->str());
-          result.Return(status);
-          return;
-        }
-        // If the expected response is empty, just return an absl::OkStatus.
-        if constexpr (std::is_same_v<ResponseT, absl::Status>) {
-          result.Return(absl::OkStatus());
-        } else {
-          // A concrete Response type is expected. Verify the type matches.
-          if (response->response_type() !=
-              android_xr::schemas::ResponseTypesTraits<ResponseT>::enum_value) {
-            result.Return(absl::InvalidArgumentError(
-                "Response type does not match expected type"));
-            return;
-          }
-          // Return the concrete response type and take ownership of the data.
-          result.DependsOn(std::move(response_data_copy));
-          result.Return(response->response_as<ResponseT>());
-        }
-      })) {
+  if (!bridge.SendRequest(
+          absl::MakeConstSpan(fbb.GetBufferPointer(), fbb.GetSize()),
+          [result](absl::Span<const uint8_t> response_data) {
+            flatbuffers::Verifier verifier(response_data.data(),
+                                           response_data.size());
+            if (!verifier.VerifyBuffer<android_xr::schemas::Response>()) {
+              result.Return(absl::InternalError(
+                  "Invalid flatbuffer schema passed to SendRequest()"));
+            }
+            auto response_data_copy = std::make_unique<std::vector<uint8_t>>(
+                response_data.data(),
+                response_data.data() + response_data.size());
+            std::vector<uint8_t>* response_data_copy_ptr =
+                response_data_copy.get();
+            const android_xr::schemas::Response* response =
+                flatbuffers::GetRoot<android_xr::schemas::Response>(
+                    response_data_copy_ptr->data());
+            if (!response) {
+              result.Return(
+                  absl::InternalError("Failed to parse response from data"));
+              return;
+            }
+            // If this is an ErrorResponse, convert and return the error status.
+            if (response->response_type() ==
+                android_xr::schemas::ResponseTypes::ErrorResponse) {
+              const android_xr::schemas::ErrorResponse* error_response =
+                  response->response_as<android_xr::schemas::ErrorResponse>();
+              absl::Status status =
+                  ErrorCodeToStatus(error_response->error_code(),
+                                    error_response->error_message()->str());
+              result.Return(status);
+              return;
+            }
+            // If the expected response is empty, just return an absl::OkStatus.
+            if constexpr (std::is_same_v<ResponseT, absl::Status>) {
+              result.Return(absl::OkStatus());
+            } else {
+              // A concrete Response type is expected. Verify the type matches.
+              if (response->response_type() !=
+                  android_xr::schemas::ResponseTypesTraits<
+                      ResponseT>::enum_value) {
+                result.Return(absl::InvalidArgumentError(
+                    "Response type does not match expected type"));
+                return;
+              }
+              // Return the concrete response type and take ownership of the
+              // data.
+              result.DependsOn(std::move(response_data_copy));
+              result.Return(response->response_as<ResponseT>());
+            }
+          })) {
     return Future<ResponseT>(
         absl::InvalidArgumentError("Bridge request failed"));
   }

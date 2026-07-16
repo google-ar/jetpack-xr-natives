@@ -1016,7 +1016,7 @@ class ImpCodeGenerator {
               field->options().GetExtension(imp::editor_control);
 
           std::string encoded;
-          absl::Base64Escape(editor_control_type.SerializeAsString(), &encoded);
+          encoded = absl::Base64Escape(editor_control_type.SerializeAsString());
           printer->Print("\"$editor_control_type$\"$next_element_token$\n",
                          "editor_control_type", encoded, "next_element_token",
                          i < (desc->field_count() - 1) ? "," : "");

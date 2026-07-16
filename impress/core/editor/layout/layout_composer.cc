@@ -75,6 +75,9 @@ constexpr absl::string_view kShowLabel = "Show";
 constexpr absl::string_view kPinToTopLabel = "Top";
 constexpr absl::string_view kPinToBottomLabel = "Bottom";
 
+// Padding around the viewport widget image.
+constexpr ImVec2 kViewportPadding = ImVec2(2.0f, 2.0f);
+
 bool IsLabelVisible(absl::string_view label) {
   return !absl::StartsWith(label, "##");
 }
@@ -132,6 +135,9 @@ void LayoutComposer::DrawOnDockingLayout(const WidgetLayoutInfo& layout_info,
     case PanelId::kSceneWindow:
       DrawInSceneSectionAsHeader(widget);
       break;
+    case PanelId::kViewport:
+      viewport_draw_functions_.push_back([widget]() { widget->DrawImGui(); });
+      break;
     case PanelId::kLeftPanel:
       DrawInLeftDock(
           widget->GetName(), [widget]() { widget->DrawImGui(); },
@@ -162,6 +168,7 @@ void LayoutComposer::DrawOnFixedLayout(const WidgetLayoutInfo& layout_info,
       DrawInDetailsSectionAsHeader(widget);
       break;
     case PanelId::kSceneWindow:
+    case PanelId::kViewport:
     case PanelId::kLeftPanel:
       DrawInSceneSectionAsHeader(widget);
       break;
@@ -216,66 +223,66 @@ void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
                                          ImGuiTabItemFlags flags,
                                          bool draw_before_previous_tabs,
                                          bool force_focus) {
-  Invocable<void()> draw_function_final =
-      [this, flags, label = std::string(tab_label),
-       draw_function = std::move(draw_function), force_focus]() {
-        // The Dear ImGui TabItem tap-to-select logic depends on hovering
-        // and is incompatible with touchscreens, so this code uses
-        // ImGuiTabItemFlags_SetSelected to manually handle tab selection.
-        // (See ImGuiTreeNodeFlags_AllowItemOverlap).
-        ImGuiID tab_id = ImGui::GetCurrentWindow()->GetID(label.c_str());
-        ImGuiTabItemFlags tab_flags = flags;
-        if (force_focus) {
-          selected_tab_id_ = tab_id;
-        }
-        // The first leading tab will be selected by default.
-        if (selected_tab_id_ == 0 &&
-            (flags & ImGuiTabItemFlags_Leading) == ImGuiTabItemFlags_Leading) {
-          selected_tab_id_ = tab_id;
-        }
-        if (selected_tab_id_ == tab_id) {
-          tab_flags |= ImGuiTabItemFlags_SetSelected;
-        }
-        ImGui::SetNextItemAllowOverlap();
-        if (ImGui::BeginTabItem(label.data(), nullptr, tab_flags)) {
-          if (tabbed_window_state_.expanded_state ==
-              LayoutConfig::WindowExpandedState::EXPANDED) {
-            ImVec2 safe_display_size = GetSafeDisplaySize();
-            float max_window_height =
-                safe_display_size.y *
-                layout_config_.initial_tabbed_window_state
-                    .max_window_height_multiplier.value_or(1.0f);
-            ImGuiStyle& style = ImGui::GetStyle();
-            ImGui::SetNextWindowSizeConstraints(
-                ImVec2(0, 0),
-                ImVec2(safe_display_size.x - style.WindowPadding.x * 2,
-                       max_window_height - ImGui::GetCursorPosY() -
-                           style.WindowPadding.y * 2));
+  Invocable<void()> draw_function_final = [this, flags,
+                                           label = std::string(tab_label),
+                                           draw_function =
+                                               std::move(draw_function),
+                                           force_focus]() {
+    // The Dear ImGui TabItem tap-to-select logic depends on hovering
+    // and is incompatible with touchscreens, so this code uses
+    // ImGuiTabItemFlags_SetSelected to manually handle tab selection.
+    // (See ImGuiTreeNodeFlags_AllowItemOverlap).
+    ImGuiID tab_id = ImGui::GetCurrentWindow()->GetID(label.c_str());
+    ImGuiTabItemFlags tab_flags = flags;
+    if (force_focus) {
+      selected_tab_id_ = tab_id;
+    }
+    // The first leading tab will be selected by default.
+    if (selected_tab_id_ == 0 &&
+        (flags & ImGuiTabItemFlags_Leading) == ImGuiTabItemFlags_Leading) {
+      selected_tab_id_ = tab_id;
+    }
+    if (selected_tab_id_ == tab_id) {
+      tab_flags |= ImGuiTabItemFlags_SetSelected;
+    }
+    ImGui::SetNextItemAllowOverlap();
+    if (ImGui::BeginTabItem(label.data(), nullptr, tab_flags)) {
+      if (tabbed_window_state_.expanded_state ==
+          LayoutConfig::WindowExpandedState::EXPANDED) {
+        ImVec2 safe_display_size = GetSafeDisplaySize();
+        float max_window_height =
+            safe_display_size.y *
+            layout_config_.initial_tabbed_window_state
+                .max_window_height_multiplier.value_or(1.0f);
+        ImGuiStyle& style = ImGui::GetStyle();
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2(0, 0),
+            ImVec2(safe_display_size.x - style.WindowPadding.x * 2,
+                   max_window_height - ImGui::GetCursorPosY() -
+                       style.WindowPadding.y * 2));
 
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                ImVec2(0.0f, 0.0f));
-            if (ImGui::BeginChild(
-                    GenerateUniqueImGuiLabel("##tab_content_child", this)
-                        .c_str(),
-                    ImVec2(0, 0),
-                    ImGuiChildFlags_AutoResizeY |
-                        ImGuiChildFlags_AlwaysUseWindowPadding)) {
-              draw_function();
-            }
-            ImGui::EndChild();
-            ImGui::PopStyleVar();
-          }
-          ImGui::EndTabItem();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        if (ImGui::BeginChild(
+                GenerateUniqueImGuiLabel("##tab_content_child", this).c_str(),
+                ImVec2(0, 0),
+                ImGuiChildFlags_AutoResizeY |
+                    ImGuiChildFlags_AlwaysUseWindowPadding)) {
+          draw_function();
         }
-        // After the tab is rendered, check if it's been selected.
-        if (ImGui::IsMouseClicked(0) &&
-            ImGui::GetCurrentContext()->HoveredId == tab_id) {
-          selected_tab_id_ = tab_id;
-          // Expand the window if a tab is tapped.
-          tabbed_window_state_.expanded_state =
-              LayoutConfig::WindowExpandedState::EXPANDED;
-        }
-      };
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+      }
+      ImGui::EndTabItem();
+    }
+    // After the tab is rendered, check if it's been selected.
+    if (ImGui::IsMouseClicked(0) &&
+        ImGui::GetCurrentContext()->HoveredId == tab_id) {
+      selected_tab_id_ = tab_id;
+      // Expand the window if a tab is tapped.
+      tabbed_window_state_.expanded_state =
+          LayoutConfig::WindowExpandedState::EXPANDED;
+    }
+  };
   if (draw_before_previous_tabs) {
     tab_item_info_.insert(
         tab_item_info_.begin(),
@@ -345,10 +352,9 @@ imp::Invocable<void()> LayoutComposer::BuildHeaderDrawFunction(
     // to false if the close button is pressed.
     bool p_visible = true;
     ImGui::Separator();
-    if (ImGui::CollapsingHeader(
-            label.c_str(), on_close_button_pressed ? &p_visible : nullptr,
-            ImGuiTreeNodeFlags_OpenOnArrow |
-                ImGuiTreeNodeFlags_OpenOnDoubleClick | additional_flags)) {
+    if (ImGui::CollapsingHeader(label.c_str(),
+                                on_close_button_pressed ? &p_visible : nullptr,
+                                additional_flags)) {
       ImGui::Indent();
       draw_function();
       ImGui::Unindent();
@@ -473,6 +479,33 @@ void LayoutComposer::DrawSceneSectionContents() {
   for (auto& draw_function : scene_draw_functions_) {
     draw_function();
   }
+}
+
+void LayoutComposer::DrawDockableViewportWindow() {
+  if (viewport_draw_functions_.empty()) return;
+
+  ImGui::SetNextWindowBgAlpha(kWindowAlpha);
+  ImGui::SetNextWindowCollapsed(false, ImGuiCond_Appearing);
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoFocusOnAppearing |
+                           ImGuiWindowFlags_NoScrollbar |
+                           ImGuiWindowFlags_NoScrollWithMouse;
+
+  if (window_configuration_ &&
+      (*window_configuration_)->ShouldHideAllWindows()) {
+    return;
+  }
+
+  // Setting padding to 0 to use full window space for image.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, kViewportPadding);
+  std::string window_label = PanelIdToString(PanelId::kViewport);
+  if (ImGui::Begin(window_label.c_str(), nullptr, flags)) {
+    for (auto& draw_function : viewport_draw_functions_) {
+      draw_function();
+    }
+  }
+
+  ImGui::End();
+  ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
 void LayoutComposer::DrawDockableTabbedWindow() {
@@ -838,6 +871,7 @@ void LayoutComposer::DrawLayout() {
   // Flush the queued draw functions immediately after drawing.
   details_draw_functions_.clear();
   scene_draw_functions_.clear();
+  viewport_draw_functions_.clear();
   left_dock_draw_functions_.clear();
   tab_item_info_.clear();
   menu_draw_functions_.clear();

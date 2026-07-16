@@ -50,6 +50,14 @@ struct EditorInfo {
   // screen.
   enum class DisplayMode { kNativeScreen, kRemoteScreen };
 
+  // Indicates the platform and build configuration of the application. This is
+  // used to determine how the editor should be configured.
+  enum class PlatformMode {
+    kDefault,
+    // The application is an XR application using SplitEngine.
+    kXrSplitEngineApp,
+  };
+
   virtual ~EditorInfo() = default;
 
   virtual bool IsEnabled() const = 0;

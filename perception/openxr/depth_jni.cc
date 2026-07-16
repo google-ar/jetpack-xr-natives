@@ -21,9 +21,20 @@
 #include "openxr/openxr_manager.h"
 
 extern "C" {
-
+// TODO: (broken link) - Remove this function once all callers are migrated to
+// OpenXrDepth.nativeGetDepthImageWidthAndHeight.
 JNIEXPORT jobject JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrDepthMap_nativeGetDepthImageWidthAndHeight(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  return androidx::xr::openxr::CreateJavaIntSize2d(
+      env, xr_manager.GetDepthImageWidth(), xr_manager.GetDepthImageHeight());
+}
+
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrDepth_nativeGetDepthImageWidthAndHeight(
     JNIEnv* env, jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();

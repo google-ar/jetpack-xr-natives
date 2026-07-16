@@ -1,0 +1,57 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+    name : "Gizmo Visualizer Overlay",
+    constants : [
+        {
+            // Flag that indicates if P3 is supported on this platform.
+            // Do not modify or update by yourself.
+            name : enableColorConversion,
+            type : bool,
+            default : false
+        }
+    ],
+    parameters : [
+        {
+            type : float4,
+            name : baseColor,
+        },
+        {
+            type : float,
+            name : scaleFactor,
+        }
+    ],
+    shadingModel : unlit,
+    blending : transparent,
+    depthWrite : false
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        // Scale the mesh relative to its distance from the camera.
+        float3 origin = getWorldFromModelMatrix()[3].xyz;
+        float dist = length(origin - getWorldCameraPosition());
+        float3 worldPos = material.worldPosition.xyz;
+        material.worldPosition.xyz = origin + (worldPos - origin) * dist * materialParams.scaleFactor;
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor.rgb = materialParams.baseColor.rgb * materialParams.baseColor.a;
+        material.baseColor.a = materialParams.baseColor.a;
+    }
+}

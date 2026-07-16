@@ -75,6 +75,13 @@ namespace imp {
 class XrSessionHost : public ViewHost {
  public:
   enum class RunningState { kNotRunning, kRunning };
+  enum class XrInitState {
+    kNotInitialized,
+    kWaitingForSystem,
+    kSystemIdObtained,
+    kSessionCreated,
+    kFailed
+  };
   // TODO: ShownState is only used internally and will be removed.
   enum class [[deprecated("Marked for removal, see (broken link)")]] ShownState {
     kShown,
@@ -89,11 +96,12 @@ class XrSessionHost : public ViewHost {
 
   XrSessionHost(std::unique_ptr<imp::BaseView> view,
                 com::google::ar::imp::view::xr::XrSetupParams xr_setup_params);
-  ~XrSessionHost() override;
+  ~XrSessionHost() override = default;
 
   // Sets up the host, which will create the filament Engine with an XrPlatform
   // instance, and ultimately lead to imp::View::Setup being called.
   absl::Status Setup(JNIEnv* env, JavaVM* vm, jobject context);
+  OptionalError Cleanup() override;
 
   // Performs the bulk of the work for initializing OpenXr by creating the
   // XrInstance & XrSession, then creating the XrSwapChain, and resizing the
@@ -102,6 +110,10 @@ class XrSessionHost : public ViewHost {
 
   // Advances a frame by blocking on xrWaitFrame and running the frame loop.
   // Rendering ultimately happens on Filament's rendering thread.
+  //
+  // If the system is not yet initialized (init_state_ is kWaitingForSystem),
+  // this method acts as a polling loop to obtain the XrSystemId and will
+  // return absl::OkStatus() without advancing the frame.
   absl::Status AdvanceFrame();
 
   // Returns the Xr display size. This is the width of both the left & right
@@ -247,6 +259,10 @@ class XrSessionHost : public ViewHost {
   void SetEnvironmentBlendMode(
       XrEnvironmentBlendMode xr_environment_blend_mode);
 
+#if IMP_PLATFORM(ANDROID)
+  void SetDimmingLevel(float dimming_level);
+#endif
+
   // Returns the number of samples per pixel for the color and depth textures.
   int32_t GetMsaaSampleCount() const;
 
@@ -380,11 +396,21 @@ class XrSessionHost : public ViewHost {
   absl::StatusOr<XrInstance> CreateInstance(JNIEnv* env, JavaVM* vm,
                                             jobject context);
 
+  // Returns the XrSystemId for the current device form factor.
+  // Returns UnavailableError if the system is not yet ready.
   absl::StatusOr<XrSystemId> ObtainSystemId() const;
+
+  // Performs the actual session creation logic once system is ready and window
+  // is attached.
+  absl::Status InitializeSessionInternal();
 
   absl::Status CheckGraphicsRequirements() const;
 
   absl::StatusOr<XrSession> CreateSession() const;
+
+  absl::Status DestroySession();
+
+  absl::Status RestartSession();
 
   absl::StatusOr<XrSpace> ObtainXrSpace(XrReferenceSpaceType space_type) const;
 
@@ -435,6 +461,8 @@ class XrSessionHost : public ViewHost {
 
   void ResizeImpressView();
 
+  bool ShouldCreateSession() const;
+
   // Verifies that the given list of extensions are supported by OpenXR.
   absl::Status EnsureSupportedExtensions(
       const std::vector<const char*>& required_extensions) const;
@@ -447,6 +475,10 @@ class XrSessionHost : public ViewHost {
   // The session is considered to be running after a successful call to
   // xrBeginSession and before calling xrEndSession.
   RunningState state_ = RunningState::kNotRunning;
+
+  XrInitState init_state_ = XrInitState::kNotInitialized;
+
+  bool is_window_attached_ = false;
 
   // Tracks the current state of the XrSession.
   // This is different from the running state, which is not indicated by the
@@ -554,9 +586,15 @@ class XrSessionHost : public ViewHost {
 
   // Whether the global passthrough dimming extensions are enabled.
   bool is_global_passthrough_dimming_extensions_enabled_ = false;
+#if IMP_PLATFORM(ANDROID)
+  std::optional<float> dimming_level_;
+#endif
 
   // Whether the hand occlusion extensions are enabled.
   bool is_hand_occlusion_extensions_enabled_ = false;
+
+  // Whether or not to create the XrSession on the render thread.
+  bool create_session_on_render_thread_ = false;
 
   // All enabled extensions
   RobinSet<std::string> enabled_extensions_;

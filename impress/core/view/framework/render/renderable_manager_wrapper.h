@@ -189,7 +189,7 @@ class RenderableManagerWrapper : public BaseRenderableManager {
    private:
     std::unique_ptr<BaseRenderableManager::Builder> spy_;
     // We forward everything to a real builder.
-    std::unique_ptr<filament::RenderableManager::Builder> real_builder_;
+    filament::RenderableManager::Builder real_builder_;
   };
 
   std::unique_ptr<BaseRenderableManager::Builder> NewBuilder(

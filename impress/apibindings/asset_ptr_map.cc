@@ -27,9 +27,10 @@
 #include "absl/strings/string_view.h"
 #include "apibindings/base_asset_loader.h"
 #include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/assets/gltf_asset.h"
+#include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/view/utils/asset.h"
 #include "re2/re2.h"
 
@@ -95,8 +96,11 @@ absl::Status AssetPtrMap::ReleaseImageBasedLightingAsset(
 
 void AssetPtrMap::LoadGltfAsset(absl::string_view path,
                                 std::unique_ptr<BaseAssetLoader> asset_loader) {
+  auto load_options = GltfAsset::LoadOptions(
+      {.collider_mode =
+           imp::GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH});
   view_.GetAssetManager()
-      .LoadGltfAsset(GetAssetString(path))
+      .LoadGltfAsset(GetAssetString(path), load_options)
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr) mutable {
         HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),
@@ -107,8 +111,11 @@ void AssetPtrMap::LoadGltfAsset(absl::string_view path,
 
 void AssetPtrMap::LoadGltfAsset(absl::Cord data, absl::string_view key,
                                 std::unique_ptr<BaseAssetLoader> asset_loader) {
+  auto load_options = GltfAsset::LoadOptions(
+      {.collider_mode =
+           imp::GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH});
   view_.GetAssetManager()
-      .LoadGltfAsset(data, key)
+      .LoadGltfAsset(data, key, load_options)
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr) mutable {
         HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),
@@ -119,8 +126,11 @@ void AssetPtrMap::LoadGltfAsset(absl::Cord data, absl::string_view key,
 
 void AssetPtrMap::LoadGltfAsset(imp::AssetDefinition asset_definition,
                                 std::unique_ptr<BaseAssetLoader> asset_loader) {
+  auto load_options = GltfAsset::LoadOptions(
+      {.collider_mode =
+           imp::GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH});
   view_.GetAssetManager()
-      .LoadGltfAsset(asset_definition)
+      .LoadGltfAsset(asset_definition, load_options)
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr) mutable {
         HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),

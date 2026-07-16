@@ -23,7 +23,6 @@
 #include "core/split_engine/android/extensions/split_engine_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/message_group_monitor.h"
-#include "core/split_engine/split_engine_bridge_sender.h"
 
 #if __ANDROID_API__ >= 34
 #include <android/binder_auto_utils.h>
@@ -184,7 +183,7 @@ JNI_METHOD_PROTOTYPE_RENDERER_CONNECTION_NDK(void, nSendRequest)
   // We can invoke the callback directly, since the Java callback is
   // guaranteed to be invoked on the same thread as the JNI call.
   absl::Status status =
-      bridge->SendRequest(data, callback->GetNativeCallback());
+      bridge->SendRequest(data, callback->ExtractNativeCallback());
   
 }
 

@@ -199,7 +199,7 @@ void Console::DrawLogs() {
             break;
         }
         ImGui::SameLine();
-        ImGui::TextWrapped(all_logs_[i].message.c_str());
+        ImGui::TextWrapped("%s", all_logs_[i].message.c_str());
       }
 
       i++;

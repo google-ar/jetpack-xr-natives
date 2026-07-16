@@ -55,8 +55,8 @@ class ModelManager {
   virtual absl::Status ReleaseGltfAsset(std::intptr_t gltf_token) = 0;
 
   // Instantiates a glTF model and returns an entity ID.
-  virtual absl::StatusOr<int32_t> InstanceGltfModel(std::intptr_t gltf_token,
-                                                    bool enable_collider) = 0;
+  virtual absl::StatusOr<int32_t> InstanceGltfModel(
+      std::intptr_t gltf_token) = 0;
 
   // Attaches or detaches a collider to a glTF model.
   virtual absl::Status SetGltfModelColliderEnabled(int32_t node,

@@ -42,11 +42,13 @@ cc_library(
         ":split_engine_shared_memory_bridge_client",
         "//core/async:executor",
         "//core/async:future",
+        "//core/common:invocable",
         "//core/math:flatbuffer_support",
         "//core/split_engine:flatbuffer_utils",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
         "@flatbuffers",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
@@ -65,7 +67,9 @@ cc_library(
     deps = [
         ":split_engine_android_bridge",
         ":split_engine_shared_memory_bridge_client",
+        "//core/common:invocable",
         "//core/split_engine:split_engine_shared",
+        "@com_google_absl//absl/types:span",
         "@mediapipe//mediapipe/framework/port:gtest",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
@@ -80,8 +84,10 @@ cc_library(
     deps = [
         ":split_engine_android_bridge",
         ":split_engine_shared_memory_bridge_client",
+        "//core/common:invocable",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
@@ -103,10 +109,12 @@ cc_library(
     ],
     deps = [
         ":buffer_handle_factory",
+        "//core/common:invocable",
         "//core/math",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
@@ -122,9 +130,11 @@ cc_library(
     deps = [
         ":buffer_handle_factory",
         ":split_engine_shared_memory_bridge_client",
+        "//core/common:invocable",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
         "@mediapipe//mediapipe/framework/port:gtest",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
@@ -152,15 +162,14 @@ cc_library(
     ],
     deps = [
         ":split_engine_shared_memory_bridge_client",
+        "//core/common:invocable",
         "//core/common:trace",
-        "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/android/aidl:split_engine_shared_memory_bridge_service_aidl_ndk_lib",
         "//core/split_engine/android/extensions:split_engine_bridge",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
@@ -212,6 +221,7 @@ cc_library(
     deps = [
         ":buffer_handle_factory",
         "//core/async:background_scheduler",
+        "//core/async:executor",
         "//core/common:trace",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
@@ -242,6 +252,7 @@ cc_library(
     deps = [
         ":bridge_buffer",
         ":buffer_handle_factory",
+        ":buffer_handle_factory_shmem",
         ":split_engine_shared_memory_bridge_client",
         ":split_engine_shared_memory_bridge_sender_base",
         "//core/async:executor",
@@ -252,7 +263,6 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
-        "@mediapipe//mediapipe/framework/port:status",
         "@third_party//split_engine:fbs",  # buildcleaner: keep
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ],
@@ -380,6 +390,20 @@ cc_library(
     ]) + [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "buffer_handle_factory_shmem",
+    hdrs = ["buffer_handle_factory_shmem.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":buffer_handle_factory",
+        ":split_engine_shared_memory_bridge_client",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

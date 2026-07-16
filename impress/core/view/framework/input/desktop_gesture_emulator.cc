@@ -91,7 +91,7 @@ class DesktopDoubleTap : public DesktopGestureEmulator::BaseGesture {
     view_->GetDispatcher().Send(
         imp::NodeHandle(),
         DoubleTapGesture::TapEvent(0, PointerEventType::kUp, imp::NodeHandle(),
-                                   float2(0, 0)));
+                                   {float2(0, 0), float2(0, 0)}));
   }
 
  private:

@@ -30,7 +30,14 @@ namespace svxr {
 namespace interaction_states {
 
 // State for when the machine is initialized.
-struct Initialized {};
+struct Initialized {
+  bool is_reinitializing = false;
+};
+
+// State for when the model is playing its opening animation.
+struct Opening {
+  Ramp<float> minimum_duration;
+};
 
 // State for a model that is not currently being interacted with.
 struct Idle {
@@ -103,10 +110,16 @@ struct AccessibilityScale {
   Ramp<float> timeout;
 };
 
+struct Shutdown {
+  float target_model_log_scale;
+  Ramp<float> minimum_duration;
+  bool shutdown_called = false;
+};
+
 // State machine for interactions.
-using Machine =
-    StateMachine<Initialized, Idle, Translation, Rotation, OneHandedScale,
-                 TwoHandedScale, ScaleReset, AccessibilityScale>;
+using Machine = StateMachine<Initialized, Opening, Idle, Translation, Rotation,
+                             OneHandedScale, TwoHandedScale, ScaleReset,
+                             AccessibilityScale, Shutdown>;
 
 }  // namespace interaction_states
 }  // namespace svxr

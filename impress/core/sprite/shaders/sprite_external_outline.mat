@@ -75,7 +75,7 @@ fragment {
         float2 uv = materialParams.displayedUVBounds.xy
             + getUV0() * materialParams.displayedUVBounds.zw;
         vec4 srgb_color = mix(materialParams.outlineColor,
-          texture2D(materialParams_BaseColor, uv) * materialParams.color,
+          texture(materialParams_BaseColor, uv) * materialParams.color,
           barycentric_factor);
         // Convert from sRGB color space to linear for (broken link), and then
         // pre-multiply alpha into RGB.

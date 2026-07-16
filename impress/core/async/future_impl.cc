@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/inlined_vector.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -118,7 +119,7 @@ FutureImpl::~FutureImpl() {
     // is shut down before the work is run. This can happen when a view is being
     // destroyed / cleaned up, and is a valid case for reaching this block of
     // code.
-    ReturnInternal(absl::CancelledError("Future is destroyed."));
+    ReturnInternal(absl::CancelledError());
   }
 #if !IMP_DISABLE_FUTURE_VALIDATION
   integrity_marker_ = kDestructedIntegrityMarker;
@@ -419,7 +420,7 @@ void FutureImpl::InvokeResultProducer(std::shared_ptr<FutureImpl>& impl,
   TaskId extant_task_id;
   std::shared_ptr<FutureImplWrapper> parent_future;
   std::shared_ptr<FutureImplWrapper> nested_future_to_reset;
-  std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
+  absl::InlinedVector<std::shared_ptr<FutureImplWrapper>, 1> to_bubble;
 
   bool should_return_early = false;
   bool should_schedule = false;
@@ -580,9 +581,9 @@ void FutureImpl::InvokeResultProducerFromParent(
   }
 }
 
-std::vector<std::shared_ptr<FutureImpl::FutureImplWrapper>>
+absl::InlinedVector<std::shared_ptr<FutureImpl::FutureImplWrapper>, 1>
 FutureImpl::GetPriorityBubbleUpTargets() {
-  std::vector<std::shared_ptr<FutureImplWrapper>> result;
+  absl::InlinedVector<std::shared_ptr<FutureImplWrapper>, 1> result;
   // There are multiple types of "parents" that a future's priority can bubble
   // up to. This method aggregates them all into a single list.
 
@@ -612,7 +613,7 @@ FutureImpl::GetPriorityBubbleUpTargets() {
 
 void FutureImpl::BubbleUpPriority(std::optional<int> changed_priority) {
   AssertIntegrity();
-  std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
+  absl::InlinedVector<std::shared_ptr<FutureImplWrapper>, 1> to_bubble;
   int changed_priority_to_bubble = 0;
   {
     absl::MutexLock lock(mu_);
@@ -747,7 +748,7 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
 
 void FutureImpl::UpdatePriority(std::optional<int> priority) {
   AssertIntegrity();
-  std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
+  absl::InlinedVector<std::shared_ptr<FutureImplWrapper>, 1> to_bubble;
   int changed_priority_to_bubble;
   {
     absl::MutexLock lock(mu_);
@@ -808,8 +809,7 @@ FutureImpl::FutureImplWrapper::FutureImplWrapper(
 
 FutureImpl::FutureImplWrapper::~FutureImplWrapper() {
   if (!impl_->Ready()) {
-    internal::FutureImpl::InvokeResultProducer(
-        impl_, absl::CancelledError("from ~FutureImplWrapper()"));
+    internal::FutureImpl::InvokeResultProducer(impl_, absl::CancelledError());
   }
 }
 

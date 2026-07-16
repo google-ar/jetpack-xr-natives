@@ -221,6 +221,54 @@ bool IsVisibleBasedOnFlags(const InteractionMode& interaction_data) {
   return true;
 }
 
+FootprintInteractionStates::Active CreateActiveStateWithDefaults(
+    float target_alpha, absl::Duration duration, imp::float2 foot_size) {
+  FootprintInteractionStates::Active next;
+  next.alpha.Setup(0.f);
+  next.alpha.SetTarget(target_alpha, duration);
+  next.ignore_visibility_flags = true;
+
+  auto setup_params = kParamsHidden;
+  auto set_target_params = kParamsActiveOverModel;
+
+  next.edge_touch_control.Setup(setup_params.edge_touch_control);
+  next.edge_touch_control.SetTarget(set_target_params.edge_touch_control,
+                                    kInteractFadeInDuration);
+  next.fill_touch_control.Setup(setup_params.fill_touch_control);
+  next.fill_touch_control.SetTarget(set_target_params.fill_touch_control,
+                                    kInteractFadeInDuration);
+  next.edge_touch_response.Setup(setup_params.edge_touch_response);
+  next.edge_touch_response.SetTarget(set_target_params.edge_touch_response,
+                                     kInteractFadeInDuration);
+  next.edge_falloff_color.Setup(setup_params.edge_falloff_color);
+  next.edge_falloff_color.SetTarget(set_target_params.edge_falloff_color,
+                                    kInteractFadeInDuration);
+  next.edge_cutoff_color.Setup(setup_params.edge_cutoff_color);
+  next.edge_cutoff_color.SetTarget(set_target_params.edge_cutoff_color,
+                                   kInteractFadeInDuration);
+  next.fill_touch_response.Setup(setup_params.fill_touch_response);
+  next.fill_touch_response.SetTarget(set_target_params.fill_touch_response,
+                                     kInteractFadeInDuration);
+  next.fill_falloff_color.Setup(setup_params.fill_falloff_color);
+  next.fill_falloff_color.SetTarget(set_target_params.fill_falloff_color,
+                                    kInteractFadeInDuration);
+  next.fill_cutoff_color.Setup(setup_params.fill_cutoff_color);
+  next.fill_cutoff_color.SetTarget(set_target_params.fill_cutoff_color,
+                                   kInteractFadeInDuration);
+
+  next.foot_size.Setup(foot_size);
+  next.foot_fraction.Setup(1.f);
+  next.last_interaction_time = absl::ZeroDuration();
+  next.is_footprint_primary_receiver = false;
+  next.is_footprint_secondary_receiver = false;
+  next.scale_handles_visibility.reset();
+  for (int i = 0; i < 4; ++i) {
+    next.scale_handle_animations[i].Setup(0.0f);
+    next.scale_handle_pressed_animations[i].Setup(0.0f);
+  }
+  return next;
+}
+
 }  // namespace
 
 Footprint::Footprint()
@@ -228,9 +276,13 @@ Footprint::Footprint()
 
 Footprint::~Footprint() = default;
 
-imp::Future<absl::Status> Footprint::Setup(imp::NodeHandle model_node) {
+imp::Future<absl::Status> Footprint::Setup(
+    imp::NodeHandle model_node, std::optional<imp::Box> initial_bounds) {
   auto& view = GetNode()->GetView();
   model_node_ = model_node;
+  if (initial_bounds.has_value()) {
+    initial_model_bounds_ = *initial_bounds;
+  }
 
   auto& asset_manager = view.GetAssetManager();
   auto options = asset_manager.GetDefaultLoadOptions();
@@ -424,6 +476,66 @@ void Footprint::OnModelSizeChanged() {
       });
 }
 
+void Footprint::Show(std::optional<absl::Duration> custom_fade_duration) {
+  absl::Duration fade_duration =
+      custom_fade_duration.value_or(kSpawnFadeInDuration);
+  machine_.UpdateWithAlternatives(
+      [this, fade_duration](FootprintInteractionStates::Initialized& state)
+          -> InteractionMachine::OptionalState {
+        // When forced to show during initialization, set up right away.
+        state.is_intialize_complete = true;
+        UpdateFootBonesAndBounds(GetFootprintSize(), 1.0f);
+
+        return CreateActiveStateWithDefaults(1.0f, fade_duration,
+                                             RetrieveSizeFromModel());
+      },
+      [this, fade_duration](FootprintInteractionStates::Hidden& state)
+          -> InteractionMachine::OptionalState {
+        if (!state.next_size.has_value()) {
+          state.next_size = RetrieveSizeFromModel();
+        }
+
+        return CreateActiveStateWithDefaults(1.0f, fade_duration,
+                                             state.next_size.value());
+      },
+      [fade_duration](FootprintInteractionStates::Active& state)
+          -> InteractionMachine::OptionalState {
+        if (state.alpha.GetTarget() != 1.f) {
+          state.alpha.SetTarget(1.f, fade_duration);
+          state.ignore_visibility_flags = true;
+        }
+        return {};
+      });
+}
+
+void Footprint::SetAlpha(float target_alpha) {
+  machine_.UpdateWithAlternatives(
+      [](FootprintInteractionStates::Initialized& state)
+          -> InteractionMachine::OptionalState { return {}; },
+      [](FootprintInteractionStates::Hidden& state)
+          -> InteractionMachine::OptionalState { return {}; },
+      [target_alpha](FootprintInteractionStates::Active& state)
+          -> InteractionMachine::OptionalState {
+        state.alpha.Setup(target_alpha);
+        state.alpha.SetTarget(target_alpha, absl::ZeroDuration());
+        return {};
+      });
+}
+
+void Footprint::Hide() {
+  machine_.UpdateWithAlternatives(
+      [](FootprintInteractionStates::Initialized& state)
+          -> InteractionMachine::OptionalState { return {}; },
+      [](FootprintInteractionStates::Hidden& state)
+          -> InteractionMachine::OptionalState { return {}; },
+      [](FootprintInteractionStates::Active& state)
+          -> InteractionMachine::OptionalState {
+        state.alpha.SetTarget(0, kUnselectFadeOutDuration);
+        state.ignore_visibility_flags = true;
+        return {};
+      });
+}
+
 void Footprint::Cleanup() {
   if (footprint_node_) {
     GetView().DestroyNode(footprint_node_);
@@ -527,7 +639,15 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
       CalculateScaleHandleVisibility(interaction, state);
   bool handles_visible = next_visibility.any();
 
-  if (!IsVisibleBasedOnFlags(interaction) || handles_visible) {
+  bool ignore_visibility = state.ignore_visibility_flags;
+  if (ignore_visibility && state.alpha.IsAtTarget()) {
+    state.ignore_visibility_flags = false;
+    ignore_visibility = false;
+  }
+
+  if (ignore_visibility) {
+    // Skip visibility checks while programmatic animation is running.
+  } else if (!IsVisibleBasedOnFlags(interaction) || handles_visible) {
     //  Fade out.
     state.alpha.SetTarget(0, kUnselectFadeOutDuration);
     state.edge_touch_control.SetTarget(kParamsHidden.edge_touch_control,
@@ -661,14 +781,18 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
   edge_material_->SetTouchControl(state.edge_touch_control.Get());
   edge_material_->SetTouchResponse(state.edge_touch_response.Get() *
                                    global_multiplier);
-  edge_material_->SetFalloffColor(state.edge_falloff_color.Get());
-  edge_material_->SetCutoffColor(state.edge_cutoff_color.Get());
+  edge_material_->SetFalloffColor(state.edge_falloff_color.Get() *
+                                  global_multiplier);
+  edge_material_->SetCutoffColor(state.edge_cutoff_color.Get() *
+                                 global_multiplier);
 
   fill_material_->SetTouchControl(state.fill_touch_control.Get());
   fill_material_->SetTouchResponse(state.fill_touch_response.Get() *
                                    global_multiplier);
-  fill_material_->SetFalloffColor(state.fill_falloff_color.Get());
-  fill_material_->SetCutoffColor(state.fill_cutoff_color.Get());
+  fill_material_->SetFalloffColor(state.fill_falloff_color.Get() *
+                                  global_multiplier);
+  fill_material_->SetCutoffColor(state.fill_cutoff_color.Get() *
+                                 global_multiplier);
 
   auto footprint_node = FootprintNode();
   auto primary_touch_point =
@@ -1001,7 +1125,9 @@ void Footprint::UpdateFootBonesAndBounds(float2 foot_size,
     bone_node->SetLocalTrs(bone_trs.AsMat4());
   }
 
-  model->ScheduleSkinningUpdate();
+  if (!model->IsSkinningScheduled()) {
+    model->ScheduleSkinningUpdate();
+  }
 
   // Extend by 1 in X and Z to account for the cards rendering the footprint.
   auto new_bounds = filament::Box{

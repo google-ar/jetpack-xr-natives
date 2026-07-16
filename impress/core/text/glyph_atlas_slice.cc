@@ -44,11 +44,13 @@
 #include "core/canvas/async_scoped_canvas.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/common/ref_counter.h"
+#include "core/common/small_source_location.h"
 #include "core/common/trace.h"
 #include "core/config.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/render/texture.h"
 #include "core/text/glyph_emulator.h"
 #include "core/view/base_view.h"
 
@@ -76,15 +78,21 @@ constexpr uint8_t kHalfPadding = kPadding / 2;
 }  // namespace
 
 AsyncScopedCanvas* Slice::GetOrStartDrawing(imp::BaseView& view,
-                                            ScopedCanvas::DrawMode draw_mode) {
+                                            ScopedCanvas::DrawMode draw_mode,
+                                            bool single_slice) {
   if (canvas_) {
     return canvas_.get();
   }
 
-  canvas_ = canvas_source_->StartDrawing(view, texture_size_, draw_mode);
+  canvas_ = canvas_source_->StartDrawing(
+      view, texture_size_,
+      [this](BorrowedTexturePtr texture) { borrowed_texture_ = texture; },
+      draw_mode, SmallSourceLocation::Current());
   if (canvas_->DidTextureChange()) {
     texture_ = canvas_->GetTexture();
-    view.GetDispatcher().Send(TextureChangedEvent());
+    if (single_slice) {
+      view.GetDispatcher().Send(TextureChangedEvent());
+    }
   }
 
   return canvas_.get();
@@ -104,11 +112,12 @@ Slice::~Slice() {
 
   {
     absl::MutexLock lock(canvas_mutex_);
+    borrowed_texture_ = nullptr;
     canvas_.reset();
   }
 }
 
-Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view) {
+Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view, bool single_slice) {
   IMP_TRACE();
   canvas_mutex_.lock();
   if (texture_status_ == TextureStatus::kStable ||
@@ -144,7 +153,7 @@ Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view) {
           ScopedCanvas::Feature::kKeepContents)) {
     // Unlock the mutex for DrawAllGlyphsToCanvas to hold.
     canvas_mutex_.unlock();
-    DrawAllGlyphsToCanvas(view);
+    DrawAllGlyphsToCanvas(view, single_slice);
     canvas_mutex_.lock();
     texture_status_ = TextureStatus::kReadyToApplyDrawCommands;
   }
@@ -171,11 +180,12 @@ const GlyphInfo* /*absl_nullable*/  Slice::GetGlyphInfo(
   return nullptr;
 }
 
-void Slice::DrawAllGlyphsToCanvas(imp::BaseView& view) {
+void Slice::DrawAllGlyphsToCanvas(imp::BaseView& view, bool single_slice) {
   ScopedCanvas* canvas;
   {
     absl::MutexLock lock(canvas_mutex_);
-    canvas = GetOrStartDrawing(view, ScopedCanvas::DrawMode::kClear);
+    canvas =
+        GetOrStartDrawing(view, ScopedCanvas::DrawMode::kClear, single_slice);
     // TODO : Canvas can may be dirty due to async drawing of
     // glyphs; investigate how to prevent that from happening.
     canvas->ClearRect(
@@ -196,7 +206,8 @@ void Slice::DrawAllGlyphsToCanvas(imp::BaseView& view) {
 
 Future<absl::Status> Slice::DrawGlyphsToCanvasAsync(
     imp::BaseView& view,
-    std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs) {
+    std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs,
+    bool single_slice) {
   if (glyphs->empty()) {
     return Future<absl::Status>(absl::OkStatus());
   }
@@ -221,7 +232,7 @@ Future<absl::Status> Slice::DrawGlyphsToCanvasAsync(
                return std::move(glyphs);
              },
              Executor::Type::kBackground)
-      .Then([this,
+      .Then([this, single_slice,
              &view](std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs)
                 -> Future<absl::Status> {
         {
@@ -237,9 +248,10 @@ Future<absl::Status> Slice::DrawGlyphsToCanvasAsync(
           // completed drawing to the canvas, which indicates the canvas was
           // destroyed somewhere during the process. Recreate the canvas and try
           // again.
-          GetOrStartDrawing(view, ScopedCanvas::DrawMode::kKeepContents);
+          GetOrStartDrawing(view, ScopedCanvas::DrawMode::kKeepContents,
+                            single_slice);
         }
-        return DrawGlyphsToCanvasAsync(view, std::move(glyphs));
+        return DrawGlyphsToCanvasAsync(view, std::move(glyphs), single_slice);
       });
 }
 
@@ -268,13 +280,14 @@ absl::Status Slice::DrawGlyphsToCanvas(
 }
 
 void Slice::ClearUnusedGlyphs(
-    imp::BaseView& view,
+    imp::BaseView& view, bool single_slice,
     std::function<void(const CanvasOptionsGlyphKey&)> glyph_cleared_fn) {
   absl::MutexLock glyph_map_lock(glyph_map_mutex_);
   // Remove each glyph that is unused. Detect if it's unused if the ref
   // counter is at zero.
 
-  absl::erase_if(glyph_map_, [this, &view, &glyph_cleared_fn](const auto& it) {
+  absl::erase_if(glyph_map_, [this, single_slice, &view,
+                              &glyph_cleared_fn](const auto& it) {
     if (it.second.ref_counter.GetCount() != 0) {
       return false;
     }
@@ -286,8 +299,8 @@ void Slice::ClearUnusedGlyphs(
             ScopedCanvas::Feature::kKeepContents)) {
       absl::MutexLock canvas_lock(canvas_mutex_);
       const GlyphInfo& glyph_info = it.second;
-      ScopedCanvas* canvas =
-          GetOrStartDrawing(view, ScopedCanvas::DrawMode::kKeepContents);
+      ScopedCanvas* canvas = GetOrStartDrawing(
+          view, ScopedCanvas::DrawMode::kKeepContents, single_slice);
 
       const AtlasPacker::ScopedAtlasEntry& atlas_entry = glyph_info.atlas_entry;
       float2 half_extent =

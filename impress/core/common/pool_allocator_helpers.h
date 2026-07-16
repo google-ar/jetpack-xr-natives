@@ -41,8 +41,8 @@ struct MemoryLayout {
   // The number of 64-bit words needed to store the bitmap storing which slots
   // are occupied.
   uint32_t bitmap_words_per_page;
-  // The offset from the start of the page to the first slot.
-  uint32_t slots_start_offset_bytes;
+  // The offset from the start of the page to the footer.
+  uint32_t footer_offset_bytes;
 };
 
 // FreeSlot stores both it's own index and the pointer to the next free slot.
@@ -67,43 +67,48 @@ struct SmallBlock {
   uint32_t count;
 };
 
-// Information stored at the beginning of each page.
-struct PageHeader {
+// Information stored at the end of each page.
+struct PageFooter {
   uint32_t start_index;
 };
-// Ensure the PageHeader is trivially destructible because we skip calling
+// Ensure the PageFooter is trivially destructible because we skip calling
 // destructors for it in the allocator.
-static_assert(std::is_trivially_destructible_v<PageHeader>);
+static_assert(std::is_trivially_destructible_v<PageFooter>);
 
 // Returns a pointer to the occupancy bitmap for the given page.
-inline uint64_t* GetPageOccupancy(std::byte* page_base) {
+inline uint64_t* GetPageOccupancy(std::byte* page_base,
+                                  uint32_t footer_offset_bytes) {
   constexpr size_t kOccupancyAlignment = alignof(uint64_t);
   constexpr size_t kBitmapOffset =
-      (sizeof(imp_pool_allocator_internal::PageHeader) + kOccupancyAlignment -
+      (sizeof(imp_pool_allocator_internal::PageFooter) + kOccupancyAlignment -
        1) &
       ~(kOccupancyAlignment - 1);
-  return reinterpret_cast<uint64_t*>(page_base + kBitmapOffset);
+  return reinterpret_cast<uint64_t*>(page_base + footer_offset_bytes +
+                                     kBitmapOffset);
 }
 
 // Sets the occupancy bit for the given slot.
 inline void SetOccupancy(std::byte* ptr, uintptr_t page_mask, size_t slot_size,
-                         uint32_t slots_start_offset_bytes) {
+                         uint32_t footer_offset_bytes) {
   std::byte* page_base = reinterpret_cast<std::byte*>(
       reinterpret_cast<uintptr_t>(ptr) & page_mask);
-  size_t slot = (ptr - page_base - slots_start_offset_bytes) / slot_size;
-  GetPageOccupancy(page_base)[slot / 64] |= (uint64_t{1} << (slot % 64));
+  size_t slot = (ptr - page_base) / slot_size;
+  GetPageOccupancy(page_base, footer_offset_bytes)[slot / 64] |=
+      (uint64_t{1} << (slot % 64));
 }
 
 // Unsets the occupancy bit for the given slot.
 inline uint32_t UnsetOccupancy(std::byte* ptr, uintptr_t page_mask,
-                               size_t slot_size,
-                               uint32_t slots_start_offset_bytes) {
+                               size_t slot_size, uint32_t footer_offset_bytes) {
   std::byte* page_base = reinterpret_cast<std::byte*>(
       reinterpret_cast<uintptr_t>(ptr) & page_mask);
-  size_t slot = (ptr - page_base - slots_start_offset_bytes) / slot_size;
-  GetPageOccupancy(page_base)[slot / 64] &= ~(uint64_t{1} << (slot % 64));
-  using PageHeader = imp_pool_allocator_internal::PageHeader;
-  return reinterpret_cast<PageHeader*>(page_base)->start_index + slot;
+  size_t slot = (ptr - page_base) / slot_size;
+  GetPageOccupancy(page_base, footer_offset_bytes)[slot / 64] &=
+      ~(uint64_t{1} << (slot % 64));
+  using PageFooter = imp_pool_allocator_internal::PageFooter;
+  return reinterpret_cast<PageFooter*>(page_base + footer_offset_bytes)
+             ->start_index +
+         slot;
 }
 
 }  // namespace imp_pool_allocator_internal
