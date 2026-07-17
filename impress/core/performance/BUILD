@@ -34,6 +34,7 @@ cc_library(
     ],
     hdrs = [
         "profiler.h",
+        "profiler_state.h",
         "profiler_structs.h",
         "timer.h",
     ],
@@ -66,9 +67,12 @@ cc_library(
             "darwin/editor_malloc.cc",
             "darwin/memory_stats.cc",
         ],
-        "@platforms//os:android": [
+        ":android_and_memory_graph": [
             "android/editor_malloc.cc",
             "android/memory_stats.cc",
+        ],
+        "@platforms//os:android": [
+            "default/memory_stats.cc",
         ],
         "@platforms//os:emscripten": [
             "wasm/editor_malloc.cc",
@@ -79,7 +83,7 @@ cc_library(
         ],
     }),
     hdrs = select({
-        "@platforms//os:android": [
+        ":android_and_memory_graph": [
             "android/editor_malloc.h",
             "memory_stats.h",
         ],
@@ -88,7 +92,8 @@ cc_library(
         ],
     }),
     linkopts = select({
-        "@platforms//os:android": imp_malloc_wrap_linkopts(),
+        ":android_and_memory_graph": imp_malloc_wrap_linkopts(),
+        "@platforms//os:android": [],
         "@platforms//os:emscripten": imp_malloc_wrap_linkopts(),
         "//conditions:default": [],
     }),
@@ -111,7 +116,7 @@ config_setting(
     },
 )
 
-# TODO: This is a temporary fix, as android/editor_malloc.cc seems to crash on Android XR. See (broken link) for more details.
+# TODO: This is a temporary fix, as imp_malloc_wrap_linkopts causes a crash in maps.
 config_setting(
     name = "android_and_memory_graph",
     constraint_values = ["@platforms//os:android"],

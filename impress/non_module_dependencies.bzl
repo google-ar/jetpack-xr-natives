@@ -165,9 +165,9 @@ def non_module_dependencies():
     http_archive(
         name = "basis_universal",
         build_file = "//:bazel/build_files/basis_universal.BUILD",
-        sha256 = "b89563aa5879eed20f56b9cfa03b52848e759531fd5a1d51a8f63c846f96c2ac",
-        strip_prefix = "basis_universal-1.16.3",
-        url = "https://github.com/BinomialLLC/basis_universal/archive/refs/tags/1.16.3.tar.gz",
+        sha256 = "ee1dbeb4c16699b577a0c78dce337bbede268e04bd2d463946971f8cb1e9c8df",
+        strip_prefix = "basis_universal-2_1_0",
+        url = "https://github.com/BinomialLLC/basis_universal/archive/refs/tags/v2_1_0.tar.gz",
     )
 
     # TODO Migrate to the equivalent bazel_dep.

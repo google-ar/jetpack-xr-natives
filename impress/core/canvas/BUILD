@@ -317,8 +317,12 @@ objc_library(
         "//core/render",
         "//core/text:text_metrics_cc_proto",
         "//core/view:base_view",
+        "//third_party/apple_frameworks:CoreGraphics",
         "//third_party/apple_frameworks:CoreText",
+        "//third_party/apple_frameworks:CoreVideo",
         "//third_party/apple_frameworks:Foundation",
+        "//third_party/apple_frameworks:Metal",
+        "//third_party/apple_frameworks:OpenGLES",
         "//third_party/apple_frameworks:UIKit",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/types:span",
@@ -329,7 +333,7 @@ objc_library(
 # --config=android_all
 # --android_ndk_min_sdk_version=28
 
-# --config=ios_x86_64
+# --config=ios_sim_arm64
 
 filegroup(
     name = "scuba_goldens",

@@ -83,7 +83,7 @@ const std::array<std::string, 13> kRequiredExtensions = {
 
 // Extensions must be listed after their dependencies.
 // LINT.IfChange
-const std::array<OpenXrExtension, 8> kOptionalExtensions = {{
+const std::array<OpenXrExtension, 9> kOptionalExtensions = {{
     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -99,6 +99,8 @@ const std::array<OpenXrExtension, 8> kOptionalExtensions = {{
     {XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME,
      {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME,
+     {XR_EXT_FUTURE_EXTENSION_NAME}},
+    {XR_ANDROID_TRACKABLES_QR_CODE_EXTENSION_NAME,
      {XR_EXT_FUTURE_EXTENSION_NAME}},
 }};
 // LINT.ThenChange(//depot/google3/third_party/jetpack_xr_natives/openxr_runtime/openxr_instance_manager.cc)
@@ -408,6 +410,17 @@ bool OpenXrManager::InitOpenXrFunctions() {
                              reinterpret_cast<PFN_xrVoidFunction*>(
                                  &destroy_trackable_image_database_)));
     image_tracking_exts_loaded_ = true;
+  }
+
+  // QR code functions.
+  if (std::find(enabled_exts.begin(), enabled_exts.end(),
+                XR_ANDROID_TRACKABLES_QR_CODE_EXTENSION_NAME) !=
+      enabled_exts.end()) {
+    LOG(INFO) << "XR_ANDROID_TRACKABLES_QR_CODE_EXTENSION_NAME is enabled!";
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrGetTrackableQrCodeANDROID",
+             reinterpret_cast<PFN_xrVoidFunction*>(&get_trackable_qr_code_)));
+    qr_code_tracking_exts_loaded_ = true;
   }
 
   auto all_geospatial_present =
@@ -1330,6 +1343,7 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
     }
     open_xr_state_ = OpenXrState::kUninitializing;
     image_tracking_properties_ = {};
+    qr_code_tracking_properties_ = {};
 
     // Destroy planes tracker.
     if (planes_trackable_tracker_ != XR_NULL_HANDLE) {
@@ -1357,6 +1371,16 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
       image_trackable_tracker_ = XR_NULL_HANDLE;
       if (XR_FAILED(result)) {
         LOG(ERROR) << "Failed to destroy image tracker with error: "
+                   << XrEnumStr(result);
+      }
+    }
+
+    // Destroy QR code tracker.
+    if (qr_code_trackable_tracker_ != XR_NULL_HANDLE) {
+      XrResult result = destroy_trackable_tracker_(qr_code_trackable_tracker_);
+      qr_code_trackable_tracker_ = XR_NULL_HANDLE;
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to destroy QR code tracker with error: "
                    << XrEnumStr(result);
       }
     }
@@ -1479,6 +1503,7 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
     geospatial_exts_loaded_ = false;
     cloud_auth_exts_loaded_ = false;
     image_tracking_exts_loaded_ = false;
+    qr_code_tracking_exts_loaded_ = false;
   }
   if (stop_polling_thread) {
     JoinPollingThread();
@@ -1670,6 +1695,9 @@ XrResult OpenXrManager::ConfigureFeatures(
       ConfigureEyeTracking(new_config_settings.eye_tracking_mode));
   XR_RETURN_RESULT_IF_FAILED(ConfigureAugmentedImageTracking(
       new_config_settings.augmented_image_tracking_mode));
+  XR_RETURN_RESULT_IF_FAILED(
+      ConfigureQrCodeTracking(new_config_settings.qr_code_tracking_mode,
+                              new_config_settings.qr_code_size_meters));
   return XR_SUCCESS;
 }
 
@@ -1685,6 +1713,8 @@ void OpenXrManager::AbortConfigureSession() {
   ConfigureGeospatialTracking(config_settings_.geospatial_mode);
   ConfigureAugmentedImageTracking(
       config_settings_.augmented_image_tracking_mode);
+  ConfigureQrCodeTracking(config_settings_.qr_code_tracking_mode,
+                          config_settings_.qr_code_size_meters);
 }
 
 XrResult OpenXrManager::ConfigurePlaneTracking(PlaneTrackingMode mode) {
@@ -1701,6 +1731,9 @@ XrResult OpenXrManager::ConfigurePlaneTracking(PlaneTrackingMode mode) {
     case PlaneTrackingMode::kHorizontalAndVertical: {
       return MaybeCreatePlanesTracker();
       break;
+    }
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
     }
   }
 }
@@ -1779,10 +1812,10 @@ XrResult OpenXrManager::ConfigureAugmentedImageTracking(
 
       return XR_SUCCESS;
     }
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
+    }
   }
-
-  // Fallback.
-  return XR_ERROR_VALIDATION_FAILURE;
 }
 
 XrResult OpenXrManager::ConfigureObjectTracking(
@@ -1813,6 +1846,9 @@ XrResult OpenXrManager::ConfigureObjectTracking(
       };
       return MaybeCreateObjectTracker();
     }
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
+    }
   }
 }
 
@@ -1833,6 +1869,9 @@ XrResult OpenXrManager::ConfigureHandTracking(HandTrackingMode mode) {
     case HandTrackingMode::kBoth: {
       return MaybeCreateHandTrackers();
       break;
+    }
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
     }
   }
 }
@@ -1869,6 +1908,9 @@ XrResult OpenXrManager::ConfigureDepthEstimation(DepthEstimationMode mode) {
       return XR_ERROR_RUNTIME_FAILURE;
       break;
     };
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
+    }
   }
 }
 
@@ -1887,6 +1929,9 @@ XrResult OpenXrManager::ConfigureAnchorPersistence(AnchorPersistenceMode mode) {
       return CreatePersistenceHandleIfNecessary();
       break;
     };
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
+    }
   }
 }
 
@@ -1900,10 +1945,17 @@ XrResult OpenXrManager::ConfigureFaceTracking(FaceTrackingMode mode) {
       return XR_SUCCESS;
       break;
     };
-    case FaceTrackingMode::kUser: {
+    case FaceTrackingMode::kBlendShapes: {
       return MaybeCreateFaceTracker();
       break;
     };
+    case FaceTrackingMode::kMeshes: {
+      return XR_ERROR_FEATURE_UNSUPPORTED;
+      break;
+    };
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
+    }
   }
 }
 
@@ -1911,6 +1963,7 @@ XrResult OpenXrManager::ConfigureGeospatialTracking(GeospatialMode mode) {
   switch (mode) {
     case GeospatialMode::kDisabled: {
       CleanupGeospatial();
+      return XR_SUCCESS;
       break;
     };
     case GeospatialMode::kEnabled: {
@@ -1969,24 +2022,73 @@ XrResult OpenXrManager::ConfigureGeospatialTracking(GeospatialMode mode) {
         // Delete the geospatial tracker if the spatial context creation
         // failed.
         CleanupGeospatial();
-        return result;
       }
+      return result;
       break;
     };
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
+    }
   }
-
-  return XR_SUCCESS;
 }
 
 XrResult OpenXrManager::ConfigureEyeTracking(EyeTrackingMode mode) {
-  if (mode == EyeTrackingMode::kDisabled) {
-    if (eye_tracker_ != XR_NULL_HANDLE) {
-      XR_RETURN_RESULT_IF_FAILED(destroy_eye_tracker_(eye_tracker_));
-      eye_tracker_ = XR_NULL_HANDLE;
+  switch (mode) {
+    case EyeTrackingMode::kDisabled: {
+      if (eye_tracker_ != XR_NULL_HANDLE) {
+        XR_RETURN_RESULT_IF_FAILED(destroy_eye_tracker_(eye_tracker_));
+        eye_tracker_ = XR_NULL_HANDLE;
+      }
+      return XR_SUCCESS;
+    }
+    case EyeTrackingMode::kCoarse:
+    case EyeTrackingMode::kFine:
+      return MaybeCreateEyeTracker();
+      break;
+    default: {
+      return XR_ERROR_VALIDATION_FAILURE;
+    }
+  }
+}
+
+XrResult OpenXrManager::ConfigureQrCodeTracking(QrCodeTrackingMode mode,
+                                                float size) {
+  if (mode != QrCodeTrackingMode::kDisabled && !qr_code_tracking_exts_loaded_) {
+    return XR_ERROR_FEATURE_UNSUPPORTED;
+  }
+
+  if (mode == QrCodeTrackingMode::kDisabled) {
+    if (qr_code_trackable_tracker_ != XR_NULL_HANDLE) {
+      XR_RETURN_RESULT_IF_FAILED(
+          destroy_trackable_tracker_(qr_code_trackable_tracker_));
+      qr_code_trackable_tracker_ = XR_NULL_HANDLE;
     }
     return XR_SUCCESS;
   }
-  return MaybeCreateEyeTracker();
+
+  XR_RETURN_RESULT_IF_FAILED(FetchSystemQrCodeTrackingPropertiesIfNecessary());
+  if (size == 0 && !qr_code_tracking_properties_.supportsQrCodeSizeEstimation) {
+    LOG(ERROR) << "QR code size estimation is not supported. "
+               << "Size of zero given for QR code configuration.";
+    return XR_ERROR_VALIDATION_FAILURE;
+  }
+
+  qr_code_tracking_config_ = {
+      .type = XR_TYPE_TRACKABLE_QR_CODE_CONFIGURATION_ANDROID,
+      .next = nullptr,
+      .qrCodeEdgeSize = size,
+  };
+
+  if (mode == QrCodeTrackingMode::kDynamic) {
+    qr_code_tracking_config_.trackingMode =
+        XrQrCodeTrackingModeANDROID::XR_QR_CODE_TRACKING_MODE_DYNAMIC_ANDROID;
+  }
+  if (mode == QrCodeTrackingMode::kStatic) {
+    qr_code_tracking_config_.trackingMode =
+        XrQrCodeTrackingModeANDROID::XR_QR_CODE_TRACKING_MODE_STATIC_ANDROID;
+  }
+
+  return CreateQrCodeTrackerIfNecessary(mode);
 }
 
 XrResult OpenXrManager::StageAugmentedImageDatabase(
@@ -2071,6 +2173,31 @@ XrResult OpenXrManager::MaybeCreateAugmentedImageTracker() {
   XR_RETURN_RESULT_IF_FAILED(create_trackable_tracker_(
       session_, &createInfo, &image_trackable_tracker_));
 
+  return XR_SUCCESS;
+}
+
+XrResult OpenXrManager::CreateQrCodeTrackerIfNecessary(
+    QrCodeTrackingMode mode) {
+  if (mode != config_settings_.qr_code_tracking_mode &&
+      qr_code_trackable_tracker_ != XR_NULL_HANDLE) {
+    XR_RETURN_RESULT_IF_FAILED(
+        destroy_trackable_tracker_(qr_code_trackable_tracker_));
+    qr_code_trackable_tracker_ = XR_NULL_HANDLE;
+  } else if (qr_code_trackable_tracker_ != XR_NULL_HANDLE) {
+    return XR_SUCCESS;
+  }
+
+  if (!SupportsQrCodeTracking()) {
+    return XR_ERROR_FEATURE_UNSUPPORTED;
+  }
+
+  XrTrackableTrackerCreateInfoANDROID createInfo = {
+      .type = XR_TYPE_TRACKABLE_TRACKER_CREATE_INFO_ANDROID,
+      .next = &qr_code_tracking_config_,
+      .trackableType = XR_TRACKABLE_TYPE_QR_CODE_ANDROID,
+  };
+  XR_RETURN_RESULT_IF_FAILED(create_trackable_tracker_(
+      session_, &createInfo, &qr_code_trackable_tracker_));
   return XR_SUCCESS;
 }
 
@@ -2493,6 +2620,31 @@ XrResult OpenXrManager::FetchSystemImageTrackingPropertiesIfNecessary() {
   return XR_SUCCESS;
 }
 
+bool OpenXrManager::SupportsQrCodeTracking() {
+  XR_RETURN_IF_FAILED(FetchSystemQrCodeTrackingPropertiesIfNecessary());
+  return (qr_code_tracking_properties_.supportsQrCodeTracking == XR_TRUE);
+}
+
+XrResult OpenXrManager::FetchSystemQrCodeTrackingPropertiesIfNecessary() {
+  if (qr_code_tracking_properties_.type !=
+      XR_TYPE_SYSTEM_QR_CODE_TRACKING_PROPERTIES_ANDROID) {
+    qr_code_tracking_properties_ = {
+        .type = XR_TYPE_SYSTEM_QR_CODE_TRACKING_PROPERTIES_ANDROID,
+        .next = nullptr};
+
+    XrSystemProperties system_properties{.type = XR_TYPE_SYSTEM_PROPERTIES,
+                                         .next = &qr_code_tracking_properties_};
+    XrResult result =
+        get_system_properties_(instance_, system_id_, &system_properties);
+    if (XR_FAILED(result)) {
+      qr_code_tracking_properties_.type = XR_TYPE_UNKNOWN;
+      XR_RETURN_RESULT_IF_FAILED(result);
+    }
+  }
+
+  return XR_SUCCESS;
+}
+
 std::vector<XrTrackableANDROID> OpenXrManager::GetPlanes() {
   uint32_t trackableCountOutput = 0;
 
@@ -2680,6 +2832,89 @@ std::vector<XrTrackableANDROID> OpenXrManager::GetAugmentedImages() {
   return all_image_trackables_;
 }
 
+std::vector<XrTrackableANDROID> OpenXrManager::GetQrCodes() {
+  {
+    absl::MutexLock lock(mutex_);
+    if (qr_code_trackable_tracker_ == XR_NULL_HANDLE) {
+      return {};
+    }
+  }
+
+  uint32_t trackableCountOutput = 0;
+
+  // Query the number of trackables available.
+  XrResult result;
+  {
+    absl::MutexLock lock(mutex_);
+    result = get_all_trackables_(qr_code_trackable_tracker_, 0,
+                                 &trackableCountOutput, nullptr);
+  }
+
+  if (result != XR_SUCCESS) {
+    LOG(ERROR) << "Unable to query trackables with error: "
+               << XrEnumStr(result);
+    return {};
+  }
+
+  if (trackableCountOutput == 0) {
+    return {};
+  }
+  all_qr_code_trackables_.resize(trackableCountOutput);
+
+  // Fetch the actual trackable handles in the appropriately resized array.
+  {
+    absl::MutexLock lock(mutex_);
+    result = get_all_trackables_(qr_code_trackable_tracker_,
+                                 trackableCountOutput, &trackableCountOutput,
+                                 all_qr_code_trackables_.data());
+  }
+
+  if (result != XR_SUCCESS) {
+    LOG(ERROR) << "Unable to get trackables with error: " << XrEnumStr(result);
+    return {};
+  }
+  return all_qr_code_trackables_;
+}
+
+bool OpenXrManager::GetQrCodeState(XrTrackableANDROID qr_code_id,
+                                   XrReferenceSpaceType reference_space_type,
+                                   XrTime time,
+                                   XrTrackableQrCodeANDROID& out_qr_code,
+                                   std::vector<char>& out_qr_code_data) {
+  XrSpace base_space = GetSpaceInReferenceSpace(reference_space_type);
+  if (base_space == XR_NULL_HANDLE) {
+    return false;
+  }
+  XrTrackableGetInfoANDROID qr_code_get_info = {
+      .type = XR_TYPE_TRACKABLE_GET_INFO_ANDROID,
+      .trackable = qr_code_id,
+      .baseSpace = base_space,
+      .time = time,
+  };
+
+  {
+    absl::ReaderMutexLock lock(mutex_);
+    XR_RETURN_IF_FAILED(get_trackable_qr_code_(
+        qr_code_trackable_tracker_, &qr_code_get_info, &out_qr_code));
+  }
+  if (out_qr_code.bufferCountOutput == 0) {
+    // buffer output not available, but otherwise state has been retrieved
+    // the qr code is likely still decoding
+    return true;
+  }
+
+  out_qr_code.bufferCapacityInput = out_qr_code.bufferCountOutput;
+  out_qr_code_data.resize(out_qr_code.bufferCountOutput);
+  out_qr_code.buffer = out_qr_code_data.data();
+  {
+    absl::ReaderMutexLock lock(mutex_);
+    XR_RETURN_IF_FAILED(get_trackable_qr_code_(
+        qr_code_trackable_tracker_, &qr_code_get_info, &out_qr_code));
+  }
+
+  return true;
+}
+
 bool OpenXrManager::GetAugmentedImageState(
     XrTrackableANDROID trackable_id, XrReferenceSpaceType reference_space_type,
     XrTime time, XrTrackableImageANDROID& out_image) {
@@ -2715,6 +2950,12 @@ bool OpenXrManager::GetAugmentedImageState(
   }
 
   return true;
+}
+
+bool OpenXrManager::SupportsQrCodeSizeEstimation() {
+  absl::MutexLock lock(mutex_);
+  XR_RETURN_IF_FAILED(FetchSystemQrCodeTrackingPropertiesIfNecessary());
+  return (qr_code_tracking_properties_.supportsQrCodeSizeEstimation == XR_TRUE);
 }
 
 bool OpenXrManager::SupportsPhysicalSizeEstimation() {

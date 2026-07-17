@@ -148,7 +148,7 @@ RefCounter::Ref RefCounter::Ref::WithNewLocation(
   return Ref(loc, tracked_refs_);
 }
 
-RefCounter::RefCounter() noexcept : tracked_refs_(new TrackedRefs()) {}
+RefCounter::RefCounter() noexcept {}
 
 RefCounter::~RefCounter() noexcept {
   if (tracked_refs_) {
@@ -176,6 +176,8 @@ RefCounter& RefCounter::operator=(RefCounter&& rhs) noexcept {
     return *this;
   }
 
+  // TODO: Check that rhs is not already destroyed.
+
   if (tracked_refs_) {
     tracked_refs_->is_destroyed = true;
     DeleteTrackedRefsIfNeeded(tracked_refs_);
@@ -188,16 +190,28 @@ RefCounter& RefCounter::operator=(RefCounter&& rhs) noexcept {
 }
 
 RefCounter::Ref RefCounter::Retain(SmallSourceLocation loc) const {
+  if (!tracked_refs_) {
+    // Lazy allocation of the tracking structure.
+    tracked_refs_ = new TrackedRefs();
+  }
   return Ref(loc, tracked_refs_);
 }
 
 RefCounter::CounterType RefCounter::GetCount() const {
-  
+  if (!tracked_refs_) {
+    return 0;
+  }
   
   return GetTrackedRefsCount(*tracked_refs_);
 }
 
 const RefCounter::TrackedRefs& RefCounter::GetTrackedRefs() const {
+  if (!tracked_refs_) {
+    // When tracked_refs_ is null, return a static empty TrackedRefs to avoid
+    // heap allocation.
+    static const TrackedRefs kEmptyTrackedRefs;
+    return kEmptyTrackedRefs;
+  }
   return *tracked_refs_;
 }
 

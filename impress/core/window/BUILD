@@ -124,6 +124,7 @@ cc_library(
         ":imgui_renderer",
         ":imp_dev_resources",
         "//core:config",
+        "//core/async:future",
         "//core/common",
         "//core/common:debug_draw",
         "//core/common:registry",
@@ -131,8 +132,10 @@ cc_library(
         "//core/common:typed_ids",
         "//core/editor",
         "//core/editor:editor_info",
+        "//core/editor:events",
         "//core/input",
         "//core/math",
+        "//core/ncsb",
         "//core/split_engine:split_engine_serializer",
         "//core/video:video_writer",
         "//core/view:base_view",
@@ -147,12 +150,8 @@ cc_library(
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:filagui",
-    ] + if_android(
-        [
-            ":open_gl_imgui_renderer",
-        ],
-    ) + if_dev_runtime([
-        "//core/editor/remote_editor",
+    ] + if_android([
+        ":open_gl_imgui_renderer",
     ]),
     alwayslink = 1,
 )

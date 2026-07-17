@@ -14,6 +14,7 @@
 
 #include <jni.h>
 
+#include <string>
 #include <vector>
 
 #include "openxr/openxr.h"
@@ -29,9 +30,37 @@ using ::androidx::xr::openxr::CreateJavaDisplayBlendMode;
 using androidx::xr::openxr::OpenXrInstanceManager;
 
 JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeCreateOpenXrInstanceManager(
+Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeCreateOpenXrInstanceManager__(
     JNIEnv* env, jclass /*clazz*/) {
   return PointerToJLong(new OpenXrInstanceManager());
+}
+
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeCreateOpenXrInstanceManager___3Ljava_lang_String_2(
+    JNIEnv* env, jclass /*clazz*/, jobjectArray extension_names) {
+  std::vector<std::string> native_extension_names;
+  if (extension_names != nullptr) {
+    int count = env->GetArrayLength(extension_names);
+    for (int i = 0; i < count; ++i) {
+      jstring extension_name_jstr =
+          (jstring)env->GetObjectArrayElement(extension_names, i);
+      if (extension_name_jstr == nullptr) {
+        continue;
+      }
+
+      const char* native_extension_name_cstr =
+          env->GetStringUTFChars(extension_name_jstr, 0);
+      if (native_extension_name_cstr == nullptr) {
+        env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"),
+                      "Failed to get extension name string.");
+        return 0L;
+      }
+      native_extension_names.push_back(native_extension_name_cstr);
+      env->ReleaseStringUTFChars(extension_name_jstr,
+                                 native_extension_name_cstr);
+    }
+  }
+  return PointerToJLong(new OpenXrInstanceManager(native_extension_names));
 }
 
 JNIEXPORT void JNICALL

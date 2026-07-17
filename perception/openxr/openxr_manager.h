@@ -105,8 +105,12 @@ class OpenXrManager {
   // Enum representing the configuration state for the hand trackers.
   enum class HandTrackingMode : uint8_t { kDisabled = 0x00, kBoth = 0x01 };
 
-  // Enum representing the configuration state for hand tracking.
-  enum class HeadTrackingMode : uint8_t { kDisabled = 0x00, kLastKnown = 0x01 };
+  // Enum representing the configuration state for head (device) tracking.
+  enum class HeadTrackingMode : uint8_t {
+    kDisabled = 0x00,
+    kSpatialLastKnown = 0x01,
+    kInertialLastKnown = 0x02
+  };
 
   // Enum representing the configuration state for depth estimation.
   enum class DepthEstimationMode : uint8_t {
@@ -129,7 +133,11 @@ class OpenXrManager {
   };
 
   // Enum representing the configuration state for face tracking.
-  enum class FaceTrackingMode : uint8_t { kDisabled = 0x00, kUser = 0x01 };
+  enum class FaceTrackingMode : uint8_t {
+    kDisabled = 0x00,
+    kBlendShapes = 0x01,
+    kMeshes = 0x02
+  };
 
   // Enum representing the calibration state for face tracking.
   enum class FaceTrackingCalibrationState : uint8_t {
@@ -176,6 +184,12 @@ class OpenXrManager {
     kFine = 0x02,
   };
 
+  enum class QrCodeTrackingMode : uint8_t {
+    kDisabled = 0x00,
+    kDynamic = 0x01,
+    kStatic = 0x02
+  };
+
   // Struct that contains the configuration settings that can be set at runtime
   // by passing to ConfigureSession().
   struct ConfigSettings {
@@ -192,6 +206,8 @@ class OpenXrManager {
     GeospatialMode geospatial_mode = GeospatialMode::kDisabled;
     AugmentedImageTrackingMode augmented_image_tracking_mode =
         AugmentedImageTrackingMode::kDisabled;
+    QrCodeTrackingMode qr_code_tracking_mode = QrCodeTrackingMode::kDisabled;
+    float qr_code_size_meters = 0.0f;
   };
 
   // Struct that contains a depth image buffer and its size.
@@ -317,6 +333,26 @@ class OpenXrManager {
   // Returns the maximum number of images an image
   // database can have loaded.
   uint32_t GetMaxLoadedImageCount() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  /// Returns a vector containing tracked QR codes from the trackable tracker.
+  std::vector<XrTrackableANDROID> GetQrCodes();
+
+  // Gets the OpenXR data associated with the QR code for the trackable
+  // id at the specified time in the specified reference space. If the time is a
+  // negative number, the current time will be used.
+  // This function is thread safe.
+  // Returns true if successful and populates out_qr_code. Returns false if
+  // there was an error getting the QR code data.
+  // Decoding QR codes can take some time. If the runtime has not decoded the
+  // QR code yet, it will still return true, but contain no decoded data.
+  bool GetQrCodeState(XrTrackableANDROID qr_code_id,
+                      XrReferenceSpaceType reference_space, XrTime time,
+                      XrTrackableQrCodeANDROID& out_qr_code,
+                      std::vector<char>& out_qr_code_data);
+
+  // Returns a boolean stating if the device supports
+  // QR code size estimation.
+  bool SupportsQrCodeSizeEstimation() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Creates an anchor at the pose provided in the default reference space.
   // Returns a CreateAnchorResult enum corresponding to whether the anchor was
@@ -767,6 +803,10 @@ class OpenXrManager {
   XrResult ConfigureEyeTracking(EyeTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Initializes or destroys the QR code tracker depending on the mode.
+  XrResult ConfigureQrCodeTracking(QrCodeTrackingMode mode, float size)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Creates a planes tracker. This is used to search for and keep track of
   // the plane trackables. This will be called when the session becomes in
   // focus or whenever planes are queried if it does not already exist. It
@@ -792,6 +832,11 @@ class OpenXrManager {
 
   // Create an image tracker if one does not currently exist.
   XrResult MaybeCreateAugmentedImageTracker()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Create a QR code tracker if it is not already created, or if the requested
+  // tracking mode differs from the existing one.
+  XrResult CreateQrCodeTrackerIfNecessary(QrCodeTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Creates persistence_handle_ if it is not already created. Returns
@@ -833,6 +878,16 @@ class OpenXrManager {
   XrResult FetchSystemImageTrackingPropertiesIfNecessary()
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Returns true if the system QR code tracking properties
+  // offers support for QR code tracking.
+  bool SupportsQrCodeTracking() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // If system properties have not been cached, call xrGetSystemProperties,
+  // retrieve the optional XrSystemQrCodeTrackingPropertiesANDROID, and cache
+  // it.
+  XrResult FetchSystemQrCodeTrackingPropertiesIfNecessary()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Validate image database creation before beginning the async call.
   // Returns XR_SUCCESS if creation can proceed.
   // Can return XR_ERROR_LIMIT_REACHED if trying to create more images than
@@ -867,6 +922,8 @@ class OpenXrManager {
   XrTrackableTrackerANDROID object_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
   XrTrackableTrackerANDROID image_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
+      XR_NULL_HANDLE;
+  XrTrackableTrackerANDROID qr_code_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
   XrHandTrackerEXT left_hand_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrHandTrackerEXT right_hand_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
@@ -917,6 +974,7 @@ class OpenXrManager {
       ABSL_GUARDED_BY(mutex_);
 
   std::vector<XrTrackableANDROID> all_plane_trackables_;
+  std::vector<XrTrackableANDROID> all_qr_code_trackables_;
   std::vector<XrTrackableANDROID> all_image_trackables_;
 
   // Only one image database exists at a time.
@@ -934,11 +992,19 @@ class OpenXrManager {
 
   XrSystemImageTrackingPropertiesANDROID image_tracking_properties_
       ABSL_GUARDED_BY(mutex_){};
+
+  XrSystemQrCodeTrackingPropertiesANDROID qr_code_tracking_properties_
+      ABSL_GUARDED_BY(mutex_){};
+
   OpenXrState open_xr_state_ ABSL_GUARDED_BY(mutex_) =
       OpenXrState::kUninitialized;
 
   XrTrackableObjectConfigurationANDROID object_tracking_config_
       ABSL_GUARDED_BY(mutex_);
+
+  XrTrackableQrCodeConfigurationANDROID qr_code_tracking_config_
+      ABSL_GUARDED_BY(mutex_) = {
+          .type = XR_TYPE_TRACKABLE_QR_CODE_CONFIGURATION_ANDROID};
 
   OpenXrManagerClockInterface* clock_;
 
@@ -964,6 +1030,7 @@ class OpenXrManager {
   bool cloud_auth_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
   bool geospatial_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
   bool image_tracking_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
+  bool qr_code_tracking_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
 
   // Mutex to guard variables that are accessible by the polling thread. It must
   // be called after the initialization_mutex_.
@@ -1060,6 +1127,8 @@ class OpenXrManager {
   PFN_xrCreateTrackableImageDatabaseCompleteANDROID
       create_trackable_image_database_complete_;
   PFN_xrDestroyTrackableImageDatabaseANDROID destroy_trackable_image_database_;
+
+  PFN_xrGetTrackableQrCodeANDROID get_trackable_qr_code_;
 
   PFN_xrGetSystemProperties get_system_properties_;
 

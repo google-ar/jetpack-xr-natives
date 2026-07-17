@@ -134,6 +134,8 @@ std::unique_ptr<AsyncScopedCanvas> AsyncCanvasSourceWrapper::StartDrawing(
 }
 
 void AsyncCanvasSourceWrapper::ForceReset() { source_->ForceReset(); }
+void AsyncCanvasSourceWrapper::OnPause() { source_->OnPause(); }
+void AsyncCanvasSourceWrapper::OnResume() { source_->OnResume(); }
 
 TextMetrics AsyncCanvasSourceWrapper::MeasureGlyphSync(
     GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options) {

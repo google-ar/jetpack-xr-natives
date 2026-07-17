@@ -22,8 +22,9 @@
 #include "core/config.h"
 #if IMP_PLATFORM(ANDROID)
 #include "core/materials/compiler/android_runtime_material_compiler.h"
-#endif
+#elif IMP_PLATFORM(LINUX) || IMP_PLATFORM(MACOS)
 #include "core/materials/compiler/desktop_runtime_material_compiler.h"
+#endif
 #include "core/materials/compiler/runtime_material_compiler.h"
 #include "core/view/base_view.h"
 
@@ -38,8 +39,12 @@ RuntimeMaterialCompilerCreator::Create(
                                                   native_library_override);
   }
   return AndroidRuntimeMaterialCompiler::Create(view);
-#endif
+#elif IMP_PLATFORM(LINUX) || IMP_PLATFORM(MACOS)
   return DesktopRuntimeMaterialCompiler::Create(view);
+#else
+  return absl::UnimplementedError(
+      "RuntimeMaterialCompiler is not supported on this platform yet.");
+#endif
 }
 
 }  // namespace imp

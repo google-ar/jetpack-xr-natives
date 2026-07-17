@@ -89,10 +89,46 @@ static_assert(
 static_assert(
     DoEnumsMatch(TexturePipelineRendererState::Texture::Format::DEPTH32F,
                  android_xr::schemas::RenderTargetTextureFormat::DEPTH32F));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::R8UI,
+                 android_xr::schemas::RenderTargetTextureFormat::R8UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RG8UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RG8UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RGB8UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RGB8UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RGBA8UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RGBA8UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::R16UI,
+                 android_xr::schemas::RenderTargetTextureFormat::R16UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RG16UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RG16UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RGB16UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RGB16UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RGBA16UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RGBA16UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::R32UI,
+                 android_xr::schemas::RenderTargetTextureFormat::R32UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RG32UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RG32UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RGB32UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RGB32UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RGBA32UI,
+                 android_xr::schemas::RenderTargetTextureFormat::RGBA32UI));
 
 static_assert(
     android_xr::schemas::RenderTargetTextureFormat::MAX ==
-        android_xr::schemas::RenderTargetTextureFormat::R16F,
+        android_xr::schemas::RenderTargetTextureFormat::RGBA32UI,
     "New fields added to RenderTargetTextureFormat but assert not updated");
 
 // Verify imp::TexturePipelineRendererState::AutomaticTextureSize::Mode and

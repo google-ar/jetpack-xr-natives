@@ -17,13 +17,12 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_VISUALIZERS_MATERIAL_VISUALIZER_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_VISUALIZERS_MATERIAL_VISUALIZER_H_
 
-
 #include "core/assets/asset_ptr.h"
+#include "core/assets/proto_asset.h"
 #include "core/async/future.h"
 #include "core/render/texture.h"
 #include "core/render/texture_registry.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/assets/proto_asset.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
 #include "core/view/utils/string_map.h"
 

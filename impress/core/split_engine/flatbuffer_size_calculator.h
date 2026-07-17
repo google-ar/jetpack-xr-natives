@@ -44,6 +44,9 @@ class FlatbufferSizeCalculator {
   // Adds a vector of given length containing elements of given size.
   FlatbufferSizeCalculator& AddVector(size_t length, size_t element_size);
 
+  // Adds a string of given length (without null terminator).
+  FlatbufferSizeCalculator& AddString(size_t length);
+
   // Adds a vector of given length containing structs of given size.
   FlatbufferSizeCalculator& AddVectorOfStructs(size_t length,
                                                size_t element_size);
@@ -54,7 +57,7 @@ class FlatbufferSizeCalculator {
   // Each method adds a table from the split engine schema of the same name.
   FlatbufferSizeCalculator& AddImageParams();
   FlatbufferSizeCalculator& AddPixelBuffer();
-  FlatbufferSizeCalculator& AddTexture();
+  FlatbufferSizeCalculator& AddTexture(bool has_name);
   FlatbufferSizeCalculator& AddAttributeVector(size_t num_attributes);
   FlatbufferSizeCalculator& AddVertexBlockInfo();
   FlatbufferSizeCalculator& AddVertexBufferInfo();
@@ -101,8 +104,9 @@ class FlatbufferSizeCalculator {
   //     - A PixelBuffer object for the buffer
   //   - Vector of references to the PixelBuffer objects
   //   - The texture object
+  //   - The name string (optional)
   FlatbufferSizeCalculator& AddTextureAndDependentData(
-      const std::vector<size_t>& buffer_sizes);
+      const std::vector<size_t>& buffer_sizes, size_t name_size = 0);
 
   // Given an image buffer size, computes the size of a
   // CubemapLevelImageContents and all the

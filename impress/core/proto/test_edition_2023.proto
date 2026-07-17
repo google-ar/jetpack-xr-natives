@@ -41,3 +41,11 @@ message TestEdition2023Message {
       [features.(.imp.impress_feature_set).presence_mode =
            OPTIONAL_WITH_DEFAULT];
 }
+
+message OneofMessage2023 {
+  oneof variant {
+    int32 i32 = 1;
+    double dbl = 2;
+    string str = 3;
+  }
+}

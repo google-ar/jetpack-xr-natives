@@ -36,7 +36,7 @@ import java.util.function.Consumer;
 
 /** Handles MessageToNative and MessageToScript transport between Java and C++. */
 public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
-  private final long viewHostHandle;
+  private final long scriptMessageHandlerProviderHandle;
 
   /**
    * A pending request for an async API call.
@@ -138,8 +138,8 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
   private int nextPromiseId = 1;
 
   /** Creates a new ScriptBridge with the given view host handle for posting messages. */
-  public ScriptBridge(long viewHostHandle) {
-    this.viewHostHandle = viewHostHandle;
+  public ScriptBridge(long scriptMessageHandlerProviderHandle) {
+    this.scriptMessageHandlerProviderHandle = scriptMessageHandlerProviderHandle;
   }
 
   @Override
@@ -233,7 +233,7 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
       if (byteArray.length == 0) {
         throw new ApiException("Failed to serialize request.");
       }
-      nPostMessage(this, viewHostHandle, byteArray, request.args());
+      nPostMessage(this, scriptMessageHandlerProviderHandle, byteArray, request.args());
     } catch (ApiException ex) {
       // An async request can fail immediately, in which case we should set the exception on the
       // future and discard the pending request since we don't expect a message with that ID to be
@@ -326,7 +326,7 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
 
   // LINT.IfChange(scripting)
   private static native void nPostMessage(
-      Object self, long viewHostHandle, byte[] request, List<Object> args);
+      Object self, long scriptMessageHandlerProviderHandle, byte[] request, List<Object> args);
   // LINT.ThenChange(
   //
   // //depot/google3/third_party/impress/core/scripting/web/android/jni/scripting_bridge_jni.cc:scripting

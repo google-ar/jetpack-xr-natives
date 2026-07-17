@@ -18,6 +18,8 @@
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_COMPONENT_ID_H_
 
 #include <array>
+#include <atomic>
+#include <cstdint>
 
 #include "absl/base/attributes.h"
 #include "core/common/base_pool_allocator.h"
@@ -26,12 +28,39 @@
 
 namespace imp {
 
-// Used to refer to a component type at runtime.
-using ComponentId = HashValue;
+namespace imp_internal {
 
-// Used to get a Component's id so that it can be used at runtime.
+inline std::atomic<uint32_t>& GetComponentIdCounter() {
+  // This is an atomic even though Impress APIs are all accessed from the
+  // foreground thread to ensure that the ID is unique across multiple threads
+  // that have their own Impress instances in the same process.
+  static std::atomic<uint32_t> value = 0;
+  return value;
+}
+
+}  // namespace imp_internal
+
+// Used to refer to a component type at runtime.
+using ComponentId = uint32_t;
+
+// Returns the component ID for the given component type.
+//
+// This is an index that sequentially increases as the application runs for each
+// unique component type.
+//
+// This is used to access component pools via a sparse set in O(1) time,
+// avoiding the need for hash map lookups.
+//
+// Note: This ID is not stable across application runs. For serialization, the
+// ISF proto state type urls are used instead.
 template <typename T>
-constexpr ComponentId kComponentId = type_traits::kTypeHash<T>;
+inline uint32_t GetComponentTypeId() {
+  // This is a static variable that is initialized only once, the first time
+  // this function is called for a particular type T. All subsequent calls for
+  // the same type T will return the same value.
+  static const uint32_t kId = imp_internal::GetComponentIdCounter()++;
+  return kId;
+}
 
 // Key used to identify a component instance within a pool.
 //
@@ -53,8 +82,8 @@ using ComponentIds ABSL_DEPRECATED("Use imp::UpdateIds<T> instead.") =
 //   third_party/impress/core/ncsb/component_test.cc
 template <typename... Args>
 struct CleanupIds {
-  static constexpr std::array<ComponentId, sizeof...(Args)> kIds{
-      kComponentId<Args>...};
+  static constexpr std::array<HashValue, sizeof...(Args)> kHashes{
+      type_traits::kTypeHash<Args>...};
 };
 
 }  // namespace imp

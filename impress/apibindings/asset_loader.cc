@@ -22,10 +22,25 @@
 #include "core/common/jni_helpers.h"
 
 namespace imp {
+namespace {
+const char* GetAssetLoaderPath(JNIEnv* env) {
+  static const char* kPath =
+      "androidx/xr/scenecore/spatial/rendering/impress/AssetLoader";
+  static const char* kFallbackPath =
+      "androidx/xr/scenecore/impl/impress/AssetLoader";
+  if (env->FindClass(kPath) != nullptr) {
+    return kPath;
+  }
+  JavaExceptionPrintClear(env);
+  if (env->FindClass(kFallbackPath) != nullptr) {
+    return kFallbackPath;
+  }
+  return nullptr;
+}
+}  // namespace
 
 AssetLoader::AssetLoader(JNIEnv* env, jobject j_asset_loader)
-    : JavaWrapper(env, j_asset_loader,
-                  "androidx/xr/scenecore/impl/impress/AssetLoader") {
+    : JavaWrapper(env, j_asset_loader, GetAssetLoaderPath(env)) {
   on_success_ = GetMethodHandle("onSuccess", "(J)V");
   on_failure_ = GetMethodHandle("onFailure", "(Ljava/lang/String;)V");
 }

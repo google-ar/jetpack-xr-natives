@@ -117,9 +117,24 @@ class OneOf {
   // Equivalent to checking if Holds<Tag>() is true for any Tag.
   constexpr bool HasValue() const noexcept;
 
+  // Returns the 0-based index of the currently active Tag.
+  // 0 means empty (monostate). 1 means the first Tag, 2 means the second, etc.
+  // Prefer to use HasValue() or Holds<Tag>().
+  constexpr int Index() const noexcept;
+
   // Returns true if the OneOf holds a value of the specified Tag.
   template <typename Tag>
   constexpr bool Holds() const noexcept;
+
+  // Returns a const pointer to the value for the specified Tag if it is
+  // held, otherwise nullptr.
+  template <typename Tag>
+  constexpr const typename Tag::Type* GetIf() const noexcept;
+
+  // Returns a mutable pointer to the value for the specified Tag if it is
+  // held, otherwise nullptr.
+  template <typename Tag>
+  constexpr typename Tag::Type* GetIf() noexcept;
 
   // Clears the assigned value if there is one. After this call, HasValue()
   // will return false.
@@ -187,9 +202,32 @@ constexpr bool OneOf<Tags...>::HasValue() const noexcept {
 }
 
 template <typename... Tags>
+constexpr int OneOf<Tags...>::Index() const noexcept {
+  return variant_.index();
+}
+
+template <typename... Tags>
 template <typename Tag>
 constexpr bool OneOf<Tags...>::Holds() const noexcept {
   return std::holds_alternative<Wrapper<Tag>>(variant_);
+}
+
+template <typename... Tags>
+template <typename Tag>
+constexpr const typename Tag::Type* OneOf<Tags...>::GetIf() const noexcept {
+  if (const auto* wrapper = std::get_if<Wrapper<Tag>>(&variant_)) {
+    return &wrapper->value;
+  }
+  return nullptr;
+}
+
+template <typename... Tags>
+template <typename Tag>
+constexpr typename Tag::Type* OneOf<Tags...>::GetIf() noexcept {
+  if (auto* wrapper = std::get_if<Wrapper<Tag>>(&variant_)) {
+    return &wrapper->value;
+  }
+  return nullptr;
 }
 
 template <typename... Tags>

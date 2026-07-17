@@ -38,6 +38,7 @@ static constexpr absl::string_view kExtensionExr = ".exr";
 static constexpr absl::string_view kExtensionHdr = ".hdr";
 static constexpr absl::string_view kExtensionTexturePng = ".png";
 static constexpr absl::string_view kExtensionTextureJpg = ".jpg";
+static constexpr absl::string_view kExtensionMat = ".mat";
 }  // namespace
 
 const FileType kFileTypeGltf =
@@ -48,6 +49,7 @@ const FileType kFileTypeHdrImage =
     FileType::Create({kExtensionExr, kExtensionHdr});
 const FileType kFileTypeTexture =
     FileType::Create({kExtensionTexturePng, kExtensionTextureJpg});
+const FileType kFileTypeMat = FileType::Create({kExtensionMat});
 
 void FileTypeRegistry::RegisterFileTypeLoader(
     FileType file_type, std::unique_ptr<FileTypeLoader> file_type_loader) {

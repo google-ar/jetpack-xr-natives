@@ -689,6 +689,14 @@ BorrowedTexturePtr TextureFactory::BorrowRGBA32FPlaceholderTexture(
   return rgba32f_placeholder_texture_.Borrow(loc);
 }
 
+BorrowedTexturePtr TextureFactory::BorrowRGBA32UIPlaceholderTexture(
+    SmallSourceLocation loc) {
+  if (!rgba32ui_placeholder_texture_) {
+    rgba32ui_placeholder_texture_ = CreateRGBA32UIPlaceholderTexture();
+  }
+  return rgba32ui_placeholder_texture_.Borrow(loc);
+}
+
 OwnedTexturePtr TextureFactory::CreatePlaceholderTexture(const uint32_t pixel) {
   constexpr int kPlaceholderTextureSize = 2;
 
@@ -761,5 +769,30 @@ OwnedTexturePtr TextureFactory::CreateRGBA32FPlaceholderTexture() {
 
   return CreateTexture(image_contents, TextureGenerationOptions{},
                        TextureSamplerOptions{}, "RGBA32F Placeholder Texture");
+}
+
+OwnedTexturePtr TextureFactory::CreateRGBA32UIPlaceholderTexture() {
+  filament::math::uint4 pixel_data = {0xffffffff, 0xffffffff, 0xffffffff,
+                                      0xffffffff};
+
+  std::vector<uint4> kPlaceholderTextureUints = {pixel_data,   // pixel 1
+                                                 pixel_data,   // pixel 2
+                                                 pixel_data,   // pixel 3
+                                                 pixel_data};  // pixel 4
+
+  std::unique_ptr<std::vector<uint4>> image_data =
+      std::make_unique<std::vector<uint4>>(
+          std::vector<uint4>(std::move(kPlaceholderTextureUints)));
+
+  constexpr int kPlaceholderTextureSize = 2;
+
+  image::OwnedImageContents<uint4> image_content(
+      kPlaceholderTextureSize, kPlaceholderTextureSize, std::move(image_data),
+      filament::backend::TextureFormat::RGBA32UI,
+      filament::backend::PixelDataFormat::RGBA_INTEGER,
+      filament::backend::PixelDataType::UINT);
+
+  return CreateTexture(image_content, TextureGenerationOptions(),
+                       TextureSamplerOptions(), "RGBA32UI Placeholder Texture");
 }
 }  // namespace imp

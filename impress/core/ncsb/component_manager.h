@@ -30,6 +30,7 @@
 #include "absl/status/statusor.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/async/future.h"
+#include "core/common/hash.h"
 #include "core/common/robin_map.h"
 #include "core/common/trace.h"
 #include "core/common/type_traits.h"
@@ -170,10 +171,6 @@ class ComponentManager {
   void CreateComponentSystem(Args&&... args);
 
  private:
-  using ComponentPoolMap =
-      RobinMap<ComponentId, std::unique_ptr<BaseComponentPool>>;
-  using ComponentPoolListView = std::vector<BaseComponentPool*>;
-
   // Used when setting up a component to help control when SetupWithState
   // methods vs. regular Setup methods are called.
   enum class SetupMode {
@@ -213,21 +210,21 @@ class ComponentManager {
   template <typename T>
   void AddPoolToCleanupGraph(BaseComponentPool* pool);
 
-  // The component pools for each type of component that has been added mapped
-  // by the type of component.
-  ComponentPoolMap component_pools_;
-
-  // A list of all the component pools that can be quickly iterated through.
+  // Stores a sparse set of all the component pools.
   //
-  // This is just a view into the pools stored in component_pools_.
+  // ComponentId / GetComponentTypeId<T>() can be used to get the index into
+  // this vector directly. ComponentId acts as an incrementing sequential index
+  // for the lifetime of the application.
   //
-  // This can be used to iterate over the pools quickly using indices in cases
-  // where the component pools could become invalidated.
-  ComponentPoolListView component_pools_list_view_;
+  // This allows fast lookup of component pools by avoiding hash map overhead.
+  std::vector<std::unique_ptr<BaseComponentPool>> component_pools_;
 
   // This is used to determine the order in which components are removed when a
   // node is destroyed.
-  DependencyGraph<ComponentId, BaseComponentPool*> cleanup_graph_;
+  //
+  // This uses the hash of the component type because it needs to be known at
+  // compile time.
+  DependencyGraph<HashValue, BaseComponentPool*> cleanup_graph_;
 
   template <SetupMode setup_mode, typename T, typename... Args>
   auto OptionalAddResultTypeUnpacker();
@@ -237,7 +234,7 @@ class ComponentManager {
   // or a Future<ComponentHandle<T>>, depending on the return type of
   // Setup(Args...).
   //
-  // If a component of type T is not found and if Setup(Args...) is aync, check
+  // If a component of type T is not found and if Setup(Args...) is async, check
   // to see if there's any component of type T that's currently being added. If
   // so, returns Future<ComponentHandle<T>>.
   //
@@ -526,17 +523,24 @@ void ComponentManager::UpdateEach(Fn&& fn) {
 
 template <typename Fn>
 void ComponentManager::ForEachPool(Fn&& fn) {
-  for (size_t i = 0; i < component_pools_list_view_.size(); i++) {
-    BaseComponentPool* pool = component_pools_list_view_[i];
-    fn(pool);
+  for (size_t i = 0; i < component_pools_.size(); i++) {
+    BaseComponentPool* pool = component_pools_[i].get();
+    if (pool) {
+      fn(pool);
+    }
   }
 }
 
 template <typename T>
 ComponentPool<T>& ComponentManager::GetComponentPool() {
-  ComponentId component_id = kComponentId<T>;
-  auto itr = component_pools_.find(component_id);
-  if (itr == component_pools_.end()) {
+  ComponentId component_id = GetComponentTypeId<T>();
+  BaseComponentPool* base_pool = GetComponentPoolById(component_id);
+
+  if (base_pool == nullptr) {
+    if (component_pools_.size() <= component_id) {
+      component_pools_.resize(component_id + 1);
+    }
+
     if constexpr (!component_traits::kIsComponentSystemDefined<T>) {
       if constexpr (component_traits::kHasUpdateFunc<T>) {
         component_pools_[component_id] =
@@ -558,15 +562,11 @@ ComponentPool<T>& ComponentManager::GetComponentPool() {
       }
     }
 
-    BaseComponentPool* base_pool = component_pools_.at(component_id).get();
-    component_pools_list_view_.push_back(base_pool);
+    base_pool = component_pools_[component_id].get();
     AddPoolToCleanupGraph<T>(base_pool);
-    ComponentPool<T>& pool = *static_cast<ComponentPool<T>*>(base_pool);
-    return pool;
   }
 
-  BaseComponentPool* pool = itr->second.get();
-  return *static_cast<ComponentPool<T>*>(pool);
+  return *static_cast<ComponentPool<T>*>(base_pool);
 }
 
 template <typename T>
@@ -585,25 +585,28 @@ bool ComponentManager::HasComponentSystem() {
                 "Cannot call HasComponentSystem with Component type that "
                 "doesn't declare a ComponentSystem.");
 
-  ComponentId component_id = kComponentId<T>;
-  return component_pools_.contains(component_id);
+  return GetComponentPoolById(GetComponentTypeId<T>()) != nullptr;
 }
 
 template <typename T, typename... Args>
 void ComponentManager::CreateComponentSystem(Args&&... args) {
-  ComponentId component_id = kComponentId<T>;
-  auto itr = component_pools_.find(component_id);
-  if (itr != component_pools_.end()) {
+  ComponentId component_id = GetComponentTypeId<T>();
+  BaseComponentPool* base_pool = GetComponentPoolById(component_id);
+
+  if (base_pool != nullptr) {
     IMP_LOG(imp::FATAL)
         << "Cannot create ComponentSystem, the ComponentPool has already been "
            "created.";
   }
 
+  if (component_pools_.size() <= component_id) {
+    component_pools_.resize(component_id + 1);
+  }
+
   component_pools_[component_id] = std::make_unique<ComponentSystemPool<T>>(
       *view_,
       std::make_unique<typename T::System>(view_, std::forward<Args>(args)...));
-  BaseComponentPool* base_pool = component_pools_.at(component_id).get();
-  component_pools_list_view_.push_back(base_pool);
+  base_pool = component_pools_[component_id].get();
   AddPoolToCleanupGraph<T>(base_pool);
 }
 
@@ -613,15 +616,15 @@ void ComponentManager::AddPoolToCleanupGraph(BaseComponentPool* pool) {
       component_traits::kAreCleanupDependenciesDefined<T>;
   constexpr bool kHasCleanupDependents =
       component_traits::kAreCleanupDependentsDefined<T>;
-  constexpr ComponentId component_id = kComponentId<T>;
+  constexpr HashValue component_hash = type_traits::kTypeHash<T>;
 
   if constexpr (kHasCleanupDependencies) {
     static_assert(type_traits::IsTemplateType<typename T::CleanupDependencies,
                                               CleanupIds>::value,
-                  "CleanupDependencies must be of type CIds.");
-    static_assert(!T::CleanupDependencies::kIds.empty());
-    for (ComponentId id : T::CleanupDependencies::kIds) {
-      cleanup_graph_.AddDependency(component_id, id);
+                  "CleanupDependencies must be of type CleanupIds.");
+    static_assert(!T::CleanupDependencies::kHashes.empty());
+    for (HashValue hash : T::CleanupDependencies::kHashes) {
+      cleanup_graph_.AddDependency(component_hash, hash);
     }
   }
 
@@ -629,17 +632,17 @@ void ComponentManager::AddPoolToCleanupGraph(BaseComponentPool* pool) {
     static_assert(type_traits::IsTemplateType<typename T::CleanupDependents,
                                               CleanupIds>::value,
                   "CleanupDependents must be of type CleanupIds.");
-    static_assert(!T::CleanupDependents::kIds.empty());
-    for (ComponentId id : T::CleanupDependents::kIds) {
-      cleanup_graph_.AddDependency(id, component_id);
+    static_assert(!T::CleanupDependents::kHashes.empty());
+    for (HashValue hash : T::CleanupDependents::kHashes) {
+      cleanup_graph_.AddDependency(hash, component_hash);
     }
   }
 
   if constexpr (!kHasCleanupDependencies && !kHasCleanupDependents) {
-    cleanup_graph_.AddNode(component_id);
+    cleanup_graph_.AddNode(component_hash);
   }
 
-  cleanup_graph_.SetExtra(component_id, pool);
+  cleanup_graph_.SetExtra(component_hash, pool);
 }
 
 }  // namespace imp

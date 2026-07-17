@@ -61,6 +61,20 @@ ToFilamentShadowSamplingQuality(
   }
 }
 
+filament::Material::UboBatchingMode ToFilamentUboBatchingMode(
+    MaterialPreCompileOptions::UboBatchingOption option) {
+  switch (option) {
+    case MaterialPreCompileOptions::UboBatchingOption::
+        UBO_BATCHING_OPTION_UNSPECIFIED:
+    case MaterialPreCompileOptions::UboBatchingOption::
+        UBO_BATCHING_OPTION_DEFAULT:
+      return filament::Material::UboBatchingMode::DEFAULT;
+    case MaterialPreCompileOptions::UboBatchingOption::
+        UBO_BATCHING_OPTION_DISABLED:
+      return filament::Material::UboBatchingMode::DISABLED;
+  }
+}
+
 Future<std::unique_ptr<MaterialAsset>> CreateMaterialFromResource(
     BaseView* view, MaterialPreCompileOptions material_pre_compile_options,
     resources::Resource resource) {
@@ -156,6 +170,8 @@ filament::Material* MaterialAsset::BuildMaterial(
       material_pre_compile_options.spherical_harmonics_bands.value_or(3));
   builder.shadowSamplingQuality(ToFilamentShadowSamplingQuality(
       material_pre_compile_options.shadow_sampling_quality));
+  builder.uboBatching(ToFilamentUboBatchingMode(
+      material_pre_compile_options.ubo_batching_option));
   return builder.build(engine);
 }
 

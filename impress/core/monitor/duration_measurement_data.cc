@@ -21,18 +21,14 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <utility>
 
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "core/common/platform_helpers.h"
 #include "core/math/moving_average.h"
 #include "core/monitor/measurement_data.h"
 #include "core/monitor/monitor.h"
-#include "core/monitor/monitor_helpers.h"
 #include "core/monitor/simple_histogram.h"
-#include "mediapipe/framework/deps/clock.h"
 
 namespace imp {
 

@@ -21,15 +21,24 @@
 #include <optional>
 #include <utility>
 
+#include "absl/base/no_destructor.h"
+#include "absl/container/flat_hash_set.h"
+#include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
+#include "filament/filament/include/filament/Color.h"
+#include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/string.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/gsplat/gsplat_asset.h"
+#include "core/gsplat/gsplat_material_params.h"
 #include "core/materials/material.h"
+#include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node.h"
 #include "core/render/texture.h"
@@ -76,9 +85,46 @@ flatbuffers::Offset<android_xr::schemas::ProjectionQuad> ToProjectionQuadSchema(
   }
 }
 
+bool IsParameterSupported(absl::string_view parameter_name) {
+  static const absl::NoDestructor<absl::flat_hash_set<absl::string_view>>
+      kValues({
+          imp::kColorDataTextureParameter,
+          imp::kCov3dDataTextureParameter,
+          imp::kMagicWindowFromUserWorldMatrixParameter,
+          imp::kMagicWindowOffscreenResolutionParameter,
+          imp::kMainViewResolutionParameter,
+          imp::kMaxScreenSizeParameter,
+          imp::kMinScreenSizeParameter,
+          imp::kOpacityScaleParameter,
+          imp::kPositionDataTextureParameter,
+          imp::kSortedIndicesParameter,
+          imp::kSplatDataPrecomputedParameter,
+          imp::kSplatScaleParameter,
+          imp::kWindowDimensionInMagicWindowParameter,
+      });
+  return kValues->contains(parameter_name);
+}
+
+void UnsupportedParameterError(absl::string_view parameter_name) {
+  IMP_LOG(imp::DFATAL) << (IsParameterSupported(parameter_name)
+                      ? "Type mismatch for parameter: "
+                      : "No such parameter: ")
+              << parameter_name;
+}
+
+bool TextureSamplersAreSame(const filament::TextureSampler& lhs,
+                            const filament::TextureSampler& rhs) {
+  return lhs.getSamplerParams() == rhs.getSamplerParams() &&
+         lhs.getWrapModeS() == rhs.getWrapModeS() &&
+         lhs.getWrapModeT() == rhs.getWrapModeT() &&
+         lhs.getWrapModeR() == rhs.getWrapModeR() &&
+         lhs.getAnisotropy() == rhs.getAnisotropy() &&
+         lhs.getCompareMode() == rhs.getCompareMode() &&
+         lhs.getCompareFunc() == rhs.getCompareFunc();
+}
 }  // namespace
 
-imp::Future<std::unique_ptr<GsplatMaterialSerializer>>
+imp::Future<imp::OwnedPtr<GsplatMaterialSerializer>>
 GsplatMaterialSerializer::Create(
     imp::NodeHandle gsplat_node, imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
     android_xr::schemas::GsplatMode material_mode,
@@ -131,10 +177,11 @@ GsplatMaterialSerializer::Create(
       .Then([&view, gsplat_asset, material_mode, precomputed_data_texture,
              magic_window_offscreen_texture_resolution](
                 imp::OwnedMaterialPtr material) mutable {
-        return absl::WrapUnique(new GsplatMaterialSerializer(
-            view, std::move(material), gsplat_asset, material_mode,
-            precomputed_data_texture,
-            magic_window_offscreen_texture_resolution));
+        return imp::OwnedPtr<GsplatMaterialSerializer>(
+            new GsplatMaterialSerializer(
+                view, std::move(material), gsplat_asset, material_mode,
+                precomputed_data_texture,
+                magic_window_offscreen_texture_resolution));
       });
 }
 
@@ -210,6 +257,292 @@ flatbuffers::Offset<void> GsplatMaterialSerializer::SerializeParameters(
   return schemas::CreateBuiltInMaterialGsplatParameters(
              fbb, mode_parameters_type, mode_parameters_offset)
       .Union();
+}
+
+bool GsplatMaterialSerializer::HasParameter(absl::string_view parameter_name) {
+  return IsParameterSupported(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            float value) {
+  if (parameter_name == imp::kOpacityScaleParameter) {
+    SetOpacityScale(value);
+  } else if (parameter_name == imp::kSplatScaleParameter) {
+    SetSplatScale(value);
+  } else {
+    UnsupportedParameterError(parameter_name);
+  }
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::float2 value) {
+  if (parameter_name == imp::kMinScreenSizeParameter) {
+    SetMinScreenSize(value);
+  } else if (parameter_name == imp::kMaxScreenSizeParameter) {
+    SetMaxScreenSize(value);
+  } else {
+    UnsupportedParameterError(parameter_name);
+  }
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::uint2 value) {
+  if (parameter_name == imp::kMagicWindowOffscreenResolutionParameter) {
+    SetMagicWindowOffscreenResolution(value);
+  } else if (parameter_name == imp::kMainViewResolutionParameter) {
+    SetViewResolution(value);
+  } else {
+    UnsupportedParameterError(parameter_name);
+  }
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::mat4f value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            bool value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::bool2 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::bool3 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::bool4 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::float3 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::float4 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            int value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::int2 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::int3 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::int4 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            uint value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::uint3 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::uint4 value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            imp::mat3f value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            absl::Span<const bool> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::bool2> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::bool3> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::bool4> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            absl::Span<const float> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::float2> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::float3> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::float4> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            absl::Span<const int> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            absl::Span<const imp::int2> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            absl::Span<const imp::int3> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            absl::Span<const imp::int4> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            absl::Span<const uint> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::uint2> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::uint3> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::uint4> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::mat3f> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, absl::Span<const imp::mat4f> value) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            filament::RgbaType type,
+                                            filament::math::float4 color) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(absl::string_view parameter_name,
+                                            filament::RgbType type,
+                                            filament::math::float3 color) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, const imp::Texture* texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  UnsupportedParameterError(parameter_name);
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, imp::TexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  IMP_LOG(imp::DFATAL) << "SetParameter with TexturePtr is not supported. Use "
+                 "OwnedTexturePtr or BorrowedTexturePtr instead.";
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, imp::OwnedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  if (!texture) {
+    IMP_LOG(imp::DFATAL) << "Texture is null for parameter: " << parameter_name;
+    return;
+  }
+  if (sampler_override.has_value() &&
+      !TextureSamplersAreSame(sampler_override.value(),
+                              texture->GetSampler())) {
+    IMP_LOG(imp::DFATAL) << "Sampler override is not supported for parameter: "
+                << parameter_name;
+  }
+  if (parameter_name == imp::kSplatDataPrecomputedParameter) {
+    precomputed_data_texture_ = std::move(texture);
+  } else if (parameter_name == imp::kSortedIndicesParameter) {
+    IMP_LOG(imp::DFATAL) << "Sorted indices texture passed as an OwnedTexturePtr it "
+                   "must be a BorrowedTexturePtr.";
+  } else if (parameter_name == imp::kPositionDataTextureParameter) {
+    position_data_texture_ = std::move(texture);
+  } else if (parameter_name == imp::kCov3dDataTextureParameter) {
+    cov3d_data_texture_ = std::move(texture);
+  } else if (parameter_name == imp::kColorDataTextureParameter) {
+    color_data_texture_ = std::move(texture);
+  } else {
+    UnsupportedParameterError(parameter_name);
+  }
+  MarkParametersDirty();
+}
+
+void GsplatMaterialSerializer::SetParameter(
+    absl::string_view parameter_name, imp::BorrowedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  if (!texture) {
+    IMP_LOG(imp::DFATAL) << "Texture is null for parameter: " << parameter_name;
+    return;
+  }
+  if (sampler_override.has_value() &&
+      !TextureSamplersAreSame(sampler_override.value(),
+                              texture->GetSampler())) {
+    IMP_LOG(imp::DFATAL) << "Sampler override is not supported for parameter: "
+                << parameter_name;
+  }
+  if (parameter_name == imp::kSplatDataPrecomputedParameter) {
+    precomputed_data_texture_ = std::move(texture);
+  } else if (parameter_name == imp::kSortedIndicesParameter) {
+    sorted_indices_texture_ = std::move(texture);
+  } else if (parameter_name == imp::kPositionDataTextureParameter) {
+    position_data_texture_ = std::move(texture);
+  } else if (parameter_name == imp::kCov3dDataTextureParameter) {
+    cov3d_data_texture_ = std::move(texture);
+  } else if (parameter_name == imp::kColorDataTextureParameter) {
+    color_data_texture_ = std::move(texture);
+  } else {
+    UnsupportedParameterError(parameter_name);
+  }
+  MarkParametersDirty();
 }
 
 }  // namespace android_xr

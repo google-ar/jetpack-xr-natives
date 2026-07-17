@@ -14,9 +14,11 @@
 
 #include "core/editor/components/camera_translate.h"
 
+#include <cstdint>
 #include <optional>
 
 #include "core/common/log.h"
+#include "core/camera/camera_component.h"
 #include "core/collision/ray.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
@@ -26,7 +28,6 @@
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
-#include "core/view/framework/camera/camera_component.h"
 #include "core/view/framework/gestures/drag_gesture.h"
 #include "core/view/framework/gestures/multi_drag_gesture.h"
 
@@ -50,7 +51,11 @@ void CameraTranslate::Setup(NodeHandle pivot) {
   // TODO: Enable arrow keys for drag gesture movement
   auto drag_gesture_start_event_listener =
       [this](const DragGesture::StartEvent& event) mutable {
-        if (event.pointer != kMousePointerIdRight) {
+        Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+        uint32_t active_pointer = editor.UseLegacyCameraControls()
+                                      ? kMousePointerIdRight
+                                      : kMousePointerIdMiddle;
+        if (event.pointer != active_pointer) {
           return;
         }
         intersection_prev_ =
@@ -59,7 +64,11 @@ void CameraTranslate::Setup(NodeHandle pivot) {
 
   auto drag_gesture_update_event_listener =
       [this](const DragGesture::UpdateEvent& event) mutable {
-        if (event.pointer != kMousePointerIdRight ||
+        Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+        uint32_t active_pointer = editor.UseLegacyCameraControls()
+                                      ? kMousePointerIdRight
+                                      : kMousePointerIdMiddle;
+        if (event.pointer != active_pointer ||
             !intersection_prev_.has_value()) {
           return;
         }

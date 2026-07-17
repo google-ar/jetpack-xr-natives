@@ -15,22 +15,37 @@
 #include "core/editor/widgets/viewport/viewport_widget.h"
 
 #include <cstdint>
+#include <optional>
+#include <string>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/config.h"
 #include "core/editor/editor.h"
+#include "core/editor/editor_info.h"
+#include "core/editor/file_loader_helper.h"
+#include "core/editor/ui/drag_and_drop.h"
 #include "core/editor/widgets/viewport/viewport_helpers.h"
 #include "core/editor/widgets/viewport/viewport_render_target.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
 #include "core/view/base_view.h"
+#include "core/window/filament_host.h"
 
 namespace imp::editor {
 
 namespace {
 
+#if IMP_MATERIAL_API(OPENGL)
+// Flipped UVs for a vertically flipped texture.
 constexpr ImVec2 kUv0 = ImVec2(0.0f, 1.0f);
 constexpr ImVec2 kUv1 = ImVec2(1.0f, 0.0f);
+#else
+// Default UVs for a non-flipped texture.
+constexpr ImVec2 kUv0 = ImVec2(0.0f, 0.0f);
+constexpr ImVec2 kUv1 = ImVec2(1.0f, 1.0f);
+#endif  // IMP_MATERIAL_API(OPENGL)
 
 }  // namespace
 
@@ -53,9 +68,14 @@ void ViewportWidget::DrawImGui() {
 
   const float2 pixel_ratio = editor::GetPhysicalPixelRatio(view_);
 
-  viewport_render_target_->SetSize(
-      {static_cast<uint32_t>(viewport_panel_size.x * pixel_ratio.x),
-       static_cast<uint32_t>(viewport_panel_size.y * pixel_ratio.y)});
+  const uint2 target_size = {
+      static_cast<uint32_t>(viewport_panel_size.x * pixel_ratio.x),
+      static_cast<uint32_t>(viewport_panel_size.y * pixel_ratio.y)};
+
+  viewport_render_target_->SetSize(target_size);
+#if IMP_RUNTIME(DEV)
+  view_.SetSizeOverride(target_size);
+#endif
 
   // Must get this value BEFORE drawing the image or it will be incorrect.
   // If this value is incorrect, input coords will not be transformed properly.
@@ -64,6 +84,8 @@ void ViewportWidget::DrawImGui() {
   ImGui::Image(viewport_render_target_->GetColorTexture(), viewport_panel_size,
                kUv0, kUv1);
 
+  HandleAssetDragDrop(screen_pos);
+
   // Update the viewport rect in the editor so input can be correctly
   // transformed.
   const float2 center = {screen_pos.x + viewport_panel_size.x * 0.5f,
@@ -71,6 +93,35 @@ void ViewportWidget::DrawImGui() {
   const float2 half_extent = {viewport_panel_size.x * 0.5f,
                               viewport_panel_size.y * 0.5f};
   editor_.SetViewportRect(Rect{center, half_extent});
+}
+
+void ViewportWidget::HandleAssetDragDrop(const ImVec2 screen_pos) {
+  if (!ImGui::BeginDragDropTarget()) return;
+  // Lets us return early without having to manually call EndDragDropTarget.
+  const absl::Cleanup cleanup([]() { ImGui::EndDragDropTarget(); });
+
+  const std::optional<std::string> payload =
+      AcceptDragAndDropPayload(DragAndDropType::kNodeAsset);
+
+  if (!payload.has_value()) return;
+
+  const ImVec2 mouse_pos = ImGui::GetIO().MousePos;
+  const float2 cursor_pos = {mouse_pos.x - screen_pos.x,
+                             mouse_pos.y - screen_pos.y};
+  LoadAssetFileAtCursor(view_, *payload, LoadAssetFileFromPathSource::kAsset,
+                        cursor_pos);
+}
+
+bool ViewportWidget::HasContent() const {
+  // Do not use the viewport widget in WorldspaceUI or Remote Editor mode.
+  window::FilamentHost::DevModeExtension* dev_mode_extension =
+      view_.GetHost()->TryGetExtension();
+  const bool isWorldspaceUI =
+      dev_mode_extension && dev_mode_extension->HasRenderTarget();
+  const bool isRemoteScreen =
+      editor_.GetDisplayMode() == EditorInfo::DisplayMode::kRemoteScreen;
+
+  return !isWorldspaceUI && !isRemoteScreen;
 }
 
 }  // namespace imp::editor

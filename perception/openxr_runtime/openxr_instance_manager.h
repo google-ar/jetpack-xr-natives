@@ -1,18 +1,21 @@
 #ifndef THIRD_PARTY_JETPACK_XR_NATIVES_OPENXR_RUNTIME_OPENXR_INSTANCE_MANAGER_H_
 #define THIRD_PARTY_JETPACK_XR_NATIVES_OPENXR_RUNTIME_OPENXR_INSTANCE_MANAGER_H_
 #include <jni.h>
-#include <openxr/openxr_platform.h>
 #include <openxr/public/all_extensions.h>
+
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
 namespace androidx::xr::openxr {
 
 class OpenXrInstanceManager {
  public:
-  OpenXrInstanceManager() = default;
+  explicit OpenXrInstanceManager(
+      absl::Span<const std::string> extra_extensions = {});
   ~OpenXrInstanceManager();
 
   enum RenderingMode {
@@ -50,11 +53,19 @@ class OpenXrInstanceManager {
   bool IsRenderingModeSupported(RenderingMode mode) ABSL_LOCKS_EXCLUDED(mutex_);
 
  private:
+  // Retrieves the available extensions from the OpenXR loader.
+  bool GetAvailableExtensions(std::unordered_set<std::string>& available_exts)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Gets the extensions to be loaded from the required and optional extensions.
-  bool GetEnabledExtensions(std::vector<std::string>& enabled_exts);
+  bool GetEnabledExtensions(
+      const std::unordered_set<std::string>& available_exts,
+      std::vector<std::string>& enabled_exts)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Creates an OpenXR instance. The OpenXR runtime must first be loaded by
-  // calling LoadOpenXr.
+  // calling LoadOpenXr. Throws an exception of one of the extra extensions is
+  // not supported.
   bool CreateInstance(JNIEnv* env, jobject context)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
@@ -67,6 +78,7 @@ class OpenXrInstanceManager {
   absl::Mutex mutex_;
   XrInstance instance_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrSystemId system_id_ ABSL_GUARDED_BY(mutex_) = XR_NULL_SYSTEM_ID;
+  const std::vector<std::string> extra_extensions_;
 
   JNIEnv* java_env_ = nullptr;
   JavaVM* app_vm_ = nullptr;

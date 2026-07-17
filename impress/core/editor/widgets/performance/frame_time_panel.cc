@@ -21,9 +21,12 @@
 #include <thread>  // NOLINT: Need to sort things by thread id.
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 #include "implot/implot.h"
@@ -37,6 +40,7 @@
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/memory_stats.h"
 #include "core/performance/profiler.h"
+#include "core/performance/profiler_state.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -380,20 +384,20 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
   const std::thread::id main_thread_id = Profiler::GetMainThreadId();
 
   const int end_index = Profiler::GetCurrentFrameIndex() - 1;
-  const int start_index = end_index - Profiler::kMaxFrames;
+  const int start_index = end_index - MainThreadProfilerState::kMaxFrames;
 
-  for (size_t i = 0; i < Profiler::kMaxFrames; ++i) {
+  for (size_t i = 0; i < MainThreadProfilerState::kMaxFrames; ++i) {
     const int frame_index = start_index + i;
 
     selected_sample_buffer_[i].frame_number = static_cast<float>(frame_index);
     selected_sample_buffer_[i].frame_time_ms = 0.0f;
 
     // Get all samples with the selected sample name for this frame and thread.
-    const std::vector<SampleNode*>* samples =
+    const absl::StatusOr<absl::Span<SampleNode* const>> samples =
         GetSamples(selected_sample_name_, frame_index, main_thread_id);
 
     // If there are no samples for this frame on this thread then we continue.
-    if (!samples) continue;
+    if (!samples.ok() || samples->empty()) continue;
 
     uint32_t total_time_ns = 0;
 
@@ -410,18 +414,17 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
   selected_sample_changed_ = false;
 }
 
-const std::vector<SampleNode*>* FrameTimePanel::GetSamples(
+absl::StatusOr<absl::Span<SampleNode* const>> FrameTimePanel::GetSamples(
     absl::string_view sample_name, int frame_index, std::thread::id thread_id) {
-  if (!Profiler::HasFrameRecorded(frame_index)) return nullptr;
+  if (!Profiler::HasFrameRecorded(frame_index)) {
+    return absl::NotFoundError(
+        absl::StrFormat("Frame %d was not recorded.", frame_index));
+  }
 
   const ProcessedSamples& processed_frame =
       sample_processor_.GetProcessedFrame(frame_index);
 
-  const auto& sample_it = processed_frame.samples_by_name.find(sample_name);
-
-  if (sample_it == processed_frame.samples_by_name.end()) return nullptr;
-
-  return &sample_it->second;
+  return processed_frame.GetSamplesByName(sample_name);
 }
 
 void FrameTimePanel::DrawHighlightFrame(int frame_number, ImDrawList* draw_list,

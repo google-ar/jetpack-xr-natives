@@ -165,7 +165,7 @@ PropertyAnimation::GetAnimationFrames(const AnimationValues* sampler_values) {
       [](auto&& values_variant)
           -> absl::StatusOr<PropertyAnimation::FramesVariant> {
         using T = std::decay_t<decltype(values_variant)>;
-        if constexpr (std::is_same_v<T, absl::monostate>) {
+        if constexpr (std::is_same_v<T, std::monostate>) {
           return absl::FailedPreconditionError(
               "Missing AnimationSampler values_array");
         } else {

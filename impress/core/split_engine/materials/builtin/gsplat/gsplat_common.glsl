@@ -22,6 +22,20 @@ ivec2 getSampleCoord(int index, int stride, highp usampler2D dataTexture) {
   return ivec2(index * stride % dataWidth, index * stride / dataWidth);
 }
 
+// Custom implementation of packUnorm4x8 needed for Metal as some drivers do not
+// handle correctly - see b/490401325.
+uint _packUnorm4x8(vec4 v) {
+  #if defined(TARGET_METAL_ENVIRONMENT)
+    // 1. Clamp values to [0.0, 1.0]
+    // 2. Scale by 255.0 and round
+    // 3. Convert to uvec4 and shift bits
+    uvec4 res = uvec4(round(clamp(v, 0.0, 1.0) * 255.0));
+    return (res.x << 0u) | (res.y << 8u) | (res.z << 16u) | (res.w << 24u);
+  #else
+    return packUnorm4x8(v);
+  #endif
+}
+
 // unpacks the 3d covariance matrix from it's packed uint3 representation.
 // expects the uint3 to encode the upper half of the 3d covariance matrix
 // via half precision floats.
@@ -174,21 +188,19 @@ vec2 getVertexCoord(int vertIndex, bool useTrianglesForSplats) {
 
 // Mono version of fetchPrecomputedSplatData
 // eyeIndex is unused, but kept so the function signature matches the 3D version.
-uint4 fetchPrecomputedSplatData(int splatIndex, int splatDataWidth, int /*eyeIndex*/, const highp sampler2D dataTexture) {
+uint4 fetchPrecomputedSplatData(int splatIndex, int splatDataWidth, int /*eyeIndex*/, const highp usampler2D dataTexture) {
   ivec2 sampleCoord = ivec2(0);
   sampleCoord.x = splatIndex % splatDataWidth;
   sampleCoord.y = splatIndex / splatDataWidth;
-  highp vec4 splatDataPrecomputedFloats = texelFetch(dataTexture, sampleCoord, 0);
-  return floatBitsToUint(splatDataPrecomputedFloats);
+  return texelFetch(dataTexture, sampleCoord, 0);
 }
 
 // Stereo version of fetchPrecomputedSplatData
-uint4 fetchPrecomputedSplatData(int splatIndex, int splatDataWidth, int eyeIndex, const highp sampler2DArray dataTexture) {
+uint4 fetchPrecomputedSplatData(int splatIndex, int splatDataWidth, int eyeIndex, const highp usampler2DArray dataTexture) {
   ivec3 sampleCoord = ivec3(0);
   sampleCoord.x = splatIndex % splatDataWidth;
   sampleCoord.y = splatIndex / splatDataWidth;
   // eyeIndex is used to index depth into the 3D texture.
   sampleCoord.z = eyeIndex;
-  highp vec4 splatDataPrecomputedFloats = texelFetch(dataTexture, sampleCoord, 0);
-  return floatBitsToUint(splatDataPrecomputedFloats);
+  return texelFetch(dataTexture, sampleCoord, 0);
 }

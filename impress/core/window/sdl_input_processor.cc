@@ -326,6 +326,10 @@ absl::Status ProcessInputFromSdlEvent(FilamentHost* host,
         pointers.push_back(kMousePointerIdRight);
         event_type = imp::PointerEventType::kMove;
       }
+      if (event->motion.state & SDL_BUTTON_MMASK) {
+        pointers.push_back(kMousePointerIdMiddle);
+        event_type = imp::PointerEventType::kMove;
+      }
       if (pointers.empty()) {
         // If neither button is down, this is still a default pointer hover.
         pointers.push_back(kDefaultMousePointerId);
@@ -359,6 +363,9 @@ absl::Status ProcessInputFromSdlEvent(FilamentHost* host,
       }
       if (event->button.button == SDL_BUTTON_RIGHT) {
         pointers.push_back(kMousePointerIdRight);
+      }
+      if (event->button.button == SDL_BUTTON_MIDDLE) {
+        pointers.push_back(kMousePointerIdMiddle);
       }
       if (pointers.empty()) {
         break;

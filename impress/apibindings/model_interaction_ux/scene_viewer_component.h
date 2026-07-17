@@ -199,10 +199,17 @@ class SceneViewerComponent : public imp::Component,
   InteractionMachine interaction_machine_;
   // The rig is a logical node that contains the footprint and the model.
   imp::NodeHandle rig_node_ = imp::NodeHandle();
+  // The rotation node is a child of rig_node_ and handles rotation around the
+  // center.
+  imp::NodeHandle rotation_node_ = imp::NodeHandle();
   // The model that is being displayed by Scene Viewer.
   imp::NodeHandle model_node_ = imp::NodeHandle();
   // The unit offset from the authored origin to the rig-relative origin.
   imp::float3 model_offset_ = imp::float3(0.0f);
+  // The ideal center of the model, used as the rotation pivot.
+  imp::float3 ideal_center_ = imp::float3(0.0f);
+  // Initial half extent y of the model, used to scale the rotation pivot.
+  float initial_half_extent_y_ = 0.f;
   // The lower/upper bounds for the model scale.
   svxr::AxisBounds model_log_scale_limits_ = svxr::AxisBounds(0.0f, 0.0f);
   // A controller for the model scale.
@@ -233,7 +240,6 @@ class SceneViewerComponent : public imp::Component,
 #endif
 
   imp::Dispatcher::Connection footprint_event_connection_;
-  imp::Dispatcher::Connection model_event_connection_;
   android_xr::SplitEngineInputEvent prev_right_input_;
   android_xr::SplitEngineInputEvent prev_left_input_;
 
@@ -250,7 +256,6 @@ class SceneViewerComponent : public imp::Component,
   bool IsInputEventHovering(const android_xr::SplitEngineInputEvent& event);
   bool is_previous_left_ray_hovering_ = false;
   bool is_previous_right_ray_hovering_ = false;
-  bool is_footprint_initialized_ = false;
 
   // Stores the initial model scale to be able to reset to it.
   float initial_model_scale_ = 1.0f;
@@ -279,7 +284,6 @@ class SceneViewerComponent : public imp::Component,
   imp::mat4f event_hit_node_transform_;
 
   bool FootprintReceivesInput();
-  void CreateFootprint(const imp::FrameTime& delta_time);
   imp::float3 GetRigToCameraXz();
 
   void ConstrainRigPosition();

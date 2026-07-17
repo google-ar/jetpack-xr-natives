@@ -22,8 +22,9 @@
 #include "absl/status/status.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "core/math/vec.h"
 #include "filament/libs/math/include/math/vec2.h"
+#include "core/input/pointer_event.proto.imp.h"
+#include "core/math/vec.h"
 
 // TODO: Use protos instead of these types. Remove 'Message' suffix
 
@@ -72,14 +73,19 @@ enum class PointerEventType : uint8_t {
 // more pointers that are associated with the PointerEventType that occurred.
 class PointerEvent {
  public:
+  using DeviceType = PointerEventMessage::DeviceType;
+
   PointerEvent();
   PointerEvent(const PointerEventType& type,
                const std::vector<Pointer>& pointers, int changed_pointer_count,
-               absl::Duration elapsed_time);
+               absl::Duration elapsed_time,
+               DeviceType device_type = DeviceType::UNKNOWN);
   ~PointerEvent();
 
   // The event type that triggered this event.
   PointerEventType Type() const { return type_; }
+  // The device type that triggered this event.
+  DeviceType GetDeviceType() const { return device_type_; }
   // Duration of time elapsed between system startup and time of event.
   absl::Duration ElapsedTime() const { return elapsed_time_; }
   // Count of pointers that changed during this event.
@@ -120,6 +126,7 @@ class PointerEvent {
   absl::Duration elapsed_time_;
   PointerEventType type_;
   uint8_t changed_pointer_count_;
+  DeviceType device_type_;
 };
 
 }  // namespace imp

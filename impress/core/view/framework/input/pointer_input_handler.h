@@ -62,7 +62,7 @@ struct PointerHitEvent : public Event {
 
   // Gets the first RayHit or DoubleRayHit from the intersection list at the
   // provided pointer index, if the intersection list is non-empty.
-  absl::variant<absl::monostate, RayHit, DoubleRayHit> GetRayHitOrDoubleRayHit(
+  std::variant<absl::monostate, RayHit, DoubleRayHit> GetRayHitOrDoubleRayHit(
       size_t index = 0) const;
 
   PointerEvent event =
@@ -74,8 +74,8 @@ struct PointerHitEvent : public Event {
   //
   // Ex. hits[0] returns a vector of all GenericRayHits returned by the
   // ray cast by the pointer with index 0.
-  absl::variant<std::vector<std::vector<RayHit>>,
-                std::vector<std::vector<DoubleRayHit>>>
+  std::variant<std::vector<std::vector<RayHit>>,
+               std::vector<std::vector<DoubleRayHit>>>
       hits = {};
 };
 

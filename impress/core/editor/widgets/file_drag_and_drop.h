@@ -17,14 +17,18 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_FILE_DRAG_AND_DROP_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_FILE_DRAG_AND_DROP_H_
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "core/async/future.h"
 #include "core/common/rememberer.h"
+#include "core/config.h"
 #include "core/editor/ui/drag_and_drop.h"
 #include "core/editor/widget.h"
+#include "core/materials/compiler/runtime_material_compiler.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -37,9 +41,17 @@ class FileDragAndDrop : public Widget, public Rememberer {
   void DrawImGui() override;
 
  private:
+  Future<RuntimeMaterialCompiler*> GetOrCreateMaterialCompiler(BaseView& view);
+#if IMP_PLATFORM(DESKTOP)
+  void ProcessMatFile(std::string filename);
+#endif  // IMP_PLATFORM(DESKTOP)
+
   BaseView& view_;
   std::optional<std::pair<DragAndDropType, std::string>>
       pending_drag_and_drop_payload_ = std::nullopt;
+  std::optional<Future<RuntimeMaterialCompiler*>>
+      runtime_material_compiler_future_;
+  std::unique_ptr<RuntimeMaterialCompiler> runtime_material_compiler_;
 };
 
 }  // namespace imp::editor

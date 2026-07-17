@@ -51,6 +51,10 @@ class PrecomputeTexturePipeline : public imp::Component {
   imp::Future<absl::Status> Setup(
       resources::ResourceDefinition precompute_material_definition,
       std::optional<imp::Box> aabb_override = std::nullopt);
+  // Setup overload that takes an owned material directly.
+  imp::Future<absl::Status> Setup(
+      imp::OwnedMaterialPtr precompute_material,
+      std::optional<imp::Box> aabb_override = std::nullopt);
   void Cleanup();
   void OnActiveStatusChanged(bool is_active);
   BorrowedMaterialPtr BorrowMaterial(
@@ -76,6 +80,7 @@ class PrecomputeTexturePipeline : public imp::Component {
   static constexpr absl::string_view kType =
       "split_engine.PrecomputeTexturePipeline";
   using IsfInfo = imp::StatelessIsfInfo<PrecomputeTexturePipeline, kType>;
+  static constexpr bool kRunInEditMode = true;
 
   // Specifies TexturePipelineRenderer and MeshRenderer component won't be
   // removed until after this component. This is to give us control over

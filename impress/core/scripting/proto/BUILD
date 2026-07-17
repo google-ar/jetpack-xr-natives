@@ -93,6 +93,7 @@ proto_library(
         "//core/ncsb:node_handle_message_proto",
         "//core/proto:imp_proto",
         "//core/view/framework:framework_proto",
+        "//core/view/utils:view_config_proto",
         "@com_google_protobuf//:any_proto",
     ],
 )
@@ -104,6 +105,7 @@ imp_cc_proto_library(
         "//core/ncsb:node_handle_message_imp_proto",
         "//core/proto:any_imp_proto",
         "//core/view/framework:framework_proto_cc",
+        "//core/view/utils:view_config_proto_cc_imp",
     ],
 )
 

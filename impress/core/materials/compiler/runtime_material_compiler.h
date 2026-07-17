@@ -16,8 +16,10 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIALCOMPILER_RUNTIME_MATERIAL_COMPILER_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIALCOMPILER_RUNTIME_MATERIAL_COMPILER_H_
 
+#include <cstdint>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Material.h"
@@ -43,8 +45,8 @@ class RuntimeMaterialCompiler {
   RuntimeMaterialCompiler(BaseView& view,
                           std::unique_ptr<MaterialCompilerClient> native_client,
                           std::unique_ptr<MaterialCache> cache)
-      : view_(view),
-        native_client_(std::move(native_client)),
+      : native_client_(std::move(native_client)),
+        view_(view),
         cache_(std::move(cache)) {}
 
   virtual ~RuntimeMaterialCompiler() = default;
@@ -57,9 +59,21 @@ class RuntimeMaterialCompiler {
       const MaterialPreCompileOptions& material_precompile_options =
           MaterialAsset::kDefaultPreCompileOptions);
 
- private:
-  BaseView& view_;
+  // Compiles the given source material (.mat) and returns the raw compiled
+  // bytes. Expects the material input to be already inlined.
+  Future<std::vector<uint8_t>> CompileMaterialToBytes(
+      absl::string_view source_material_string, Platform platform,
+      TargetApi target_api);
+
+ protected:
   std::unique_ptr<MaterialCompilerClient> native_client_;
+
+ private:
+  Future<std::vector<uint8_t>> CompileMaterialInternal(
+      absl::string_view source_material_string,
+      const MaterialCompilerConfig& config);
+
+  BaseView& view_;
   std::unique_ptr<MaterialCache> cache_;
 };
 }  // namespace imp

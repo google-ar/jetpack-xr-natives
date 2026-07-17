@@ -141,6 +141,8 @@ int curr_loaded_image_count = 0;
 int next_loaded_image_count = 0;
 const int kMaxLoadedImages = 5;
 const int kMaxTrackedImages = 5;
+const std::vector<char> kQrCodeData = {'S', 'u', 'c', 'c', 'e', 's', 's', '\0'};
+const int kQrCodeDataSize = 8;
 
 }  // namespace
 
@@ -924,6 +926,32 @@ Internal_xrCreateTrackableImageDatabaseCompleteANDROID(
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetTrackableQrCodeANDROID(
+    XrTrackableTrackerANDROID tracker, const XrTrackableGetInfoANDROID* getInfo,
+    XrTrackableQrCodeANDROID* qrCodeOutput) {
+  if (tracker == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+
+  qrCodeOutput->trackingState =
+      XrTrackingStateANDROID(XR_TRACKING_STATE_TRACKING_ANDROID);
+  qrCodeOutput->centerPose = kPose;
+  qrCodeOutput->extents = kExtent2D;
+
+  if (qrCodeOutput->bufferCapacityInput == 0) {
+    qrCodeOutput->bufferCountOutput = kQrCodeDataSize;
+    return XR_SUCCESS;
+  }
+
+  if (qrCodeOutput->bufferCapacityInput < kQrCodeDataSize) {
+    return XR_ERROR_SIZE_INSUFFICIENT;
+  }
+
+  memcpy(qrCodeOutput->buffer, kQrCodeData.data(), kQrCodeDataSize);
+  qrCodeOutput->bufferCountOutput = kQrCodeDataSize;
+  return XR_SUCCESS;
+}
+
 }  // extern "C"
 
 namespace {
@@ -1079,6 +1107,8 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrCreateTrackableImageDatabaseAsyncANDROID)},
     {"xrDestroyTrackableImageDatabaseANDROID",
      ToXrVoidFunction(Internal_xrDestroyTrackableImageDatabaseANDROID)},
+    {"xrGetTrackableQrCodeANDROID",
+     ToXrVoidFunction(Internal_xrGetTrackableQrCodeANDROID)},
 });
 
 }  // namespace
@@ -1137,8 +1167,11 @@ const std::vector<XrExtensionProperties> kExtensions = {
      XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME},
+     // Image tracking extensions
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_TRACKABLES_QR_CODE_EXTENSION_NAME},
 };
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
@@ -1212,6 +1245,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
         imageTrackingProperties->supportsPhysicalSizeEstimation = true;
         imageTrackingProperties->maxTrackedImageCount = kMaxTrackedImages;
         imageTrackingProperties->maxLoadedImageCount = kMaxLoadedImages;
+        break;
+      }
+      case XR_TYPE_SYSTEM_QR_CODE_TRACKING_PROPERTIES_ANDROID: {
+        XrSystemQrCodeTrackingPropertiesANDROID* qrCodeTrackingProperties =
+            reinterpret_cast<XrSystemQrCodeTrackingPropertiesANDROID*>(nextPtr);
+        qrCodeTrackingProperties->supportsQrCodeTracking = true;
+        qrCodeTrackingProperties->supportsQrCodeSizeEstimation = true;
         break;
       }
       default:

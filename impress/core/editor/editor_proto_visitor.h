@@ -37,6 +37,7 @@
 #include "core/common/bit_flag.h"
 #include "core/common/copyable_ptr.h"
 #include "core/common/invocable.h"
+#include "core/common/one_of.h"
 #include "core/common/optional_with_default.h"
 #include "core/common/template_helpers.h"
 #include "core/editor/editor_field_control.h"
@@ -764,6 +765,129 @@ class EditorProtoVisitor {
 
     // Oneofs guaranteed to be contiguous.
     return field_index + std::variant_size_v<T>;
+  }
+
+  template <typename... Tags, typename FieldType, FieldType... field_types,
+            size_t... I>
+  Cursor VisitOneOf(Cursor field_index, imp::OneOf<Tags...>* field,
+                    imp::OneOf<Tags...>* other, absl::string_view field_name,
+                    std::integer_sequence<FieldType, field_types...>,
+                    const std::vector<int>& variant_field_ids,
+                    std::index_sequence<I...>) {
+    // Array of field types for easier access.
+    constexpr FieldType types_array[] = {field_types...};
+
+    // Determine if the field matches the base.
+    int active_idx = field ? field->Index() : 0;
+    int base_idx = other ? other->Index() : 0;
+    bool does_match_base_type = other && (active_idx == base_idx);
+    bool is_base_set = other && other->HasValue();
+
+    if (does_match_base_type) {
+      editor::PushBaseIsfElementStyle();
+    }
+
+    ImGui::Text("%s:", field_name.data());
+
+    // Support RevertToBasePopup if the OneOf is copy assignable
+    if constexpr (std::is_copy_assignable_v<imp::OneOf<Tags...>>) {
+      if (other) {
+        updated_ |=
+            EditorFieldControl::RevertToBasePopup(*field, *other, "OneOf");
+      }
+    }
+
+    // Ensure all protobuf message types can be dragged onto the combo. This
+    // fold expression is essentially a loop over the Tags in the OneOf.
+    (
+        [&]() {
+          constexpr FieldType field_type = types_array[I];
+          if constexpr (internal::kIsImpressProtoMessage<field_type, Tags>) {
+            // Allow drag-and-drop from the Asset Library into this oneof.
+            Tags maybe_set;
+            bool should_set = CreateDragAndDropTargetForField(&maybe_set);
+            if (should_set) {
+              field->template Emplace<Tags>(std::move(maybe_set));
+              updated_ = true;
+            }
+          }
+        }(),
+        ...);
+
+    bool can_unset = field->HasValue() && !is_base_set;
+    absl::string_view combo_text =
+        !field->HasValue()
+            ? "select type..."
+            : proto::GetFieldName<Proto>(variant_field_ids[active_idx - 1]);
+
+    ImGui::SameLine();
+    if (ImGui::BeginCombo(GenerateUniqueImGuiLabel(combo_text, field,
+                                                   EditorControlFlags::kNone)
+                              .c_str(),
+                          combo_text.data(), ImGuiComboFlags_None)) {
+      // Populate the "unset" option
+      if (can_unset) {
+        bool selected = false;
+        if (ImGui::Selectable(GenerateUniqueImGuiLabel("unset", field).c_str(),
+                              &selected)) {
+          field->Reset();
+          updated_ = true;
+        }
+      }
+
+      // Populate the combo box with all the types in the oneof.
+      (
+          [&]() {
+            int variant_field_id = variant_field_ids[I];
+            absl::string_view label_str =
+                proto::GetFieldName<Proto>(variant_field_id);
+            bool selected = field->template Holds<Tags>();
+
+            if (ImGui::Selectable(
+                    GenerateUniqueImGuiLabel(label_str, field).c_str(),
+                    &selected)) {
+              if (!field->template Holds<Tags>()) {
+                field->template MutableValue<Tags>();
+                updated_ = true;
+              }
+            }
+          }(),
+          ...);
+
+      ImGui::EndCombo();
+    }
+
+    if (does_match_base_type) {
+      editor::PopBaseIsfElementStyle();
+    }
+
+    ImGui::Indent();
+    // If the field is set, recurse into Visit on the set field type.
+    if (field->HasValue()) {
+      (
+          [&]() {
+            if (field->template Holds<Tags>()) {
+              int variant_field_id = variant_field_ids[I];
+              constexpr FieldType field_type = types_array[I];
+
+              typename Tags::Type* element = field->template GetIf<Tags>();
+              typename Tags::Type* base =
+                  other ? other->template GetIf<Tags>() : nullptr;
+
+              Visit<field_type>(field_index + I + 1, variant_field_id, element,
+                                base,
+                                static_cast<EditorControlFlags>(
+                                    EditorControlFlags::kIsEditable |
+                                    EditorControlFlags::kResetUnsetValToBase));
+            }
+          }(),
+          ...);
+    }
+    ImGui::Unindent();
+
+    // Add sizeof...(Tags) +1 to account for the number of oneof field types and
+    // the unset option.
+    return field_index + sizeof...(Tags) + 1;
   }
 
   // TODO: Support standard (non-impress) protos.

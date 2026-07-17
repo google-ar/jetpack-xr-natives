@@ -21,6 +21,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -43,6 +44,7 @@
 #include "core/model/model_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 
 namespace imp::loader::details {
@@ -57,7 +59,9 @@ class ModelCreator {
   Future<absl::Status> LoadAll(
       BaseView& view, const schemas::LoadedModel* model,
       MaterialPackage* material_package,
-      std::vector<std::unique_ptr<image::ImageContents>> images,
+      std::vector<std::variant<std::unique_ptr<image::ImageContents>,
+                               std::unique_ptr<TextureAsset>>>
+          images,
       std::optional<absl::string_view> name = std::nullopt);
 
   absl::StatusOr<std::unique_ptr<model::ModelData>> CreateModelData(
@@ -73,13 +77,17 @@ class ModelCreator {
   Future<absl::Status> LoadAllInternal(
       BaseView& view, const schemas::LoadedModel* model,
       MaterialPackage* material_package,
-      std::vector<std::unique_ptr<image::ImageContents>> images,
+      std::vector<std::variant<std::unique_ptr<image::ImageContents>,
+                               std::unique_ptr<TextureAsset>>>
+          images,
       std::optional<absl::string_view> name = std::nullopt);
 
   Future<absl::Status> CreateModelResources(
       BaseView& view, MaterialPackage* material_package,
       const schemas::LoadedModel* model,
-      std::vector<std::unique_ptr<image::ImageContents>> images,
+      std::vector<std::variant<std::unique_ptr<image::ImageContents>,
+                               std::unique_ptr<TextureAsset>>>
+          images_or_texture_assets,
       std::optional<absl::string_view> name = std::nullopt);
 
   filament::Engine* const engine_;
@@ -117,6 +125,7 @@ class ModelCreator {
   std::vector<model::ModelData::AudioEmitterId> scene_audio_emitters_;
 
   std::optional<model::ModelData::InteractivityData> interactivity_;
+  std::vector<std::unique_ptr<TextureAsset>> loaded_texture_assets_;
 };
 
 }  // namespace imp::loader::details

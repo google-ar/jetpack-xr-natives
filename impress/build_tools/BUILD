@@ -92,7 +92,10 @@ bzl_library(
 bzl_library(
     name = "assets_bzl",
     srcs = ["assets.bzl"],
-    deps = ["//core/resources:resources_bzl"],
+    deps = [
+        "//core/resources:resources_bzl",
+        "@rules_cc//cc:core_rules",
+    ],
 )
 
 bzl_library(

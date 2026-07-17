@@ -55,7 +55,6 @@ cc_library(
     deps = [
         ":profiling_clock",
         ":simple_histogram",
-        "//core/common:platform_helpers",
         "//core/common:typed_ids",
         "//core/math:moving_average",
         "//core/view/utils:string_map",

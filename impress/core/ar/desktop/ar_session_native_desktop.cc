@@ -81,8 +81,8 @@ static constexpr uint32_t kGreenPixel = 65280;
 static constexpr uint32_t kBluePixel = 16711680;
 static constexpr uint32_t kPinkPixel = 16711935;
 
-static constexpr int kPlaceholderCameraTextureSize = 2;
-static constexpr int kNumPlaceholderCameraTexturePixels =
+static constexpr uint32_t kPlaceholderCameraTextureSize = 2;
+static constexpr uint32_t kNumPlaceholderCameraTexturePixels =
     kPlaceholderCameraTextureSize * kPlaceholderCameraTextureSize;
 static constexpr std::array<uint32_t, kNumPlaceholderCameraTexturePixels>
     kPlaceholderCameraTexturePixels = {kRedPixel, kGreenPixel, kBluePixel,
@@ -215,9 +215,14 @@ void ArSessionNativeDesktop::Resume() {
 }
 
 TexturePtr CreateCameraTexture(BaseView* view, uint2 texture_dimensions) {
-  TexturePtr texture = view->GetTextureFactory().CreateTexture(
-      kPlaceholderCameraTextureSize, kPlaceholderCameraTextureSize,
-      filament::Texture::InternalFormat::RGBA8);
+  TexturePtr texture = TexturePtr(
+      view->GetTextureFactory()
+          .CreateTexture(imp::TextureFactory::TextureCreationSettings{
+              .width = kPlaceholderCameraTextureSize,
+              .height = kPlaceholderCameraTextureSize,
+              .format = filament::Texture::InternalFormat::RGBA8,
+          })
+          .Release());
 
   filament::Texture::PixelBufferDescriptor buffer(
       kPlaceholderCameraTexturePixels.data(),

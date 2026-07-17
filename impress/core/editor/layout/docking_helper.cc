@@ -85,17 +85,18 @@ void DockingHelper::Initialize() {
                               &remain_2);  // Split main dockspace
 
   // The remaining space after splitting the left side.
-  ImGuiID remain_3;
   ImGui::DockBuilderSplitNode(
       /*space_to_split=*/remain_2, ImGuiDir_Left, kDefaultSideDockRatio,
       /*first_child=*/&dock_id_left_,
-      /*the_remaining_space=*/&remain_3);  // Split main dockspace
+      /*the_remaining_space=*/&dock_id_center_);  // Split main dockspace
 
   // Dock windows into the created nodes
   ImGui::DockBuilderDockWindow(PanelIdToString(PanelId::kSceneWindow).c_str(),
                                dock_id_left_);
   ImGui::DockBuilderDockWindow(PanelIdToString(PanelId::kDetailsWindow).c_str(),
                                dock_id_right_);
+  ImGui::DockBuilderDockWindow(PanelIdToString(PanelId::kViewport).c_str(),
+                               dock_id_center_);
 
   ImGui::DockBuilderFinish(dockspace_id_);
 }

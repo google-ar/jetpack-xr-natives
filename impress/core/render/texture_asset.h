@@ -55,6 +55,7 @@ class TextureAsset {
   absl::string_view GetName() const { return texture_name_; }
 
   filament::Texture* GetFilamentTexture() const { return texture_; }
+  filament::Texture* ReleaseFilamentTexture();
 
   size_t GetWidth() const { return texture_->getWidth(); }
   size_t GetHeight() const { return texture_->getHeight(); }
@@ -63,6 +64,9 @@ class TextureAsset {
   BaseView* view_;
   std::string texture_name_;
   filament::Texture* texture_;
+#if IMP_PLATFORM(WASM)
+  GLuint gl_texture_id_ = 0;
+#endif
 };
 
 }  // namespace imp

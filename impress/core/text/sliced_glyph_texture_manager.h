@@ -46,7 +46,7 @@ class SlicedGlyphTextureManager {
   // Kick off the async creation of the texture manager.
   static Future<std::unique_ptr<SlicedGlyphTextureManager>> CreateAsync(
       BaseView& view, uint2 atlas_size, uint2 grid_size,
-      Texture* composite_texture);
+      BorrowedTexturePtr composite_texture, bool use_bitmap_surface_provider);
 
   // The size of an individual slice in the composite texture.
   uint2 GetAtlasSize() const { return atlas_size_; }
@@ -59,24 +59,24 @@ class SlicedGlyphTextureManager {
   // Renders a single slice.
   void RenderSlice(filament::Renderer& renderer, SliceId slice);
 
-  static std::unique_ptr<Texture> CreateCompositeTexture(BaseView& view,
-                                                         uint2 atlas_size,
-                                                         uint2 grid_size);
+  static OwnedTexturePtr CreateCompositeTexture(BaseView& view,
+                                                uint2 atlas_size,
+                                                uint2 grid_size);
 
  private:
   SlicedGlyphTextureManager(BaseView& view,
                             AssetPtr<MaterialAsset> blit_material,
                             uint2 atlas_size, uint2 grid_size,
-                            Texture* composite_texture);
+                            BorrowedTexturePtr composite_texture);
 
   uint2 atlas_size_;
   uint2 grid_size_;
 
   filament::Engine& engine_;
 
-  // An un-owned pointer to the composite texture. The owner of the texture
+  // A borrowed pointer to the composite texture. The owner of the texture
   // manager is responsible for the lifetime of the composite texture.
-  Texture* composite_texture_;
+  BorrowedTexturePtr composite_texture_;
   AssetPtr<MaterialAsset> blit_material_;
 
   filament::Camera* blit_camera_;

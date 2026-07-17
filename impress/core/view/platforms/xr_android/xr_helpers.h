@@ -168,7 +168,7 @@ void SetupXrTimingSummary(
         metricsStore);
 
 void SetCustomEyeProjectionOnCamera(filament::Camera* camera,
-                                    std::vector<XrView>& latest_views);
+                                    const std::vector<XrView>& latest_views);
 
 // Set the position of each eye relative to the local transform of the camera.
 //

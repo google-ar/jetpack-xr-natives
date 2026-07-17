@@ -175,6 +175,7 @@ cc_library(
         "message_handlers/set_node_enabled_handler.cc",
         "message_handlers/set_node_name_handler.cc",
         "message_handlers/set_parent_handler.cc",
+        "message_handlers/set_view_config_handler.cc",
         "message_handlers/transform_handler.cc",
     ] + if_dev_runtime([
         "message_handlers/load_file_handler.cc",
@@ -199,6 +200,7 @@ cc_library(
         "message_handlers/set_node_enabled_handler.h",
         "message_handlers/set_node_name_handler.h",
         "message_handlers/set_parent_handler.h",
+        "message_handlers/set_view_config_handler.h",
         "message_handlers/transform_handler.h",
     ] + if_dev_runtime([
         "message_handlers/load_file_handler.h",

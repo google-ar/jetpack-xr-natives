@@ -14,11 +14,16 @@
 
 #include "core/input/pointer_event.h"
 
-#include <utility>
+#include <cassert>
+#include <cstddef>
+#include <iterator>
+#include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
-#include "core/common/platform_helpers.h"
+#include "absl/time/time.h"
+#include "absl/types/span.h"
+#include "core/math/vec.h"
 
 namespace imp {
 
@@ -26,16 +31,18 @@ PointerEvent::PointerEvent()
     : pointers_(std::vector<Pointer>{}),
       elapsed_time_(absl::ZeroDuration()),
       type_(PointerEventType::kCancel),
-      changed_pointer_count_(0) {}
+      changed_pointer_count_(0),
+      device_type_(DeviceType::UNKNOWN) {}
 
 PointerEvent::PointerEvent(const PointerEventType& type,
                            const std::vector<Pointer>& pointers,
                            int changed_pointer_count,
-                           absl::Duration elapsed_time)
+                           absl::Duration elapsed_time, DeviceType device_type)
     : pointers_(pointers),
       elapsed_time_(elapsed_time),
       type_(type),
-      changed_pointer_count_(changed_pointer_count) {}
+      changed_pointer_count_(changed_pointer_count),
+      device_type_(device_type) {}
 
 PointerEvent::~PointerEvent() {}
 

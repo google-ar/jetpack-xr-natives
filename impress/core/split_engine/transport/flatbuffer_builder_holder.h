@@ -25,12 +25,12 @@
 namespace imp::split_engine {
 
 // Ensures that senders are using correct FlatbufferBuilder
-template <typename Owner>
+template <typename Instantiator>
 class FlatbufferBuilderHolder {
  public:
   using CleanupCallback = imp::Invocable<void()>;
   FlatbufferBuilderHolder(
-      PassKey<Owner> passkey,
+      PassKey<Instantiator> passkey,
       std::unique_ptr<flatbuffers::FlatBufferBuilder> builder,
       CleanupCallback cleanup_callback = {})
       : FlatbufferBuilderHolder(std::move(builder),
@@ -52,7 +52,7 @@ class FlatbufferBuilderHolder {
   flatbuffers::FlatBufferBuilder& operator*() const { return *builder_; }
   flatbuffers::FlatBufferBuilder* operator->() const { return builder_.get(); }
 
-  void CancelCleanup(PassKey<Owner> passkey) { cleanup_callback_ = {}; }
+  void CancelCleanup(PassKey<Instantiator> passkey) { cleanup_callback_ = {}; }
 
  private:
   FlatbufferBuilderHolder(

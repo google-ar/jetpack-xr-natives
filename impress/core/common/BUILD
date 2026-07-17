@@ -527,6 +527,17 @@ cc_library(
 )
 
 cc_library(
+    name = "string_numbers",
+    hdrs = ["string_numbers.h"],
+    copts = imp_copts(),
+    linkstatic = 1,
+    deps = [
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "optional_error",
     srcs = ["optional_error.cc"],
     hdrs = ["optional_error.h"],
@@ -978,6 +989,27 @@ cc_library(
     deps = [
         ":optional_with_default",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "paged_pointer_array",
+    hdrs = ["paged_pointer_array.h"],
+    copts = imp_copts(),
+    deps = [
+        ":uniform_block_pool",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/log:check",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "uniform_block_pool",
+    srcs = ["uniform_block_pool.cc"],
+    hdrs = ["uniform_block_pool.h"],
+    copts = imp_copts(),
+    linkstatic = True,
     alwayslink = 1,
 )
 

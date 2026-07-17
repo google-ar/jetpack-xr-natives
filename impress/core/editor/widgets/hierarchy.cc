@@ -58,7 +58,6 @@ namespace imp::editor {
 constexpr absl::string_view kUnamedNodeLabel = "<node>";
 
 namespace {
-static constexpr absl::string_view kNodesHeaderLabel = "Nodes";
 
 constexpr VirtualKeyCode kMultiSelectKeyCodes[] = {
     VirtualKeyCode::VK_LEFT_SUPER,

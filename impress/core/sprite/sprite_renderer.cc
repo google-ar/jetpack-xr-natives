@@ -113,10 +113,11 @@ void SpriteRenderer::System::AfterLastComponentRemoved() { quad_mesh_.Reset(); }
 void SpriteRenderer::System::PostComponentsUpdated(
     const FrameTime& frame_time) {
   std::vector<SpriteRenderer*> sorted_sprites;
-  sorted_sprites.reserve(GetView()
-                             .GetComponentManager()
-                             .GetComponentPoolById(kComponentId<SpriteRenderer>)
-                             ->GetComponentCount());
+  sorted_sprites.reserve(
+      GetView()
+          .GetComponentManager()
+          .GetComponentPoolById(GetComponentTypeId<SpriteRenderer>())
+          ->GetComponentCount());
   GetComponentManager().UpdateEach<SpriteRenderer>(
       [&sorted_sprites](SpriteRenderer* sprite) {
         sorted_sprites.push_back(sprite);
@@ -137,7 +138,7 @@ void SpriteRenderer::System::PostComponentsUpdated(
 Future<absl::Status> SpriteRenderer::Setup() {
   if (GetView()
           .GetComponentManager()
-          .GetComponentPoolById(kComponentId<SpriteRenderer>)
+          .GetComponentPoolById(GetComponentTypeId<SpriteRenderer>())
           ->GetComponentCount() >= kMaxSpriteRendererForBlendOrder) {
     IMP_LOG(imp::ERROR) << "Number of SpriteRenderer Components will exceed "
                << kMaxSpriteRendererForBlendOrder
@@ -309,6 +310,12 @@ void SpriteRenderer::SetupInternal(OwnedMaterialPtr material) {
     mesh_renderer_->SetPriority(*state_.priority);
   }
   mesh_renderer_->SetMaterial(std::move(material));
+
+  // Update the clip space transform to avoid rendering the sprite with an
+  // identity clip space transform. This is necessary since sprite can already
+  // be rendered at this time, but we can't guarantee there will be a component
+  // update before frame rendering.
+  UpdateClipSpaceTransform();
 
   // There are cases where the physical texture size is known but the device
   // screen ratio is not known yet, so we wait till it's available to set the

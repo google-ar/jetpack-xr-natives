@@ -149,7 +149,7 @@ absl::StatusOr<Variable> EvaluateUnaryExpression(
     const UnaryExpression::UnaryOps& op, const Variable& input) {
   Variable result = std::visit(EvaluateUnaryExpressionVisitor{.op = op}, input);
 
-  if (absl::holds_alternative<absl::monostate>(result)) {
+  if (absl::holds_alternative<std::monostate>(result)) {
     return absl::InternalError(absl::StrFormat(
         "invalid unary_expression %s %s", ToTypeName(input),
         proto::EnumMetaData<UnaryExpression::UnaryOps>::GetName(op)));

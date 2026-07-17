@@ -406,7 +406,7 @@ imp_assets(
 
 # --android_ndk_min_sdk_version=23
 
-# --config=ios_x86_64
+# --config=ios_sim_arm64
 
 # --android_ndk_min_sdk_version=23
 

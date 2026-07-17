@@ -17,6 +17,8 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <string>
+#include <tuple>
 #include <utility>
 
 #include "core/common/log.h"
@@ -47,14 +49,14 @@
 #include "core/render/texture.h"
 #include "core/render_passes/group_to_projection_quad_texture_renderer/group_to_projection_quad_texture_renderer.h"
 #include "core/render_passes/group_to_projection_quad_texture_renderer/group_to_projection_quad_texture_renderer_state.proto.imp.h"
+#include "core/render_passes/texture_pipeline_renderer_helper.h"
 #include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/resources/resource_definition.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/builtin_material_registry.h"
-#include "core/split_engine/materials/builtin/gsplat/gsplat_material_assets.h"
-#include "core/split_engine/materials/builtin/gsplat/magic_window_panel_material_assets.h"
+#include "core/split_engine/materials/builtin/gsplat/gsplat_material_helpers.h"
 #include "core/split_engine/materials/builtin/gsplat/precompute_material_assets.h"
 #include "core/split_engine/materials/builtin/gsplat/precompute_texture_pipeline.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -62,6 +64,7 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
+#include "core/view/view_events.h"
 #include "core/window/filament_host.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
@@ -70,13 +73,12 @@
 
 namespace imp::split_engine {
 namespace {
-// LINT.IfChange
-constexpr char kUseTrianglesForSplatsConstant[] = "useTrianglesForSplats";
-// LINT.ThenChange(
-//   builtin_gsplat.mat,
-// )
 
 constexpr char kMagicWindowTextureNamePrefix[] = "magic_window_texture_";
+
+// TODO: Remove this wait once the serializer can guarantee the
+// node is going to be created before this material.
+constexpr int kMaxFramesToWaitForGsplatNode = 30;
 
 // Helper to get the size of the data textures.
 absl::StatusOr<imp::uint2> GetTextureSizeFromFlatbuffer(
@@ -122,37 +124,6 @@ absl::Status SetMaterialParameterFromFlatbuffer(
   material->SetParameter(material_parameter_name, texture,
                          ConvertSampler(serialized_texture->sampler()));
   return absl::OkStatus();
-}
-
-resources::ResourceDefinition GetResourceDefinition(
-    BaseView& view, android_xr::schemas::GsplatMode material_mode) {
-  // In multiview mode, materials must accept texture arrays.
-  bool is_multiview =
-      view.GetHost()->GetEngine()->getConfig().stereoscopicType ==
-      filament::backend::StereoscopicType::MULTIVIEW;
-#if defined(IMP_INCLUDE_STEREO_VARIANT_BY_DEFAULT) && \
-    IMP_INCLUDE_STEREO_VARIANT_BY_DEFAULT
-  switch (material_mode) {
-    case android_xr::schemas::GsplatMode::UNSPECIFIED:
-    case android_xr::schemas::GsplatMode::GSPLAT:
-      return is_multiview ? kBuiltinGsplatStereoMatCmat
-                          : kBuiltinGsplatMonoMatCmat;
-    case android_xr::schemas::GsplatMode::MAGIC_WINDOW:
-      return is_multiview ? kBuiltinMagicWindowPanelStereoMatCmat
-                          : kBuiltinMagicWindowPanelMonoMatCmat;
-  }
-#else
-  if (is_multiview) {
-    IMP_LOG(imp::DFATAL) << "Stereo variant is not included in this build.";
-  }
-  switch (material_mode) {
-    case android_xr::schemas::GsplatMode::UNSPECIFIED:
-    case android_xr::schemas::GsplatMode::GSPLAT:
-      return kBuiltinGsplatMonoMatCmat;
-    case android_xr::schemas::GsplatMode::MAGIC_WINDOW:
-      return kBuiltinMagicWindowPanelMonoMatCmat;
-  }
-#endif
 }
 
 absl::Status MakeParameterNotImplementedError(
@@ -247,6 +218,41 @@ imp::TexturePipelineRendererProjectionQuad GetWorldProjectionQuad(
   };
 }
 
+// Utility method to return a future waiting up to N frames for the gsplat node
+// to be available on the system side. This can occur when the request to create
+// the GsplatMaterialDeserializer is received before the Split Engine message to
+// create the gsplat node it depends upon.
+Future<NodeHandle> GetOrWaitForGsplatNode(BaseView& view,
+                                          uint32_t gsplat_node_id,
+                                          int frames_to_wait) {
+  if (absl::StatusOr<NodeHandle> node = DeserializeNodeId(view, gsplat_node_id);
+      node.ok() && node->IsValid()) {
+    return Future<NodeHandle>(node.value());
+  }
+
+  Future<NodeHandle> wait_for_node_future;
+  view.GetDispatcher().Connect(
+      [wait_for_node_future, &view, gsplat_node_id,
+       remaining_frames = frames_to_wait,
+       original_frames_to_wait =
+           frames_to_wait](const ViewPostFrameUpdateEvent& event) mutable {
+        if (absl::StatusOr<NodeHandle> node =
+                DeserializeNodeId(view, gsplat_node_id);
+            node.ok() && node->IsValid()) {
+          event.Disconnect();
+          wait_for_node_future.Return(node.value());
+        } else if (--remaining_frames <= 0) {
+          event.Disconnect();
+          wait_for_node_future.Return(absl::FailedPreconditionError(
+              absl::StrFormat("Failed to get gsplat node after %d frames",
+                              original_frames_to_wait)));
+        }
+      },
+      &view);
+
+  return wait_for_node_future;
+}
+
 }  // namespace
 
 Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
@@ -254,19 +260,10 @@ Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
     const android_xr::schemas::BuiltInMaterialGsplatSpec& spec) {
   android_xr::schemas::GsplatMode material_mode = spec.material_mode();
 
-  absl::StatusOr<NodeHandle> gsplat_node =
-      DeserializeNodeId(view, spec.entity());
-  // A valid gsplat renderer is required to correctly provide and update the
-  // transforms for the filament material.
-  if (!gsplat_node.ok() || !gsplat_node->IsValid()) {
-    IMP_LOG(imp::WARNING) << "Invalid gsplat renderer entity ";
-    // TODO: Refactor to support default construction of
-    // GsplatMaterialDeserializer, without a valid gsplat node.
-    gsplat_node = view.CreateNode();
-  }
-  NodeHandle gsplat_node_value = gsplat_node.value();
+  Future<NodeHandle> gsplat_node_future = GetOrWaitForGsplatNode(
+      view, spec.entity(), kMaxFramesToWaitForGsplatNode);
   ::imp::resources::ResourceDefinition source =
-      GetResourceDefinition(view, material_mode);
+      GsplatDefaultRenderResource(view, material_mode);
 
   if (material_mode == android_xr::schemas::GsplatMode::MAGIC_WINDOW) {
     // MAGIC_WINDOW mode.
@@ -295,30 +292,34 @@ Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
           "specified!");
     }
 
-    imp::uint2 offscreen_texture_resolution =
+    const imp::uint2 offscreen_texture_resolution =
         UnPack(*magic_window_spec->magic_window_offscreen_resolution());
+    const std::string render_group_name =
+        magic_window_spec->render_group()->str();
 
-    GroupToProjectionQuadTextureRendererState
-        group_to_projection_quad_texture_renderer_state{
-            .texture_name = absl::StrCat(kMagicWindowTextureNamePrefix,
-                                         gsplat_node_value.GetEntity().getId()),
-            .render_group_name = magic_window_spec->render_group()->str(),
-            .texture_size = offscreen_texture_resolution,
-        };
+    Future<AssetPtr<MaterialAsset>> material_asset_future =
+        view.GetAssetManager().LoadMaterial(source);
 
-    return view.GetAssetManager().LoadMaterial(source).Then(
-        [bridge_id, gsplat_node_value, offscreen_texture_resolution,
-         group_to_projection_quad_texture_renderer_state](
-            AssetPtr<MaterialAsset> material_asset) mutable
-            -> Future<BuiltInMaterialPtr> {
-          return gsplat_node_value
+    return gsplat_node_future.Merge(material_asset_future)
+        .Then([bridge_id, offscreen_texture_resolution, render_group_name](
+                  std::tuple<NodeHandle, AssetPtr<MaterialAsset>> result)
+                  -> Future<BuiltInMaterialPtr> {
+          NodeHandle gsplat_node = std::get<0>(result);
+          AssetPtr<MaterialAsset> material_asset = std::get<1>(result);
+          return gsplat_node
               ->AddComponentWithState<GroupToProjectionQuadTextureRenderer>(
-                  group_to_projection_quad_texture_renderer_state)
-              .Then([gsplat_node_value, bridge_id, material_asset,
+                  GroupToProjectionQuadTextureRendererState{
+                      .texture_name =
+                          absl::StrCat(kMagicWindowTextureNamePrefix,
+                                       gsplat_node.GetEntity().getId()),
+                      .render_group_name = render_group_name,
+                      .texture_size = offscreen_texture_resolution,
+                  })
+              .Then([gsplat_node, bridge_id, material_asset,
                      offscreen_texture_resolution](
                         ComponentHandle<GroupToProjectionQuadTextureRenderer>
                             texture_renderer) -> BuiltInMaterialPtr {
-                return Create(gsplat_node_value, bridge_id,
+                return Create(gsplat_node, bridge_id,
                               android_xr::schemas::GsplatMode::MAGIC_WINDOW,
                               material_asset, offscreen_texture_resolution,
                               ComponentHandle<PrecomputeTexturePipeline>(),
@@ -339,44 +340,51 @@ Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
     }
 
     // Check if the optional render group is given.
+    std::optional<std::string> render_group;
     if (spec.mode_spec_type() ==
         android_xr::schemas::GsplatModeSpec::GsplatSpec) {
       const android_xr::schemas::GsplatSpec* gsplat_spec =
           spec.mode_spec_as_GsplatSpec();
       if (gsplat_spec != nullptr && gsplat_spec->render_group() != nullptr &&
           !gsplat_spec->render_group()->empty()) {
-        gsplat_node_value->SetGroups({gsplat_spec->render_group()->str()});
+        render_group = gsplat_spec->render_group()->str();
       }
     }
 
-    return view.GetAssetManager()
-        .LoadMaterial(source,
-                      MaterialPreCompileOptions{
-                          .constants = {{.name = kUseTrianglesForSplatsConstant,
-                                         .value = use_triangles}}})
-        .Then([bridge_id, material_mode, gsplat_node_value,
-               has_precomputed_texture](
-                  AssetPtr<MaterialAsset> material_asset) mutable
+    Future<AssetPtr<MaterialAsset>> material_asset_future =
+        view.GetAssetManager().LoadMaterial(
+            source, MaterialPreCompileOptions{
+                        .constants = {{.name = std::string(
+                                           kUseTrianglesForSplatsConstant),
+                                       .value = use_triangles}}});
+
+    return gsplat_node_future.Merge(material_asset_future)
+        .Then([bridge_id, material_mode, has_precomputed_texture, render_group](
+                  std::tuple<NodeHandle, AssetPtr<MaterialAsset>> result)
                   -> Future<BuiltInMaterialPtr> {
+          NodeHandle gsplat_node = std::get<0>(result);
+          AssetPtr<MaterialAsset> material_asset = std::get<1>(result);
+          if (render_group.has_value()) {
+            gsplat_node->SetGroups({*render_group});
+          }
           // When the spec provides precomputed texture, we create the builtin
           // material without a PrecomputeTexturePipeline. Otherwise, the
           // pipeline will be created and used by the builtin material.
           if (has_precomputed_texture) {
             return Future<BuiltInMaterialPtr>(Create(
-                gsplat_node_value, bridge_id, material_mode, material_asset,
+                gsplat_node, bridge_id, material_mode, material_asset,
                 /*offscreen_texture_resolution=*/std::nullopt,
                 ComponentHandle<PrecomputeTexturePipeline>(),
                 ComponentHandle<GroupToProjectionQuadTextureRenderer>()));
           }
           // TODO: Pass in aabb of the gsplat scene so that the precompute pass
           // doesn't run if the scene is frustum culled.
-          return BuildPrecomputeTexturePipeline(gsplat_node_value)
-              .Then([gsplat_node_value, bridge_id, material_mode,
-                     material_asset](
+          return BuildPrecomputeTexturePipeline(gsplat_node)
+              .Then([gsplat_node, bridge_id, material_mode, material_asset](
                         ComponentHandle<PrecomputeTexturePipeline>
                             pipeline) mutable -> BuiltInMaterialPtr {
                 return Create(
-                    gsplat_node_value, bridge_id, material_mode, material_asset,
+                    gsplat_node, bridge_id, material_mode, material_asset,
                     /*offscreen_texture_resolution=*/std::nullopt, pipeline,
                     ComponentHandle<GroupToProjectionQuadTextureRenderer>());
               });
@@ -429,7 +437,7 @@ GsplatMaterialDeserializer::~GsplatMaterialDeserializer() {
   if (precompute_texture_pipeline_) {
     // Release the pass texture before destroying the pass.
     BorrowedTexturePtr placeholder_texture =
-        view_.GetTextureFactory().BorrowRGBA32FPlaceholderTexture();
+        view_.GetTextureFactory().BorrowRGBA32UIPlaceholderTexture();
     GetRenderMaterial()->SetParameter(kSplatDataPrecomputedParameter,
                                       placeholder_texture,
                                       placeholder_texture->GetSampler());
@@ -670,9 +678,15 @@ absl::Status GsplatMaterialDeserializer::UpdatePrecomputeTexturePipeline(
       view_, offscreen_texture_resolution_,
       precompute_texture_pipeline_->BorrowMaterial()));
 
+  // TODO: (broken link) - Delay initial use of TPR to workaround black screen.
+  static int count = GetFrameDelayForTPR(view_);
   if (!precompute_texture_pipeline_->IsRunningAsyncSetup() &&
       !precompute_texture_pipeline_->GetNode()->IsEnabled()) {
-    precompute_texture_pipeline_->GetNode()->SetEnabled(true);
+    if (count == 0) {
+      precompute_texture_pipeline_->GetNode()->SetEnabled(true);
+    } else {
+      --count;
+    }
   }
 
   if (const android_xr::schemas::ProjectionQuad* magic_window_projection_quad =

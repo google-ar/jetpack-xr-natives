@@ -55,6 +55,7 @@ FILAMENT_HEADLESS_JNI_SRCS = [
 
 FILAMENT_HEADLESS_JNI_HDRS = [
     "common/CallbackUtils.h",
+    "common/JniUtils.h",
     "common/NioUtils.h",
 ]
 

@@ -25,6 +25,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "mediapipe/framework/deps/clock.h"
 #include "absl/time/time.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "core/assets/gltf/gltf_asset.h"
@@ -50,7 +51,6 @@
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/window/filament_host.h"
 #include "mediapipe/framework/port/status_macros.h"
-#include "mediapipe/framework/deps/clock.h"
 
 namespace imp {
 using absl::StatusOr;
@@ -168,6 +168,11 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
   loader_options.exclude_excess_nodes = options.exclude_excess_nodes;
   loader_options.remove_shadow_planes = options.remove_shadow_planes;
   loader_options.vertex_access_flags = options.vertex_access_flags;
+  if (view->GetConfig().experimental_feature_flags) {
+    loader_options.enable_use_texture_asset_api =
+        view->GetConfig()
+            .experimental_feature_flags->enable_use_texture_asset_api.Value();
+  }
   if (options.collider_mode ==
           GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH ||
       options.collider_mode ==

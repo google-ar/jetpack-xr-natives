@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "absl/base/nullability.h"
@@ -90,15 +91,20 @@ class TextureBuilder : public BaseTextureBuilder {
   std::unique_ptr<BaseTextureBuilder> spy_;
   // Wrapper around filament::Texture::Builder that handles errors and prevents
   // Filament from panicking.
-  SafeFilamentTextureBuilder builder_;
-
-  // Whether or not builder_.build() was called.
-  bool was_built_ = false;
+  std::optional<SafeFilamentTextureBuilder> builder_ = std::nullopt;
 
   // Texture or error from builder_.build().
   absl::StatusOr<filament::Texture* /*absl_nonnull*/ > texture_;
 
   std::string name_;
+
+  struct QueuedImageAsset {
+    AssetPtr<ImageAsset> image;
+    int index;
+  };
+  std::vector<QueuedImageAsset> image_assets_;
+  std::vector<filament::backend::PixelBufferDescriptor> images_;
+  bool generate_mipmaps_ = false;
 };
 
 }  // namespace imp

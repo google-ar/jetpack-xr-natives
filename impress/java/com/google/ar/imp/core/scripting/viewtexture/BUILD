@@ -25,6 +25,7 @@ android_library(
     ],
     manifest = ":AndroidManifest.xml",
     deps = [
+        "@maven//:com_google_guava_guava",
         "@third_party//filament/android:filament_android_no_jni",
     ],
 )

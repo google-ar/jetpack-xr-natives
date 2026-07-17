@@ -128,7 +128,7 @@ class RefCounter {
   // for thread synchronization that shared_ptr would do.
   //
   // This requires the lifetime of tracked_refs_ to be managed carefully.
-  TrackedRefs* tracked_refs_;
+  mutable TrackedRefs* tracked_refs_ = nullptr;
 };
 
 }  // namespace imp

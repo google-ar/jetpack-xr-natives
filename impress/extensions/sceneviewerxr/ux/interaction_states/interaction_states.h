@@ -75,6 +75,10 @@ struct Rotation {
   bool is_rotating_after_two_handed_scale;
   float cumulative_change_delta;
   bool has_rotated = false;
+  float turntable_angle = 0.0f;
+  float pitch_angle = 0.0f;
+  imp::float3 smoothed_delta_translation_xy = imp::kZero3;
+  bool has_initialized_smoothing = false;
 };
 
 // State initiated with a pinch after a short tap, performs scaling

@@ -14,7 +14,7 @@
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "if_android", "if_non_android", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android", "if_dev_runtime", "if_non_android", "imp_google3_copts")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -71,6 +71,7 @@ cc_library(
         "//core/view:view_host",
         "//core/view/framework",
         "//core/view/platforms/android/wrappers:imp_lifecycle_callback",
+        "//core/view/scripting",
         "//core/view/utils:render_settings_proto_cc_imp",
         "//core/view/utils:view_config_proto_cc_imp",
         "//core/window:filament_host",
@@ -82,7 +83,8 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:platform",
         "@third_party//filament/filament/backend:virtual_machine_env",
-    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    ] + if_dev_runtime([
+    ]) + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 

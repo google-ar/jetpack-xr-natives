@@ -124,7 +124,7 @@ NodeHandle PathManager::FindDescendantOrSelfIf(NodeHandle context,
     return context;
   }
 
-  for (auto child : context->GetChildren()) {
+  for (auto child : context->GetChildrenRange()) {
     NodeHandle result = FindDescendantOrSelfIf(child, predicate);
     if (result) {
       return result;
@@ -181,8 +181,7 @@ std::vector<ComponentHandle<T>> PathManager::GetComponentsInDescendantsOrSelf(
     }
 
     // Recursively search in descendants
-    std::vector<NodeHandle> descendants = current_node->GetChildren();
-    for (NodeHandle descendant : descendants) {
+    for (NodeHandle descendant : current_node->GetChildrenRange()) {
       search_queue.push(descendant);
     }
   }

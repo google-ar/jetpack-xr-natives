@@ -15,7 +15,7 @@
 material{
   name : "BlitSlice",
   parameters : [
-    {type : {SAMPLER_EXTERNAL}, name : Slice}
+    {type : sampler2d, name : Slice}
   ],
   requires: [uv0],
   culling : none,

@@ -36,6 +36,7 @@
 #include "core/async/future.h"
 #include "core/editor/components/world_space_editor_ui_assets.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node.h"
 #include "core/render/primitive_shape_renderer.h"
 #include "core/render/primitive_shape_renderer_state.proto.imp.h"
 #include "core/render/texture_factory.h"
@@ -138,9 +139,13 @@ void RemoteEditorRenderer::SetRenderTargetWindow(void* native_window, int width,
 
   if (texture_needs_recreation) {
     texture_ = view_.GetTextureFactory().CreateTexture(
-        width, height, filament::Texture::InternalFormat::RGBA8,
-        filament::Texture::Usage::COLOR_ATTACHMENT |
-            filament::Texture::Usage::SAMPLEABLE);
+        imp::TextureFactory::TextureCreationSettings{
+            .width = static_cast<uint32_t>(width),
+            .height = static_cast<uint32_t>(height),
+            .format = filament::Texture::InternalFormat::RGBA8,
+            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                     filament::Texture::Usage::SAMPLEABLE,
+        });
   }
 
   view_.GetHost()->TryGetExtension()->ApplyTextureRenderTarget(
@@ -169,7 +174,10 @@ void RemoteEditorRenderer::SetRenderTargetWindow(void* native_window, int width,
                             1.0, 0.0, 1.0);
 
   ui_quad_node_ = view_.CreateNode();
+
+  ui_quad_node_->SetName("Remote Editor");
   ui_quad_node_->SetLocalPosition({0.5f, 0.5f, 0.0f});
+  ui_quad_node_->RemoveFromGroup(Node::kMainGroupName);
   ui_scene_->addEntity(ui_quad_node_->GetEntity());
 
   PrimitiveShapeRendererState state;

@@ -143,6 +143,8 @@ class SplitEngineSerializerImpl
   void SetMaterialInstanceAt(
       filament::RenderableManager::Instance instance, size_t primitiveIndex,
       const filament::MaterialInstance* material_instance) override;
+  void ClearMaterialInstanceAt(filament::RenderableManager::Instance instance,
+                               size_t primitiveIndex) override;
   void SetGeometryAt(filament::RenderableManager::Instance instance,
                      size_t primitiveIndex,
                      filament::backend::PrimitiveType type,

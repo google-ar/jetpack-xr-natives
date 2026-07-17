@@ -20,11 +20,11 @@
 #include <memory>
 
 #include "absl/strings/string_view.h"
+#include "mediapipe/framework/deps/clock.h"
 #include "absl/time/time.h"
 #include "core/common/typed_vector.h"
 #include "core/monitor/measurement_data.h"
 #include "core/view/utils/string_map.h"
-#include "mediapipe/framework/deps/clock.h"
 
 namespace imp {
 /*

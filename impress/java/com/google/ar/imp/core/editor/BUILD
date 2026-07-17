@@ -17,11 +17,11 @@ load("@build_bazel_rules_android//android:rules.bzl", "android_library")
 package(default_visibility = ["//visibility:public"])
 
 android_library(
-    name = "remote_editor_server",
+    name = "remote_editor",
     srcs = [
+        "RemoteEditor.java",
         "RemoteEditorHttpServer.java",
         "RemoteEditorScriptApiBridge.java",
-        "RemoteEditorServer.java",
         "RemoteEditorVideoStreamer.java",
         "RemoteEditorWebSocketServer.java",
     ],
@@ -31,4 +31,10 @@ android_library(
         "@maven//:com_google_guava_guava",
         "@third_party//filament/android:filament_android_no_jni",
     ],
+)
+
+android_library(
+    name = "remote_editor_ui_assets",
+    assets = ["//javascript/core/editor/remote_editor/ui_stream:assets"],
+    assets_dir = "assets",
 )

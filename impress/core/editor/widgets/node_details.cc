@@ -73,6 +73,8 @@ NodeDetails::NodeDetails(BaseView& view)
 bool NodeDetails::HasContent() const { return active_node_.IsValid(); }
 
 void NodeDetails::DrawImGui() {
+  if (!active_node_.IsValid()) return;
+
   auto scene_metadata = active_node_->GetComponent<SceneMetadata>();
 
   // Only allow changing the name of a node if it is not a child of a base.

@@ -43,6 +43,7 @@
 #include "core/scripting/message_handlers/set_node_enabled_handler.h"
 #include "core/scripting/message_handlers/set_node_name_handler.h"
 #include "core/scripting/message_handlers/set_parent_handler.h"
+#include "core/scripting/message_handlers/set_view_config_handler.h"
 #include "core/scripting/message_handlers/transform_handler.h"
 #include "core/scripting/scripting_system.h"
 #include "core/view/base_view.h"
@@ -84,6 +85,7 @@ static void AddBasicApiMessageHandlers(ScriptingSystem& scripting_system,
   scripting_system.AddHandler(std::make_unique<TransformHandler>());
   scripting_system.AddHandler(std::make_unique<SetNodeNameHandler>());
   scripting_system.AddHandler(std::make_unique<GetNodeNameHandler>());
+  scripting_system.AddHandler(std::make_unique<SetViewConfigHandler>(view));
 }
 
 }  // namespace imp::scripting

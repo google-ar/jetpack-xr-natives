@@ -78,6 +78,7 @@ cc_library(
     deps = [
         "//core:config",
         "//core/assets",
+        "//core/assets:proto_asset",
         "//core/assets/gltf:gltf_asset",
         "//core/assets/material:material_asset",
         "//core/async:executor",

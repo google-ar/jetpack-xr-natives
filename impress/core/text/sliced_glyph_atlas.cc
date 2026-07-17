@@ -122,7 +122,8 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(BaseView& view, Config config)
                 config.force_individual_glyph_source_instances,
                 view.GetConfig()
                     .experimental_feature_flags
-                    ->enable_label_prep_profile_logging.Value());
+                    ->enable_label_prep_profile_logging.Value(),
+                config.use_bitmap_surface_provider);
           },
           config) {}
 
@@ -135,7 +136,8 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
       atlas_texture_size_(GetTextureSize(config.texture_size)),
       atlas_grid_size_(GetGridSize(config.texture_size)),
       glyph_emulator_(view.GetContext()),
-      addition_cursor_(SliceId::At(0)) {
+      addition_cursor_(SliceId::At(0)),
+      use_bitmap_surface_provider_(config.use_bitmap_surface_provider) {
   size_t slice_count = atlas_grid_size_.x * atlas_grid_size_.y;
   slice_storage_ = static_cast<Slice*>(malloc(sizeof(Slice) * slice_count));
   for (size_t i = 0; i < slice_count; ++i) {
@@ -154,7 +156,8 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
   // This could be absent if there is only one slice, but on Android would
   // require conditionally swapping materials based on the number of slices.
   TextureManager::CreateAsync(view, atlas_texture_size_, atlas_grid_size_,
-                              composite_texture_.get())
+                              composite_texture_.Borrow(),
+                              config.use_bitmap_surface_provider)
       .Then([this](std::unique_ptr<TextureManager> texture_manager) {
         texture_manager_ = std::move(texture_manager);
         pending_renders_.ForEachBit<SliceId>([this](SliceId slice) {
@@ -183,22 +186,24 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
   // when the view is resumed. This is only relevant to the sliced atlas if
   // there is only one slice. With multiple slices, the external texture is
   // not sampled directly.
-  if (config.force_reset_on_view_resumed && (slice_count == 1)) {
-    view.GetDispatcher().Connect(
-        [this](const ViewResumedEvent& event) {
-          // Cannot force reset if there is already an active canvas.
-          for (auto& slice : slices_) {
-            absl::MutexLock lock(slice.canvas_mutex_);
-            if (slice.canvas_ != nullptr) {
-              continue;
+  if (!config.use_bitmap_surface_provider) {
+    if (config.force_reset_on_view_resumed && (slice_count == 1)) {
+      view.GetDispatcher().Connect(
+          [this](const ViewResumedEvent& event) {
+            // Cannot force reset if there is already an active canvas.
+            for (auto& slice : slices_) {
+              absl::MutexLock lock(slice.canvas_mutex_);
+              if (slice.canvas_ != nullptr) {
+                continue;
+              }
+              slice.canvas_source_->ForceReset();
             }
-            slice.canvas_source_->ForceReset();
-          }
-          for (auto& slice : slices_) {
-            slice.OnViewResumed();
-          }
-        },
-        this);
+            for (auto& slice : slices_) {
+              slice.OnViewResumed();
+            }
+          },
+          this);
+    }
   }
 
   if (view.GetDevice().IsPhysicalPixelRatioAvailable()) {
@@ -264,11 +269,13 @@ void SlicedGlyphAtlas::RenderBlits(filament::Renderer& renderer) {
   // The workaround is that once a surface as been blitted, we continue to blit
   // it every frame.  This causes the new atlas to render the same way the old
   // atlas did.
-  for (auto slice : slices_.Ids()) {
-    if (slices_[slice].texture_ != nullptr && !pending_renders_.Get(slice)) {
-      // Has a texture; ensure we won't signal early.
-      if (slices_[slice].texture_blit_futures_.empty()) {
-        pending_renders_.Set(slice, true);
+  if (!use_bitmap_surface_provider_) {
+    for (auto slice : slices_.Ids()) {
+      if (slices_[slice].texture_ != nullptr && !pending_renders_.Get(slice)) {
+        // Has a texture; ensure we won't signal early.
+        if (slices_[slice].texture_blit_futures_.empty()) {
+          pending_renders_.Set(slice, true);
+        }
       }
     }
   }
@@ -302,7 +309,7 @@ SlicedGlyphAtlas::~SlicedGlyphAtlas() {
   ClearRemembered();
 
   texture_manager_.reset();
-  composite_texture_.reset();
+  composite_texture_.Reset();
 
   for (auto& slice : slices_) {
     {
@@ -486,6 +493,7 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                   std::vector<Future<absl::Status>> entry_futures;
                   for (auto& entry : pending_canvas_glyphs->entries) {
                     Future<absl::Status> entry_future;
+                    Future<absl::Status> pending_glyph_future;
                     auto& slice = slices_[entry.slice];
                     if (slice.canvas_source_->IsFeatureSupported(
                             ScopedCanvas::Feature::kKeepContents)) {
@@ -494,24 +502,15 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                         slice.GetOrStartDrawing(
                             view_, ScopedCanvas::DrawMode::kKeepContents,
                             slices_.size() == 1);
+                        slice.texture_update_futures_.push_back(
+                            pending_glyph_future);
                       }
 
                       // Schedule the glyphs that are newly added to the atlas
                       // to be drawn to the canvas asynchronously.
                       // To ensure glyphs are always drawn once their space is
                       // reserved, the ownership of the DrawGlyphsToCanvasAsync
-                      // future is transferred to the SlicedGlyphAtlas. This
-                      // ties the future's lifecycle to the atlas itself, rather
-                      // than the calling method. This is to avoid the specific
-                      // situation where the caller is destroyed before the
-                      // future is resolved, thus cancelling this future, but
-                      // the atlas space is still reserved as other callers may
-                      // have made references to those glyphs in the meantime,
-                      // preventing the now invalid atlas space from being
-                      // released.
-                      // TODO: Have the future's lifetime be tied
-                      // to the glyphs's space reservation instead of the atlas
-                      // itself.
+                      // future is transferred to the SlicedGlyphAtlas.
                       slice
                           .DrawGlyphsToCanvasAsync(view_,
                                                    std::move(entry.glyphs),
@@ -532,39 +531,17 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                                               slices_.size() == 1);
                       slice.texture_status_ = TextureStatus::kHasNewGlyphs;
                       entry_future.Return(absl::OkStatus());
+                      slice.texture_update_futures_.push_back(
+                          pending_glyph_future);
                     }
                     absl::MutexLock lock(slice.canvas_mutex_);
                     entry_futures.push_back(entry_future);
+                    entry_futures.push_back(pending_glyph_future);
                   }
+
                   result_future =
                       Future<absl::Status>::CombineList(entry_futures);
                   return result_future
-                      .Then([this, pending_canvas_glyphs =
-                                       std::move(pending_canvas_glyphs)]() {
-                        std::vector<Future<absl::Status>> slice_futures;
-                        for (auto& entry : pending_canvas_glyphs->entries) {
-                          auto& slice = slices_[entry.slice];
-                          bool canvas_is_null;
-                          {
-                            absl::MutexLock lock(slice.canvas_mutex_);
-                            canvas_is_null = slice.canvas_ == nullptr;
-                            if (canvas_is_null) {
-                              slice.texture_status_ = TextureStatus::kStable;
-                            }
-                          }
-
-                          // Block resolution of the glyphs until the texture
-                          // has been updated and the glyphs can be safely used.
-                          // With the SlicedGlyphAtlas this always blocks, since
-                          // the glyphs are not available until the external
-                          // texture has been blitted to the composite texture.
-                          Future<absl::Status> pending_glyph_future;
-                          slice.texture_update_futures_.push_back(
-                              pending_glyph_future);
-                          slice_futures.push_back(pending_glyph_future);
-                        }
-                        return Future<absl::Status>::CombineList(slice_futures);
-                      })
                       .Then([glyphs = std::move(result)]() { return glyphs; });
                 });
           },
@@ -854,7 +831,7 @@ imp::Texture* SlicedGlyphAtlas::GetTexture() {
   if (atlas_grid_size_.x == 1 && atlas_grid_size_.y == 1) {
     return slices_.front().texture_;
   } else {
-    return composite_texture_.get();
+    return &*composite_texture_;
   }
 }
 

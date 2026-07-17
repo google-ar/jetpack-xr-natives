@@ -39,28 +39,35 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/SwapChain.h"
 #include "filament/filament/include/filament/View.h"
+#include "core/camera/camera_component.h"
 #include "core/common/invocable.h"
+#include "core/common/optional_error.h"
 #include "core/common/robin_map.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
 #include "core/math/vec.h"
-#include "core/monitor/default_monitor_summary.h"
 #include "core/monitor/duration_measurement.h"
 #include "core/monitor/monitor_summary.h"
 #include "core/monitor/value_measurement.h"
+#include "core/ncsb/component_handle.h"
 #include "core/render/content_security_level.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_events.proto.imp.h"
 #include "core/view/platforms/xr_android/xr_helpers.h"
+#include "core/view/view_host.h"
 #include "core/xr/openxr_events.h"
 #include "java/com/google/ar/imp/view/xr/xr_setup_params.proto.imp.h"
-#if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
-#include "core/view/platforms/xr_android/xr_vulkan_platform.h"
+
+#if IMP_MATERIAL_API(VULKAN)
+namespace imp {
+class XrVulkanPlatform;
+}
 #else
-#include "core/view/platforms/xr_android/xr_opengl_platform.h"
+namespace imp {
+class XrOpenGLPlatform;
+}
 #endif
-#include "core/view/view_host.h"
 
 namespace imp {
 
@@ -96,7 +103,10 @@ class XrSessionHost : public ViewHost {
 
   XrSessionHost(std::unique_ptr<imp::BaseView> view,
                 com::google::ar::imp::view::xr::XrSetupParams xr_setup_params);
-  ~XrSessionHost() override = default;
+  ~XrSessionHost() override;
+
+  // Returns the current OpenXR session state.
+  XrSessionState GetSessionState() const { return session_state_; }
 
   // Sets up the host, which will create the filament Engine with an XrPlatform
   // instance, and ultimately lead to imp::View::Setup being called.
@@ -193,8 +203,10 @@ class XrSessionHost : public ViewHost {
   // foveated rendering is enabled.
   uint32_t GetLogicalEyeCount() const;
 
+#if IMP_PLATFORM(ANDROID)
   // Identifies thread type to system through xrSetAndroidApplicationThreadKHR.
   absl::Status SetThreadType(XrAndroidThreadTypeKHR threadType);
+#endif
 
   // kShown allows layer data to be displayed and kHidden blocks the submission
   // of layer data in xrEndFrame.
@@ -230,31 +242,35 @@ class XrSessionHost : public ViewHost {
 
   void SetContentSecurityLevel(ContentSecurityLevel security);
 
+  // Checks for the presence of various OpenXR extensions.
   bool IsXrFbFoveationEnabled() const;
   bool IsXrVarjoQuadViewsEnabled() const;
   bool IsXrVarjoFoveatedRenderingEnabled() const;
   bool IsXrFbColorSpaceEnabled() const;
+  bool IsXrEyeGazeInteractionEnabled() const;
+
+#if IMP_PLATFORM(ANDROID)
+  // Checks for the presence of various Android-specific OpenXR extensions.
+  bool IsXrAndroidXOccupancyGridEnabled() const;
+  bool IsXrAndroidXSpatialInteractionEnabled() const;
+  bool IsXrAndroidXTrackpadGestureEnabled() const;
+  bool IsXrAndroidDepthTextureEnabled() const;
+  bool IsXrAndroidSystemExtensionsEnabled() const;
+  bool IsXrAndroidGlobalPassthroughDimmingExtensionsEnabled() const;
+  bool IsXrAndroidEyeTrackingCalibrationEnabled() const;
+  bool IsXrAndroidHandOcclusionExtensionsEnabled() const;
+#endif  // IMP_PLATFORM(ANDROID)
+
   // Returns true if this frame should be rendered with varjo foveation. Should
   // only be called on filament's render thread.
   // NOTE: This is a performance heavy call. Should only be called once per
   // frame.
   bool ShouldRenderVarjoFoveationThisFrame();
-  bool IsXrAndroidXOccupancyGridEnabled() const;
-#if IMP_PLATFORM(ANDROID)
-  bool IsXrAndroidXSpatialInteractionEnabled() const;
-#endif  // IMP_PLATFORM(ANDROID)
-  bool IsXrAndroidDepthTextureEnabled() const;
-  bool IsXrEyeGazeInteractionEnabled() const;
-  bool IsXrAndroidSystemExtensionsEnabled() const;
-  bool IsXrGlobalPassthroughDimmingExtensionsEnabled() const;
-  bool IsXrHandOcclusionExtensionsEnabled() const;
-  bool IsXrEyeTrackingCalibrationEnabled() const;
 
   void SetFoveationLevel(XrFoveationLevelFB xr_foveation_level_fb);
+  XrFoveationLevelFB GetCurrentFoveationLevel();
 
   void SetEyeTrackingEnabled(bool enabled);
-
-  XrFoveationLevelFB GetCurrentFoveationLevel();
 
   void SetEnvironmentBlendMode(
       XrEnvironmentBlendMode xr_environment_blend_mode);
@@ -313,12 +329,14 @@ class XrSessionHost : public ViewHost {
   // thread, not the backend thread.
   void MarkPostRenderAndCreateSync();
 
-#if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
+#if IMP_MATERIAL_API(VULKAN)
   using XrGraphicsBinding = XrGraphicsBindingVulkan2KHR;
   using XrGraphicsRequirements = XrGraphicsRequirementsVulkan2KHR;
   using XrGetGraphicsRequirements = PFN_xrGetVulkanGraphicsRequirements2KHR;
 #else
+#if IMP_PLATFORM(ANDROID)
   using XrGraphicsBinding = XrGraphicsBindingOpenGLESAndroidKHR;
+#endif
   using XrGraphicsRequirements = XrGraphicsRequirementsOpenGLESKHR;
   using XrGetGraphicsRequirements = PFN_xrGetOpenGLESGraphicsRequirementsKHR;
 #endif
@@ -359,10 +377,15 @@ class XrSessionHost : public ViewHost {
 
   void RemoveCompositionLayer(XrCompositionLayerBaseHeader* layer);
 
+  // Sets model and projection matrices on a camera from the pose and views.
+  void SetCameraModelAndProjection(ComponentHandle<CameraComponent> camera,
+                                   const XrPosef& pose,
+                                   const std::vector<XrView>& views);
+
  private:
   enum class LocateSpaceStatus { kUnableToObtainPose, kObtainedPose };
 
-#if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
+#if IMP_MATERIAL_API(VULKAN)
   using PlatformType = imp::XrVulkanPlatform;
 #else
   using PlatformType = imp::XrOpenGLPlatform;
@@ -444,10 +467,11 @@ class XrSessionHost : public ViewHost {
   absl::Status BeginAndDiscardFrame(XrTime predictedDisplayTime);
 
   // Sets the Camera Node transform to that of an XrView.
-  void UpdateCameraFromXrView(const XrView& view);
+  void UpdateCameraProjectionFromXrView(const XrView& view);
 
   // Sets the Camera Node transform to that of an XrPose.
-  void UpdateCameraFromXrPose(const XrPosef& pose);
+  void UpdateCameraFromXrPose(ComponentHandle<CameraComponent> camera,
+                              const XrPosef& pose);
 
   // Returns the view configs to use for the current frame on the Impress
   // thread.
@@ -474,7 +498,7 @@ class XrSessionHost : public ViewHost {
   // Tracks if the XrSession is currently running.
   // The session is considered to be running after a successful call to
   // xrBeginSession and before calling xrEndSession.
-  RunningState state_ = RunningState::kNotRunning;
+  RunningState xr_running_state_ = RunningState::kNotRunning;
 
   XrInitState init_state_ = XrInitState::kNotInitialized;
 
@@ -610,4 +634,4 @@ class XrSessionHost : public ViewHost {
 
 }  // namespace imp
 
-#endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_XR_ANDROID_XR_SESSION_HOST_H_
+#endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_XR_ANDROID_XR_SESSION_HOST_IMPL_H_

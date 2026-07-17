@@ -57,7 +57,7 @@ using MinFilter = schemas::MinFilter;
 using MagFilter = schemas::MagFilter;
 using WrapMode = schemas::WrapMode;
 using TextureInfoFlags = schemas::TextureInfoFlags;
-using PathOrIndex = absl::variant<std::string, int>;
+using PathOrIndex = std::variant<std::string, int>;
 using InternalFormat = ::filament::Texture::InternalFormat;
 
 constexpr float kDefaultIndexOfRefraction = 1.5f;

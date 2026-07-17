@@ -16,6 +16,8 @@
 
 package com.google.android.filament;
 
+import com.google.android.filament.proguard.UsedByNative;
+
 import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -189,6 +191,7 @@ public class MaterialInstance {
      *
      * @param name the name of the material parameter
      * @param x    the value of the material parameter
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, boolean x) {
         nSetParameterBool(getNativeObject(), name, x);
@@ -199,6 +202,7 @@ public class MaterialInstance {
      *
      * @param name the name of the material parameter
      * @param x    the value of the material parameter
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, float x) {
         nSetParameterFloat(getNativeObject(), name, x);
@@ -209,6 +213,7 @@ public class MaterialInstance {
      *
      * @param name the name of the material parameter
      * @param x    the value of the material parameter
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, int x) {
         nSetParameterInt(getNativeObject(), name, x);
@@ -220,6 +225,7 @@ public class MaterialInstance {
      * @param name the name of the material parameter
      * @param x    the value of the first component
      * @param y    the value of the second component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, boolean x, boolean y) {
         nSetParameterBool2(getNativeObject(), name, x, y);
@@ -231,6 +237,7 @@ public class MaterialInstance {
      * @param name the name of the material parameter
      * @param x    the value of the first component
      * @param y    the value of the second component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, float x, float y) {
         nSetParameterFloat2(getNativeObject(), name, x, y);
@@ -242,6 +249,7 @@ public class MaterialInstance {
      * @param name the name of the material parameter
      * @param x    the value of the first component
      * @param y    the value of the second component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, int x, int y) {
         nSetParameterInt2(getNativeObject(), name, x, y);
@@ -254,6 +262,7 @@ public class MaterialInstance {
      * @param x    the value of the first component
      * @param y    the value of the second component
      * @param z    the value of the third component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, boolean x, boolean y, boolean z) {
         nSetParameterBool3(getNativeObject(), name, x, y, z);
@@ -266,6 +275,7 @@ public class MaterialInstance {
      * @param x    the value of the first component
      * @param y    the value of the second component
      * @param z    the value of the third component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, float x, float y, float z) {
         nSetParameterFloat3(getNativeObject(), name, x, y, z);
@@ -278,6 +288,7 @@ public class MaterialInstance {
      * @param x    the value of the first component
      * @param y    the value of the second component
      * @param z    the value of the third component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, int x, int y, int z) {
         nSetParameterInt3(getNativeObject(), name, x, y, z);
@@ -291,6 +302,7 @@ public class MaterialInstance {
      * @param y    the value of the second component
      * @param z    the value of the third component
      * @param w    the value of the fourth component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, boolean x, boolean y, boolean z, boolean w) {
         nSetParameterBool4(getNativeObject(), name, x, y, z, w);
@@ -304,6 +316,7 @@ public class MaterialInstance {
      * @param y    the value of the second component
      * @param z    the value of the third component
      * @param w    the value of the fourth component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, float x, float y, float z, float w) {
         nSetParameterFloat4(getNativeObject(), name, x, y, z, w);
@@ -317,6 +330,7 @@ public class MaterialInstance {
      * @param y    the value of the second component
      * @param z    the value of the third component
      * @param w    the value of the fourth component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, int x, int y, int z, int w) {
         nSetParameterInt4(getNativeObject(), name, x, y, z, w);
@@ -332,6 +346,7 @@ public class MaterialInstance {
      * @param name The name of the material texture parameter
      * @param texture The texture to set as parameter
      * @param sampler The sampler to be used with this texture
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name,
             @NonNull Texture texture, @NonNull TextureSampler sampler) {
@@ -353,6 +368,7 @@ public class MaterialInstance {
      *     instance.setParameter("param", MaterialInstance.BooleanElement.BOOL4, a, 0, 4);
      * }</pre>
      * </p>
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name,
             @NonNull BooleanElement type, @NonNull boolean[] v,
@@ -375,6 +391,7 @@ public class MaterialInstance {
      *     instance.setParameter("param", MaterialInstance.IntElement.INT4, a, 0, 4);
      * }</pre>
      * </p>
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name,
             @NonNull IntElement type, @NonNull int[] v,
@@ -397,6 +414,7 @@ public class MaterialInstance {
      *     material.setDefaultParameter("param", MaterialInstance.FloatElement.FLOAT4, a, 0, 4);
      * }</pre>
      * </p>
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name,
             @NonNull FloatElement type, @NonNull float[] v,
@@ -412,6 +430,7 @@ public class MaterialInstance {
      * @param r    red component
      * @param g    green component
      * @param b    blue component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, @NonNull Colors.RgbType type,
             float r, float g, float b) {
@@ -428,6 +447,7 @@ public class MaterialInstance {
      * @param g    green component
      * @param b    blue component
      * @param a    alpha component
+     * @throws RuntimeException if name doesn't exist or no-op if exceptions are disabled.
      */
     public void setParameter(@NonNull String name, @NonNull Colors.RgbaType type,
             float r, float g, float b, float a) {

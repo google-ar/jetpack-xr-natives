@@ -14,6 +14,7 @@
 
 #include "core/editor/file_loader_helper.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -37,6 +38,7 @@
 #include "core/config.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_touch.h"
+#include "core/editor/editor_utils.h"
 #include "core/editor/events.h"
 #include "core/editor/file_type_loader.h"
 #include "core/editor/file_type_registry.h"
@@ -45,6 +47,9 @@
 #include "core/lighting/environment_light_factory.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/lighting/image_based_lighting_asset_iblprefilter_loader.h"
+#include "core/math/math.h"
+#include "core/math/quat.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/scene_metadata.h"
@@ -55,7 +60,9 @@
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
+#include "core/view/framework/collision/ray_hit.h"
 #include "core/view/framework/lighting/light_manager.h"
+#include "core/view/framework/model_factory.h"
 #include "core/view/framework/scene/scene_system.h"
 
 namespace imp::editor {
@@ -63,6 +70,10 @@ namespace imp::editor {
 namespace {
 
 static constexpr absl::string_view kFileSuffix = "file://";
+
+// The threshold to snap the spawn_point to the origin.
+constexpr float kSnapThreshold = 0.1f;
+
 static constexpr float kDefaultIndirectIntensity = 220.0f;
 
 }  // namespace
@@ -75,7 +86,7 @@ Future<std::string> AddFileToAssetLibraryIfNeeded(Editor& editor,
                                                   absl::string_view path,
                                                   absl::string_view file_name,
                                                   absl::string_view extension,
-                                                  LoadFileSource source) {
+                                                  LoadAssetFileSource source) {
   if (std::holds_alternative<absl::Cord>(source)) {
     absl::Cord& cord = std::get<absl::Cord>(source);
     // The data is coming from a Cord, so add it to the AssetLibrary.
@@ -83,15 +94,15 @@ Future<std::string> AddFileToAssetLibraryIfNeeded(Editor& editor,
         editor.GetAssetLibrary()->AddResourceInCurrentDirectory(
             file_name, extension, cord.Flatten()));
   } else {
-    LoadFileFromPathSource from_path_source =
-        std::get<LoadFileFromPathSource>(source);
+    LoadAssetFileFromPathSource from_path_source =
+        std::get<LoadAssetFileFromPathSource>(source);
     switch (from_path_source) {
-      case LoadFileFromPathSource::kAsset:
+      case LoadAssetFileFromPathSource::kAsset:
         // The data is already available in the asset library, so just return
         // the path.
         return Future<std::string>(std::string(path));
         break;
-      case LoadFileFromPathSource::kLocalFile:
+      case LoadAssetFileFromPathSource::kLocalFile:
         std::string load_path = absl::StrCat(kFileSuffix, path);
 
         // Load the local file.
@@ -145,7 +156,7 @@ Future<absl::Status> GltfFileLoader::LoadNode(
   BeginLoadingNode(editor, GetView());
 
   return GetView()
-      .GetAssetManager()
+      .GetModelFactory()
       .LoadModel(path, editor.GetGltfLoadOptions())
       .Then([this, &editor, path = std::string(path),
              placement_func =
@@ -244,9 +255,9 @@ Future<absl::Status> IblFileLoader::LoadNode(
       });
 }
 
-Future<absl::Status> LoadFile(BaseView& view, absl::string_view path,
-                              LoadFileSource source,
-                              Invocable<void(NodeHandle)> placement_func) {
+Future<absl::Status> LoadAssetFile(BaseView& view, absl::string_view path,
+                                   LoadAssetFileSource source,
+                                   Invocable<void(NodeHandle)> placement_func) {
   Editor& editor = *view.GetRegistry().Get<Editor>();
 
   absl::string_view file_name = RemoveDirectoryAndExtensionFromFilename(path);
@@ -262,6 +273,33 @@ Future<absl::Status> LoadFile(BaseView& view, absl::string_view path,
             *view.GetRegistry().Get<FileTypeRegistry>();
         return file_type_registry.LoadNode(path, std::move(placement_func));
       });
+}
+
+void LoadAssetFileAtCursor(BaseView& view, const absl::string_view filename,
+                           LoadAssetFileSource source,
+                           std::optional<float2> cursor) {
+  if (!cursor.has_value()) {
+    cursor = view.GetSize() / 2.0f;
+  }
+  std::optional<RayHit> hit = std::nullopt;
+  std::optional<float3> spawn_point =
+      GetPointerIntersectionWithGroundPlane(view, *cursor);
+
+  if (spawn_point.has_value()) {
+    if (length(*spawn_point) < kSnapThreshold) {
+      spawn_point = kZero3;
+    }
+    hit.emplace(0, kIdentityQuatf, *spawn_point, NodeHandle(), kUp);
+  }
+
+  LoadAssetFile(view, filename, std::move(source), [hit](NodeHandle scene) {
+    if (hit.has_value()) {
+      // Place the scene at the orientation and
+      // position of the cursor hit location.
+      float3 target_center = hit->world_point;
+      scene->SetWorldPosition(target_center);
+    }
+  }).KeptBy(&view);
 }
 
 }  // namespace imp::editor

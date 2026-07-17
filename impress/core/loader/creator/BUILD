@@ -145,10 +145,14 @@ cc_library(
         "//core/loader:loaded_model_fb",  # buildcleaner: keep
         "//core/loader/provider:fbs",
         "//core/loader/provider:fbs_deps",  # build_cleaner: keep
+        "//core/material_library:fbs",
+        "//core/render",
         "//core/resources",
+        "//core/view:base_view",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/types:span",
+        "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/libs:ktxreader_hdrs",
     ],
@@ -222,6 +226,7 @@ cc_library(
         "//core/material_library:material_package",
         "//core/model",
         "//core/model:model_data_details",
+        "//core/render",
         "//core/view:base_view",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",

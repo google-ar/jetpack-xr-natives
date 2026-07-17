@@ -20,30 +20,65 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <stack>
+#include <iterator>
 #include <vector>
 
 #include "absl/base/optimization.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/common/trace.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
+#include "core/performance/profiler_state.h"
 #include "core/performance/profiler_structs.h"
 
 namespace imp::editor {
 
-const ProcessedSamples& SampleProcessor::GetProcessedFrame(
-    const int frame_index) const {
-  return processed_samples_[frame_index % Profiler::kMaxFrames];
+namespace {
+struct SampleNameComparator {
+  using is_transparent = void;
+  bool operator()(const SampleNode* a, const SampleNode* b) const {
+    return a->result->GetName() < b->result->GetName();
+  }
+  bool operator()(const SampleNode* a, absl::string_view b) const {
+    return a->result->GetName() < b;
+  }
+  bool operator()(absl::string_view a, const SampleNode* b) const {
+    return a < b->result->GetName();
+  }
+};
+}  // namespace
+
+void ProcessedSamples::SortSamples() {
+  std::stable_sort(all_samples.begin(), all_samples.end(),
+                   SampleNameComparator{});
 }
 
-void SampleProcessor::ProcessSamples(const int profiler_sample_count,
-                                     NodePool& node_pool,
-                                     ProcessedSamples& processed_samples,
-                                     ResultCollection& results) {
+absl::Span<SampleNode* const> ProcessedSamples::GetSamplesByName(
+    absl::string_view name) const {
+  auto it_pair = std::equal_range(all_samples.begin(), all_samples.end(), name,
+                                  SampleNameComparator{});
+  if (it_pair.first == it_pair.second) {
+    return {};
+  }
+  return absl::MakeConstSpan(&*it_pair.first,
+                             std::distance(it_pair.first, it_pair.second));
+}
+
+const ProcessedSamples& SampleProcessor::GetProcessedFrame(
+    const int frame_index) const {
+  return GetOrCreateState()
+      .processed_samples[frame_index % MainThreadProfilerState::kMaxFrames];
+}
+
+void SampleProcessor::ProcessSamples(
+    const int profiler_sample_count, NodePool& node_pool,
+    ProcessedSamples& processed_samples, ResultCollection& results,
+    std::vector<SampleNode*>& active_nodes_stack) {
   bool sample_has_parent;
-  std::stack<SampleNode*> active_nodes;
+  active_nodes_stack.clear();
   uint64_t current_sample_end_id;
   const ProfileResult* current_profiler_sample;
   size_t current_depth = 0;
@@ -57,10 +92,10 @@ void SampleProcessor::ProcessSamples(const int profiler_sample_count,
     current_profiler_sample = results.Get(i);
     // Pop nodes that have ended before the current sample starts
     current_sample_end_id = current_profiler_sample->GetSampleEndId();
-    while (!active_nodes.empty() &&
-           active_nodes.top()->result->GetSampleEndId() <=
+    while (!active_nodes_stack.empty() &&
+           active_nodes_stack.back()->result->GetSampleEndId() <=
                current_sample_end_id) {
-      active_nodes.pop();
+      active_nodes_stack.pop_back();
       current_depth--;
     }
 
@@ -69,18 +104,18 @@ void SampleProcessor::ProcessSamples(const int profiler_sample_count,
     new_node->SetInitialValues(current_profiler_sample);
 
     // If the stack is empty, the sample has no parent.
-    sample_has_parent = !active_nodes.empty();
+    sample_has_parent = !active_nodes_stack.empty();
 
     // If the sample node has a parent, add it as a child of its parent and then
     // register it into the processed samples.
     // Otherwise, add it as a root sample in the processed samples.
     if (ABSL_PREDICT_TRUE(sample_has_parent)) {
-      active_nodes.top()->AddChild(new_node);
+      active_nodes_stack.back()->AddChild(new_node);
       processed_samples.AddSample(new_node);
     } else {
       processed_samples.AddRootSample(new_node);
     }
-    active_nodes.push(new_node);
+    active_nodes_stack.push_back(new_node);
     current_depth++;
     max_depth = std::max(max_depth, current_depth);
   }
@@ -93,10 +128,10 @@ void SampleProcessor::ProcessMainThreadSamples(const int frame_index) {
 
   if (!Profiler::HasFrameRecorded(frame_index)) return;
 
-  int sample_index = frame_index % Profiler::kMaxFrames;
-  ProcessedSamples& processed_samples = processed_samples_[sample_index];
-  processed_samples.samples_by_name.clear();
-  processed_samples.sample_roots.clear();
+  const int sample_index = frame_index % MainThreadProfilerState::kMaxFrames;
+  ProcessedSamples& processed_samples =
+      GetOrCreateState().processed_samples[sample_index];
+  processed_samples.Clear();
 
   absl::StatusOr<int> sample_count = Profiler::GetSampleCount(frame_index);
 
@@ -106,31 +141,36 @@ void SampleProcessor::ProcessMainThreadSamples(const int frame_index) {
 
   if (count == 0) return;
 
-  count = std::min(count, Profiler::kMaxSamples);
+  count = std::min(count, MainThreadProfilerState::kMaxSamples);
 
-  NodePool& node_pool = main_thread_node_pools_[sample_index];
+  NodePool& node_pool = GetOrCreateState().main_thread_node_pools[sample_index];
   node_pool.ResetIndex();
 
-  absl::StatusOr<
-      const std::array<MainThreadProfileResult, Profiler::kMaxSamples>*>
+  absl::StatusOr<const std::array<MainThreadProfileResult,
+                                  MainThreadProfilerState::kMaxSamples>*>
       profiler_samples = Profiler::GetSamples(frame_index);
 
   if (!profiler_samples.ok()) return;
 
-  const std::array<MainThreadProfileResult, Profiler::kMaxSamples>& samples =
+  const std::array<MainThreadProfileResult,
+                   MainThreadProfilerState::kMaxSamples>& samples =
       **profiler_samples;
 
   MainThreadResultCollection results(&samples);
 
-  ProcessSamples(count, node_pool, processed_samples, results);
+  ProcessSamples(count, node_pool, processed_samples, results,
+                 GetOrCreateState().active_nodes_stack);
+  processed_samples.SortSamples();
 }
 
 void SampleProcessor::ProcessWorkerSampleList(
     const std::vector<WorkerProfileResult>& samples,
     ProcessedSamples& processed_worker_samples) {
+  SampleProcessorState& state = GetOrCreateState();
   WorkerResultCollection results(&samples);
-  ProcessSamples(samples.size(), worker_node_pool_, processed_worker_samples,
-                 results);
+  ProcessSamples(samples.size(), state.worker_node_pool,
+                 processed_worker_samples, results, state.active_nodes_stack);
+  processed_worker_samples.SortSamples();
 }
 
 ProcessedWorkerSamplesMap SampleProcessor::ProcessAllWorkerThreadsSamples(
@@ -138,7 +178,7 @@ ProcessedWorkerSamplesMap SampleProcessor::ProcessAllWorkerThreadsSamples(
   IMP_TRACE();
 
   ProcessedWorkerSamplesMap processed_worker_samples_map;
-  worker_node_pool_.ResetIndex();
+  GetOrCreateState().worker_node_pool.ResetIndex();
 
   for (const auto& [thread_id, samples] : raw_samples_map) {
     ProcessWorkerSampleList(samples, processed_worker_samples_map[thread_id]);
@@ -151,7 +191,7 @@ ProcessedSamples SampleProcessor::ProcessWorkerThreadSamples(
   IMP_TRACE();
 
   ProcessedSamples processed_worker_samples;
-  worker_node_pool_.ResetIndex();
+  GetOrCreateState().worker_node_pool.ResetIndex();
 
   ProcessWorkerSampleList(samples, processed_worker_samples);
 

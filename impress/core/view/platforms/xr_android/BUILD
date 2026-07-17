@@ -14,6 +14,7 @@
 
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@third_party//filament:filament.bzl", "by_backend")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "if_dev_runtime", "if_non_android", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//build_tools:imp_gltf_materials_package.bzl", "imp_gltf_materials_package")
@@ -31,6 +32,7 @@ package(
 
 licenses(["notice"])
 
+# TODO: (broken link) - Remove this once build-impress-prebuilt.sh has xr config fixes.
 string_flag(
     name = "platform_type",
     build_setting_default = "opengl",
@@ -60,18 +62,119 @@ cc_library(
         "//core:config",
         "@third_party//OpenXR_KHR:generated_openxr_headers_public",
         "@third_party//OpenXR_KHR:openxr_headers_androidxr",
+        "@third_party//filament/filament/backend:backend_hdrs",
         "@third_party//filament/filament/backend:platform",
-    ] + select({
-        ":xr_opengl_platform": [
-            "@third_party//filament/filament/backend:backend_hdrs",
-            "@third_party//filament/filament/backend:backend_opengl_private_hdrs",
+    ] + by_backend(
+        opengl = [
             "@third_party//gl",
+            "@third_party//filament/filament/backend:backend_opengl_private_hdrs",
         ],
-        ":xr_vulkan_platform": [
+        vulkan = [
             "@third_party//filament/filament/backend:backend_vk_hdrs",
             "@third_party//filament/libs:bluevk_hdrs",
         ],
-    }) + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    ) + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "xr_backend",
+    srcs = [
+        "xr_swap_chain.cc",
+    ] + by_backend(
+        opengl = [
+            "xr_opengl_platform.cc",
+            "xr_opengl_swap_chain_image_handler.cc",
+        ],
+        vulkan = [
+            "xr_vulkan_platform.cc",
+            "xr_vulkan_swap_chain_image_handler.cc",
+        ],
+    ),
+    hdrs = [
+        "xr_swap_chain.h",
+    ] + by_backend(
+        opengl = [
+            "xr_opengl_platform.h",
+            "xr_opengl_swap_chain_image_handler.h",
+        ],
+        vulkan = [
+            "xr_vulkan_platform.h",
+            "xr_vulkan_swap_chain_image_handler.h",
+        ],
+    ),
+    copts = imp_google3_copts() + [
+        "-fno-rtti",
+    ],
+    defines = imp_defines(),
+    deps = [
+        ":openxr_includes",
+        ":xr_helpers",
+        ":xr_session_host",
+        "//core:config",
+        "//core/common:platform_helpers",
+        "//core/common:trace",
+        "//core/math",
+        "//core/render:content_security_level",
+        "//core/view:view_host",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@robin_map",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:platform",
+        "@third_party//filament/libs:utils_hdrs",
+    ] + by_backend(
+        opengl = [
+            "@third_party//filament/filament/backend:backend_opengl_private_hdrs",
+        ],
+        vulkan = [
+            "@third_party//filament/filament/backend:backend_vk_hdrs",
+            "@third_party//filament/libs:bluevk_hdrs",
+        ],
+    ) + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "xr_session_host",
+    hdrs = ["xr_session_host.h"],
+    defines = imp_defines(),
+    deps = [
+        ":openxr_includes",
+        ":xr_events_proto_cc",
+        ":xr_helpers",
+        "//core:config",
+        "//core/camera",
+        "//core/common:invocable",
+        "//core/common:optional_error",
+        "//core/common:robin_map",
+        "//core/math",
+        "//core/monitor",
+        "//core/monitor:default_monitor_summary",
+        "//core/monitor:monitor_summary",
+        "//core/ncsb",
+        "//core/render:content_security_level",
+        "//core/view:base_view",
+        "//core/view:view_host",
+        "//core/xr:openxr_events",
+        "//java/com/google/ar/imp/view/xr:xr_setup_params_cc_proto",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@robin_map",
+        "@third_party//filament/filament:filament_hdrs",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 
@@ -79,43 +182,25 @@ cc_library(
     name = "xr",
     srcs = [
         "xr_session_host.cc",
-        "xr_swap_chain.cc",
-    ] + select({
-        ":xr_opengl_platform": [
-            "xr_opengl_platform.cc",
-            "xr_opengl_swap_chain_image_handler.cc",
-        ],
-        ":xr_vulkan_platform": [
-            "xr_vulkan_platform.cc",
-            "xr_vulkan_swap_chain_image_handler.cc",
-        ],
-    }),
-    hdrs = [
-        "xr_session_host.h",
-        "xr_swap_chain.h",
-    ] + select({
-        ":xr_opengl_platform": [
-            "xr_opengl_platform.h",
-            "xr_opengl_swap_chain_image_handler.h",
-        ],
-        ":xr_vulkan_platform": [
-            "xr_vulkan_platform.h",
-            "xr_vulkan_swap_chain_image_handler.h",
-        ],
-    }),
-    copts = imp_copts(),
-    defines = imp_defines(),
+    ],
+    copts = imp_google3_copts(),
+    defines = imp_defines() + [
+        "IMP_INCLUDE_STEREO_VARIANT_BY_DEFAULT",
+    ],
     deps = [
         ":generic_stereo_materials",
         ":openxr_includes",
+        ":xr_backend",
         ":xr_color_space_helper",
         ":xr_events_proto_cc",
         ":xr_helpers",
+        ":xr_session_host",
         "//core:config",
         "//core/actions:action_config",
         "//core/actions:controller_events",
         "//core/actions:input_action_event",
         "//core/async:executor",
+        "//core/camera",
         "//core/common:enum_flags",
         "//core/common:invocable",
         "//core/common:optional_error",
@@ -123,6 +208,7 @@ cc_library(
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/common:trace",
+        "//core/editor:editor_plugin",
         "//core/math",
         "//core/monitor",
         "//core/monitor:default_monitor_summary",
@@ -158,16 +244,12 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:platform",
         "@third_party//filament/libs:utils_hdrs",
-    ] + select({
-        ":xr_opengl_platform": [
-            "@third_party//filament/filament/backend:backend_opengl_private_hdrs",
+    ] + by_backend(
+        opengl = [
             "@third_party//gl",
         ],
-        ":xr_vulkan_platform": [
-            "@third_party//filament/filament/backend:backend_vk_hdrs",
-            "@third_party//filament/libs:bluevk_hdrs",
-        ],
-    }) + if_non_android(["@bazel_tools//tools/jdk:jni"]) + if_dev_runtime([":xr_editor_plugin"]),
+        vulkan = [],
+    ) + if_non_android(["@bazel_tools//tools/jdk:jni"]) + if_dev_runtime([":xr_editor_plugin"]),
     alwayslink = 1,
 )
 
@@ -212,6 +294,7 @@ cc_library(
         "//core/monitor:monitor_summary",
         "//core/render_passes:texture_pipeline_renderer_projection_quad",
         "//core/view:base_view",
+        "//core/xr:openxr_loader_lib",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -236,6 +319,8 @@ cc_library(
         ":xr",
         ":xr_action_controller",
         ":xr_helpers",
+        ":xr_session_host",
+        "//core:config",
         "//core/common:buffer_access",
         "//core/common:jni_helpers",
         "//core/monitor",
@@ -247,7 +332,6 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@mediapipe//mediapipe/framework/port:status",
-        "@third_party//gl",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
@@ -277,17 +361,20 @@ cc_library(
         "xr_action_controller.h",
     ],
     copts = imp_google3_copts(),
+    defines = imp_defines(),
     deps = [
         ":openxr_includes",
-        ":xr",
         ":xr_action_config",
         ":xr_action_params_imp_cc_proto",
         ":xr_helpers",
+        ":xr_session_host",
+        "//core:config",
         "//core/actions:action_config",
         "//core/actions:controller_input_handler",
         "//core/actions:input_action_event",
         "//core/common:robin_map",
         "//core/common:trace",
+        "//core/input",
         "//core/math",
         "//core/view:base_view",
         "//core/view/utils:string_hasher",
@@ -379,3 +466,12 @@ imp_assets(
     srcs = ["//core/view/platforms/xr_android:compiled_imp_default_stereo_gltf_materials.zip"],
     namespace = "imp::materials",
 )
+
+filegroup(
+    name = "scuba_goldens",
+    srcs = glob(["scuba_goldens/**/*.png"]),
+)
+
+# Note: this test is disabled until Filament uses Multivew rendering by default.
+# build command:
+# blaze test //core/view/platforms/xr_android:xr_platform_scuba_test --define=IMP_INCLUDE_STEREO_VARIANT_BY_DEFAULT=1 --define=FILAMENT_ENABLE_MULTIVIEW=1 --define=IMP_ENABLE_STEREO_TYPE_MULTIVIEW=1

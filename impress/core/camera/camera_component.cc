@@ -38,6 +38,11 @@
 #include "core/view/base_view.h"
 #include "core/view/view_events.h"
 
+#if IMP_RUNTIME(DEV)
+#include "filament/filament/include/filament/Viewport.h"
+#include "core/editor/widgets/viewport/viewport_helpers.h"
+#endif  // IMP_RUNTIME(DEV)
+
 namespace imp {
 
 namespace {
@@ -505,13 +510,30 @@ float2 CameraComponent::PixelFromClipPoint(const float3& clip_point) const {
 }
 
 float2 CameraComponent::UVFromPixelPoint(const float2& pixel_point) const {
-  uint2 size = GetView().GetSize();
+  const float2 size = GetViewportSize();
   return float2(pixel_point.x / size.x, pixel_point.y / size.y);
 }
 
 float2 CameraComponent::PixelFromUVPoint(const float2& uv_point) const {
-  uint2 size = GetView().GetSize();
+  const float2 size = GetViewportSize();
   return float2(uv_point.x * size.x, uv_point.y * size.y);
+}
+
+float2 CameraComponent::GetViewportSize() const {
+  float2 size = static_cast<float2>(GetView().GetSize());
+#if IMP_RUNTIME(DEV)
+  const std::optional<filament::Viewport> viewport_override =
+      GetView().GetHost()->GetEditorViewportOverride();
+
+  if (!viewport_override) return size;
+
+  const float2 pixel_ratio = editor::GetPhysicalPixelRatio(GetView());
+
+  return float2(viewport_override->width / pixel_ratio.x,
+                viewport_override->height / pixel_ratio.y);
+#else
+  return size;
+#endif  // IMP_RUNTIME(DEV)
 }
 
 bool CameraComponent::IntersectsFrustum(const Box& world_bounds) const {
@@ -533,13 +555,23 @@ bool CameraComponent::IsAspectRatioLocked() const {
   return state_.locked_aspect_ratio.has_value();
 }
 
-float CameraComponent::GetAspectRatio(float2 scale) const {
+float CameraComponent::GetAspectRatio(const float2 scale) const {
   if (IsAspectRatioLocked()) {
     return state_.locked_aspect_ratio.value();
   } else {
-    float2 size = GetView().GetSize() * scale;
-    float width = size.x;
-    float height = size.y;
+    uint2 size = GetView().GetSize();
+#if IMP_RUNTIME(DEV)
+    const std::optional<filament::Viewport> viewport_override =
+        GetView().GetHost()->GetEditorViewportOverride();
+
+    if (viewport_override) {
+      size = {viewport_override->width, viewport_override->height};
+    }
+#endif  // IMP_RUNTIME(DEV)
+
+    const float2 scaled_size = static_cast<float2>(size) * scale;
+    const float width = scaled_size.x;
+    const float height = scaled_size.y;
     
     
     return width / height;

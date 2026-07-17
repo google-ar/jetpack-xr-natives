@@ -17,6 +17,7 @@
 package com.google.ar.imp.core.scripting;
 
 import com.google.ar.imp.core.NodeHandleMessageOuterClass.NodeHandleMessage;
+import com.google.ar.imp.core.ViewConfig;
 import com.google.ar.imp.core.scripting.Api.CreateNodeRequest;
 import com.google.ar.imp.core.scripting.Api.FindNodeRequest;
 import com.google.ar.imp.core.scripting.Api.GetCameraRequest;
@@ -25,6 +26,7 @@ import com.google.ar.imp.core.scripting.Api.LoadModelFromInputStreamRequest;
 import com.google.ar.imp.core.scripting.Api.LoadModelRequest;
 import com.google.ar.imp.core.scripting.Api.LoadSceneRequest;
 import com.google.ar.imp.core.scripting.Api.SetCameraProjectionRequest;
+import com.google.ar.imp.core.scripting.Api.SetViewConfigRequest;
 import com.google.ar.imp.proto.Math.Mat4f;
 import com.google.ar.imp.view.View;
 import com.google.common.util.concurrent.Futures;
@@ -42,7 +44,7 @@ public class ScriptApi {
   public static ScriptApi create(View view) {
     // These three lines are the "enable scripting idiom". You can copy this small block into your
     // Impress-based Java activity to use the Java scripting interface.
-    ScriptBridge scriptBridge = new ScriptBridge(view.getViewHostHandle());
+    ScriptBridge scriptBridge = new ScriptBridge(view.getScriptMessageHandlerProviderHandle());
     view.setScriptEndpoint(scriptBridge);
     return new ScriptApi(scriptBridge);
   }
@@ -169,6 +171,13 @@ public class ScriptApi {
     apiBridge.sendRequest(
         "imp.scripting.SetCameraProjectionRequest",
         SetCameraProjectionRequest.newBuilder().setMatrix(matrix).build());
+  }
+
+  /** Sets the view configuration. */
+  public void setViewConfig(ViewConfig config) {
+    apiBridge.sendRequest(
+        "imp.scripting.SetViewConfigRequest",
+        SetViewConfigRequest.newBuilder().setConfig(config).build());
   }
 
   /**

@@ -17,10 +17,14 @@
 #include <time.h>
 
 #include "absl/synchronization/mutex.h"
-#include "absl/time/time.h"
 #include "mediapipe/framework/deps/clock.h"
+#include "absl/time/time.h"
 
 namespace imp {
+
+namespace {
+mediapipe::Clock* GetRealClockImpl() { return mediapipe::Clock::RealClock(); }
+}  // namespace
 
 absl::Time ProfilingClock::GetMonotonicClockTime() {
   timespec timespec;
@@ -30,7 +34,7 @@ absl::Time ProfilingClock::GetMonotonicClockTime() {
 #endif
 
   if (monotonic_clock_unsupported) {
-    return mediapipe::Clock::RealClock()->TimeNow();
+    return GetRealClockImpl()->TimeNow();
   }
 
   return absl::TimeFromTimespec(timespec);
@@ -38,12 +42,10 @@ absl::Time ProfilingClock::GetMonotonicClockTime() {
 
 absl::Time ProfilingClock::TimeNow() { return GetMonotonicClockTime(); }
 
-void ProfilingClock::Sleep(absl::Duration d) {
-  mediapipe::Clock::RealClock()->Sleep(d);
-}
+void ProfilingClock::Sleep(absl::Duration d) { GetRealClockImpl()->Sleep(d); }
 
 void ProfilingClock::SleepUntil(absl::Time wakeup_time) {
-  mediapipe::Clock::RealClock()->SleepUntil(wakeup_time);
+  GetRealClockImpl()->SleepUntil(wakeup_time);
 }
 
 bool ProfilingClock::AwaitWithDeadline(absl::Mutex* mu,

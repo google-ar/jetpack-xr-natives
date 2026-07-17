@@ -283,6 +283,10 @@ class CameraComponent : public Component {
   bool IsAspectRatioLocked() const;
   float GetAspectRatio(float2 scale = kOne2) const;
 
+  // Returns the size of the viewport in pixels, taking into account any editor
+  // overrides and physical pixel ratio.
+  float2 GetViewportSize() const;
+
   imp::mat4 GetOrthographicProjection() const;
 
   imp::mat4 GetCustomProjection() const;

@@ -549,10 +549,11 @@ GlyphEmulator::SuperSampleInfo GlyphEmulator::GetSuperSampleInfo(
 void GlyphEmulator::DrawGlyph(ScopedCanvas& canvas,
                               const GlyphEmulator::GlyphKeyOrGlyphString& glyph,
                               float2 position,
-                              const ScopedCanvas::TextOptions& canvas_options) {
+                              const ScopedCanvas::TextOptions& canvas_options,
+                              const TextMetrics* pre_cached_metrics) {
   if (absl::holds_alternative<GlyphEmulator::GlyphKey>(glyph)) {
     canvas.DrawGlyph(std::get<GlyphEmulator::GlyphKey>(glyph).glyph_id,
-                     position, canvas_options);
+                     position, canvas_options, pre_cached_metrics);
   } else {
     canvas.DrawText(std::get<std::string>(glyph), position, canvas_options);
   }

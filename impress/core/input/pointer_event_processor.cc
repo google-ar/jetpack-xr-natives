@@ -14,6 +14,9 @@
 
 #include "core/input/pointer_event_processor.h"
 
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -21,7 +24,9 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/time/time.h"
 #include "core/config.h"
+#include "core/input/pointer_event.h"
 #include "core/math/vec.h"
 #include "mediapipe/framework/port/status_macros.h"
 
@@ -33,7 +38,8 @@ PointerEventProcessor::~PointerEventProcessor() {}
 
 PointerEvent PointerEventProcessor::CreatePointerEvent(
     uint8_t action, const std::vector<Pointer::Id>& changed_ids,
-    const std::vector<float2>& changed_points, absl::Duration elapsed_time) {
+    const std::vector<float2>& changed_points, absl::Duration elapsed_time,
+    PointerEvent::DeviceType device_type) {
   const PointerEventType type = static_cast<PointerEventType>(action);
   if (changed_ids.size() != changed_points.size()) {
     IMP_LOG(imp::FATAL) << "Size of changed_ids(" << changed_ids.size()
@@ -89,7 +95,8 @@ PointerEvent PointerEventProcessor::CreatePointerEvent(
   }
 #endif
 
-  return PointerEvent(type, pointers, changed_pointer_count, elapsed_time);
+  return PointerEvent(type, pointers, changed_pointer_count, elapsed_time,
+                      device_type);
 }
 
 absl::Status PointerEventProcessor::UpdatePointerEvent(

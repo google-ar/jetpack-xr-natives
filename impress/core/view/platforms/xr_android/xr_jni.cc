@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
 #include <jni.h>
 
 #include <memory>
@@ -23,6 +21,7 @@
 #include "absl/status/status.h"
 #include "core/common/buffer_access.h"
 #include "core/common/jni_helpers.h"
+#include "core/config.h"
 #include "core/monitor/monitor.h"
 #include "core/proto/proto_reader.h"
 #include "core/render/content_security_level.h"
@@ -64,6 +63,7 @@ absl::Status InitializeLoader(JNIEnv* env, jobject context) {
       xrGetInstanceProcAddr(XR_NULL_HANDLE, "xrInitializeLoaderKHR",
                             (PFN_xrVoidFunction*)(&initialize_loader))));
 
+#if IMP_PLATFORM(ANDROID)
   JavaVM* app_vm = nullptr;
   env->GetJavaVM(&app_vm);
 
@@ -78,6 +78,10 @@ absl::Status InitializeLoader(JNIEnv* env, jobject context) {
       XR_NULL_HANDLE,
       initialize_loader(reinterpret_cast<const XrLoaderInitInfoBaseHeaderKHR*>(
           &loader_init_info_android)));
+#else
+  return absl::UnavailableError(
+      "Android OpenXR loader initialization not supported on this platform.");
+#endif
 }
 
 }  // namespace
@@ -105,10 +109,10 @@ JNI_METHOD(jlong, nCreateSessionHost)
 
   auto session_host =
       std::make_unique<XrSessionHost>(std::move(view), xr_setup_params);
-  auto& xr_action_controller =
-      session_host->GetView()
-          ->GetRegistry()
-          .GetOrCreate<imp::XrActionController>(*session_host);
+  auto& xr_action_controller = session_host->GetView()
+                                   ->GetRegistry()
+                                   .GetOrCreate<imp::XrActionController>(
+                                       *session_host->GetView(), *session_host);
   if (xr_setup_params.use_xr_action_defaults.Value() == JNI_TRUE) {
     xr_action_controller.SetXrSessionActionConfig(
         imp::XrActionController::XrSessionActionConfig::kUseXrActionDefaults);

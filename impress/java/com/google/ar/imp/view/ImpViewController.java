@@ -233,6 +233,10 @@ public class ImpViewController {
   }
 
   public void releaseResources() {
+    releaseResources(false);
+  }
+
+  public void releaseResources(boolean asyncDestructionEnabled) {
     if (getNativeHandle() == 0) {
       return;
     }
@@ -252,13 +256,14 @@ public class ImpViewController {
               return null;
             });
 
-    try {
-      // Block until destroy has returned.
-      future.get();
-    } catch (InterruptedException | ExecutionException e) {
-      throw new IllegalStateException("Unable to call View::destroy", e);
+    if (!asyncDestructionEnabled) {
+      try {
+        // Block until destroy has returned.
+        future.get();
+      } catch (InterruptedException | ExecutionException e) {
+        throw new IllegalStateException("Unable to call View::destroy", e);
+      }
     }
-
     frameScheduler.destroy();
   }
 

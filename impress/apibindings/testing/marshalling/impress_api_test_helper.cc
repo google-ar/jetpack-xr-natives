@@ -25,6 +25,10 @@
 
 #define JNI_METHOD_AOSP(return_type, method_name) \
   IMP_JNI return_type JNICALL                     \
+      Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_##method_name  // NOLINT
+
+#define JNI_METHOD_AOSP_OLD(return_type, method_name) \
+  IMP_JNI return_type JNICALL                         \
       Java_androidx_xr_scenecore_impl_impress_ImpressApiTestHelper_##method_name  // NOLINT
 
 extern "C" {
@@ -35,6 +39,12 @@ JNI_METHOD_AOSP(void, nativeResetTestState)
   imp::SkyboxTestContext::Get().Reset();
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeResetTestState)
+(JNIEnv* env, jclass clazz) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeResetTestState(  // NOLINT
+      env, clazz);
+}
+
 JNI_METHOD_AOSP(jlong, nativeCreateTestView)
 (JNIEnv* env, jclass /*clazz*/) {
   // Create an instance of the test view class. The constructor of
@@ -43,10 +53,22 @@ JNI_METHOD_AOSP(jlong, nativeCreateTestView)
   return reinterpret_cast<jlong>(test_view);
 }
 
+JNI_METHOD_AOSP_OLD(jlong, nativeCreateTestView)
+(JNIEnv* env, jclass clazz) {
+  return Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeCreateTestView(  // NOLINT
+      env, clazz);
+}
+
 JNI_METHOD_AOSP(void, nativeDestroyTestView)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto* test_view = reinterpret_cast<imp::TestImpressApiView*>(view_handle);
   delete test_view;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeDestroyTestView)
+(JNIEnv* env, jclass clazz, jlong view_handle) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeDestroyTestView(  // NOLINT
+      env, clazz, view_handle);
 }
 
 // glTF Operations
@@ -54,6 +76,12 @@ JNI_METHOD_AOSP(void, nativeSetExpectedLoadGltfPath)
 (JNIEnv* env, jclass /*clazz*/, jstring path) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.load_gltf_asset_path.expected_path = imp::GetString(env, path);
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedLoadGltfPath)
+(JNIEnv* env, jclass clazz, jstring path) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedLoadGltfPath(  // NOLINT
+      env, clazz, path);
 }
 
 JNI_METHOD_AOSP(void, nativeSetLoadGltfAssetSuccess)
@@ -66,12 +94,24 @@ JNI_METHOD_AOSP(void, nativeSetLoadGltfAssetSuccess)
   context.load_gltf_asset_bytes.failure_message.clear();
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetLoadGltfAssetSuccess)
+(JNIEnv* env, jclass clazz, jlong token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetLoadGltfAssetSuccess(  // NOLINT
+      env, clazz, token);
+}
+
 JNI_METHOD_AOSP(void, nativeSetLoadGltfAssetFailure)
 (JNIEnv* env, jclass /*clazz*/, jstring message) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   std::string msg = imp::GetString(env, message);
   context.load_gltf_asset_path.failure_message = msg;
   context.load_gltf_asset_bytes.failure_message = msg;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetLoadGltfAssetFailure)
+(JNIEnv* env, jclass clazz, jstring message) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetLoadGltfAssetFailure(  // NOLINT
+      env, clazz, message);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedLoadGltfAssetTestPattern)
@@ -83,10 +123,22 @@ JNI_METHOD_AOSP(void, nativeSetExpectedLoadGltfAssetTestPattern)
   context.load_gltf_asset_bytes.expected_key = imp::GetString(env, key);
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedLoadGltfAssetTestPattern)
+(JNIEnv* env, jclass clazz, jint expected_size, jstring key) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedLoadGltfAssetTestPattern(  // NOLINT
+      env, clazz, expected_size, key);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedReleaseGltfAsset)
 (JNIEnv* env, jclass /*clazz*/, jlong token) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.release_gltf_asset.expected_token = token;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedReleaseGltfAsset)
+(JNIEnv* env, jclass clazz, jlong token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedReleaseGltfAsset(  // NOLINT
+      env, clazz, token);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedInstanceGltfModel)
@@ -95,10 +147,22 @@ JNI_METHOD_AOSP(void, nativeSetExpectedInstanceGltfModel)
   context.instance_gltf_model.expected_token = token;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedInstanceGltfModel)
+(JNIEnv* env, jclass clazz, jlong token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedInstanceGltfModel(  // NOLINT
+      env, clazz, token);
+}
+
 JNI_METHOD_AOSP(void, nativeSetInstanceGltfModelSuccess)
 (JNIEnv* env, jclass /*clazz*/, jint node_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.instance_gltf_model.success_id = node_id;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetInstanceGltfModelSuccess)
+(JNIEnv* env, jclass clazz, jint node_id) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetInstanceGltfModelSuccess(  // NOLINT
+      env, clazz, node_id);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfModelColliderEnabled)
@@ -108,6 +172,12 @@ JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfModelColliderEnabled)
   context.set_gltf_model_collider_enabled.expected_enabled = enable_collider;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedSetGltfModelColliderEnabled)
+(JNIEnv* env, jclass clazz, jint node_id, jboolean enable_collider) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedSetGltfModelColliderEnabled(  // NOLINT
+      env, clazz, node_id, enable_collider);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfReformAffordanceEnabled)
 (JNIEnv* env, jclass /*clazz*/, jint impress_node_id,
  jboolean enable_affordance) {
@@ -115,6 +185,12 @@ JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfReformAffordanceEnabled)
   context.set_gltf_reform_affordance_enabled.expected_node_id = impress_node_id;
   context.set_gltf_reform_affordance_enabled.expected_enabled =
       enable_affordance;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedSetGltfReformAffordanceEnabled)
+(JNIEnv* env, jclass clazz, jint impress_node_id, jboolean enable_affordance) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedSetGltfReformAffordanceEnabled(  // NOLINT
+      env, clazz, impress_node_id, enable_affordance);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedAnimateGltfModel)
@@ -130,10 +206,23 @@ JNI_METHOD_AOSP(void, nativeSetExpectedAnimateGltfModel)
   context.animate_gltf_model.expected_channel_id = channel_id;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedAnimateGltfModel)
+(JNIEnv* env, jclass clazz, jint node_id, jstring animation_name, jboolean loop,
+ jfloat speed, jfloat start_time, jint channel_id) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedAnimateGltfModel(  // NOLINT
+      env, clazz, node_id, animation_name, loop, speed, start_time, channel_id);
+}
+
 JNI_METHOD_AOSP(void, nativeSetAnimateGltfModelSuccess)
 (JNIEnv* env, jclass /*clazz*/) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.animate_gltf_model.failure_message.clear();
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetAnimateGltfModelSuccess)
+(JNIEnv* env, jclass clazz) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetAnimateGltfModelSuccess(  // NOLINT
+      env, clazz);
 }
 
 JNI_METHOD_AOSP(void, nativeSetAnimateGltfModelFailure)
@@ -142,11 +231,23 @@ JNI_METHOD_AOSP(void, nativeSetAnimateGltfModelFailure)
   context.animate_gltf_model.failure_message = imp::GetString(env, message);
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetAnimateGltfModelFailure)
+(JNIEnv* env, jclass clazz, jstring message) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetAnimateGltfModelFailure(  // NOLINT
+      env, clazz, message);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedStopGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jint node_id, jint channel_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.stop_gltf_model_animation.expected_node_id = node_id;
   context.stop_gltf_model_animation.expected_channel_id = channel_id;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedStopGltfModelAnimation)
+(JNIEnv* env, jclass clazz, jint node_id, jint channel_id) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedStopGltfModelAnimation(  // NOLINT
+      env, clazz, node_id, channel_id);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedToggleGltfModelAnimation)
@@ -158,12 +259,24 @@ JNI_METHOD_AOSP(void, nativeSetExpectedToggleGltfModelAnimation)
   context.toggle_gltf_model_animation.expected_channel_id = channel_id;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedToggleGltfModelAnimation)
+(JNIEnv* env, jclass clazz, jint node_id, jboolean toggle, jint channel_id) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedToggleGltfModelAnimation(  // NOLINT
+      env, clazz, node_id, toggle, channel_id);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfModelAnimationSpeed)
 (JNIEnv* env, jclass /*clazz*/, jint node_id, jfloat speed, jint channel_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.set_gltf_model_animation_speed.expected_node_id = node_id;
   context.set_gltf_model_animation_speed.expected_speed = speed;
   context.set_gltf_model_animation_speed.expected_channel_id = channel_id;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedSetGltfModelAnimationSpeed)
+(JNIEnv* env, jclass clazz, jint node_id, jfloat speed, jint channel_id) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedSetGltfModelAnimationSpeed(  // NOLINT
+      env, clazz, node_id, speed, channel_id);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfModelAnimationPlaybackTime)
@@ -177,16 +290,35 @@ JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfModelAnimationPlaybackTime)
       channel_id;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedSetGltfModelAnimationPlaybackTime)
+(JNIEnv* env, jclass clazz, jint node_id, jfloat playback_time,
+ jint channel_id) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedSetGltfModelAnimationPlaybackTime(  // NOLINT
+      env, clazz, node_id, playback_time, channel_id);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelAnimationCount)
 (JNIEnv* env, jclass /*clazz*/, jint node_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.get_gltf_model_animation_count.expected_node_id = node_id;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedGetGltfModelAnimationCount)
+(JNIEnv* env, jclass clazz, jint node_id) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedGetGltfModelAnimationCount(  // NOLINT
+      env, clazz, node_id);
+}
+
 JNI_METHOD_AOSP(void, nativeSetGetGltfModelAnimationCountSuccess)
 (JNIEnv* env, jclass /*clazz*/, jint count) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.get_gltf_model_animation_count.success_count = count;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetGetGltfModelAnimationCountSuccess)
+(JNIEnv* env, jclass clazz, jint count) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetGetGltfModelAnimationCountSuccess(  // NOLINT
+      env, clazz, count);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelAnimationName)
@@ -196,11 +328,23 @@ JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelAnimationName)
   context.get_gltf_model_animation_name.expected_index = index;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedGetGltfModelAnimationName)
+(JNIEnv* env, jclass clazz, jint node_id, jint index) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedGetGltfModelAnimationName(  // NOLINT
+      env, clazz, node_id, index);
+}
+
 JNI_METHOD_AOSP(void, nativeSetGetGltfModelAnimationNameSuccess)
 (JNIEnv* env, jclass /*clazz*/, jstring name) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.get_gltf_model_animation_name.success_name =
       imp::GetString(env, name);
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetGetGltfModelAnimationNameSuccess)
+(JNIEnv* env, jclass clazz, jstring name) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetGetGltfModelAnimationNameSuccess(  // NOLINT
+      env, clazz, name);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelAnimationDurationSeconds)
@@ -210,16 +354,34 @@ JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelAnimationDurationSeconds)
   context.get_gltf_model_animation_duration_seconds.expected_index = index;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedGetGltfModelAnimationDurationSeconds)
+(JNIEnv* env, jclass clazz, jint node_id, jint index) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedGetGltfModelAnimationDurationSeconds(  // NOLINT
+      env, clazz, node_id, index);
+}
+
 JNI_METHOD_AOSP(void, nativeSetGetGltfModelAnimationDurationSecondsSuccess)
 (JNIEnv* env, jclass /*clazz*/, jfloat duration) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.get_gltf_model_animation_duration_seconds.success_duration = duration;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetGetGltfModelAnimationDurationSecondsSuccess)
+(JNIEnv* env, jclass clazz, jfloat duration) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetGetGltfModelAnimationDurationSecondsSuccess(  // NOLINT
+      env, clazz, duration);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelLocalBounds)
 (JNIEnv* env, jclass /*clazz*/, jint node_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.get_gltf_model_local_bounds.expected_node_id = node_id;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedGetGltfModelLocalBounds)
+(JNIEnv* env, jclass clazz, jint node_id) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedGetGltfModelLocalBounds(  // NOLINT
+      env, clazz, node_id);
 }
 
 JNI_METHOD_AOSP(void, nativeSetGetGltfModelLocalBoundsSuccess)
@@ -232,12 +394,24 @@ JNI_METHOD_AOSP(void, nativeSetGetGltfModelLocalBoundsSuccess)
       context.get_gltf_model_local_bounds.success_half_extent);
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetGetGltfModelLocalBoundsSuccess)
+(JNIEnv* env, jclass clazz, jfloatArray center, jfloatArray half_extents) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetGetGltfModelLocalBoundsSuccess(  // NOLINT
+      env, clazz, center, half_extents);
+}
+
 // Skybox Operations
 JNI_METHOD_AOSP(void, nativeSetExpectedLoadIblPath)
 (JNIEnv* env, jclass /*clazz*/, jstring path) {
   imp::SkyboxTestContext& context = imp::SkyboxTestContext::Get();
   context.load_image_based_lighting_asset_path.expected_path =
       imp::GetString(env, path);
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedLoadIblPath)
+(JNIEnv* env, jclass clazz, jstring path) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedLoadIblPath(  // NOLINT
+      env, clazz, path);
 }
 
 JNI_METHOD_AOSP(void, nativeSetLoadIblAssetSuccess)
@@ -250,12 +424,24 @@ JNI_METHOD_AOSP(void, nativeSetLoadIblAssetSuccess)
   context.load_image_based_lighting_asset_bytes.failure_message.clear();
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetLoadIblAssetSuccess)
+(JNIEnv* env, jclass clazz, jlong token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetLoadIblAssetSuccess(  // NOLINT
+      env, clazz, token);
+}
+
 JNI_METHOD_AOSP(void, nativeSetLoadIblAssetFailure)
 (JNIEnv* env, jclass /*clazz*/, jstring message) {
   imp::SkyboxTestContext& context = imp::SkyboxTestContext::Get();
   std::string msg = imp::GetString(env, message);
   context.load_image_based_lighting_asset_path.failure_message = msg;
   context.load_image_based_lighting_asset_bytes.failure_message = msg;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetLoadIblAssetFailure)
+(JNIEnv* env, jclass clazz, jstring message) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetLoadIblAssetFailure(  // NOLINT
+      env, clazz, message);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedLoadIblAssetTestPattern)
@@ -268,10 +454,22 @@ JNI_METHOD_AOSP(void, nativeSetExpectedLoadIblAssetTestPattern)
       imp::GetString(env, key);
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedLoadIblAssetTestPattern)
+(JNIEnv* env, jclass clazz, jint expected_size, jstring key) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedLoadIblAssetTestPattern(  // NOLINT
+      env, clazz, expected_size, key);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedReleaseIblAsset)
 (JNIEnv* env, jclass /*clazz*/, jlong token) {
   imp::SkyboxTestContext& context = imp::SkyboxTestContext::Get();
   context.release_image_based_lighting_asset.expected_token = token;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedReleaseIblAsset)
+(JNIEnv* env, jclass clazz, jlong token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedReleaseIblAsset(  // NOLINT
+      env, clazz, token);
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedSetEnvironmentLight)
@@ -280,10 +478,22 @@ JNI_METHOD_AOSP(void, nativeSetExpectedSetEnvironmentLight)
   context.set_environment_light.expected_token = token;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedSetEnvironmentLight)
+(JNIEnv* env, jclass clazz, jlong token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedSetEnvironmentLight(  // NOLINT
+      env, clazz, token);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedClearEnvironmentLight)
 (JNIEnv* env, jclass /*clazz*/) {
   imp::SkyboxTestContext& context = imp::SkyboxTestContext::Get();
   context.clear_environment_light.expected_clear = true;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedClearEnvironmentLight)
+(JNIEnv* env, jclass clazz) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedClearEnvironmentLight(  // NOLINT
+      env, clazz);
 }
 
 // Texture Operations
@@ -293,11 +503,23 @@ JNI_METHOD_AOSP(void, nativeSetExpectedLoadTexturePath)
   context.load_texture_asset_path.expected_path = imp::GetString(env, path);
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedLoadTexturePath)
+(JNIEnv* env, jclass clazz, jstring path) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedLoadTexturePath(  // NOLINT
+      env, clazz, path);
+}
+
 JNI_METHOD_AOSP(void, nativeSetLoadTextureAssetSuccess)
 (JNIEnv* env, jclass /*clazz*/, jlong token) {
   imp::TextureTestContext& context = imp::TextureTestContext::Get();
   context.load_texture_asset_path.success_token = token;
   context.load_texture_asset_path.failure_message.clear();
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetLoadTextureAssetSuccess)
+(JNIEnv* env, jclass clazz, jlong token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetLoadTextureAssetSuccess(  // NOLINT
+      env, clazz, token);
 }
 
 JNI_METHOD_AOSP(void, nativeSetLoadTextureAssetFailure)
@@ -307,10 +529,22 @@ JNI_METHOD_AOSP(void, nativeSetLoadTextureAssetFailure)
   context.load_texture_asset_path.failure_message = msg;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetLoadTextureAssetFailure)
+(JNIEnv* env, jclass clazz, jstring message) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetLoadTextureAssetFailure(  // NOLINT
+      env, clazz, message);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedBorrowReflectionTexture)
 (JNIEnv* env, jclass /*clazz*/) {
   imp::TextureTestContext& context = imp::TextureTestContext::Get();
   context.borrow_reflection_texture.expected_call = true;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedBorrowReflectionTexture)
+(JNIEnv* env, jclass clazz) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedBorrowReflectionTexture(  // NOLINT
+      env, clazz);
 }
 
 JNI_METHOD_AOSP(void, nativeSetBorrowReflectionTextureSuccessToken)
@@ -319,10 +553,22 @@ JNI_METHOD_AOSP(void, nativeSetBorrowReflectionTextureSuccessToken)
   context.borrow_reflection_texture.success_token = token;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetBorrowReflectionTextureSuccessToken)
+(JNIEnv* env, jclass clazz, jlong token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetBorrowReflectionTextureSuccessToken(  // NOLINT
+      env, clazz, token);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedGetReflectionTextureFromIbl)
 (JNIEnv* env, jclass /*clazz*/, jlong ibl_token) {
   imp::TextureTestContext& context = imp::TextureTestContext::Get();
   context.get_reflection_texture_from_ibl.expected_ibl_token = ibl_token;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedGetReflectionTextureFromIbl)
+(JNIEnv* env, jclass clazz, jlong ibl_token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedGetReflectionTextureFromIbl(  // NOLINT
+      env, clazz, ibl_token);
 }
 
 JNI_METHOD_AOSP(void, nativeSetGetReflectionTextureFromIblSuccessToken)
@@ -331,10 +577,22 @@ JNI_METHOD_AOSP(void, nativeSetGetReflectionTextureFromIblSuccessToken)
   context.get_reflection_texture_from_ibl.success_token = texture_token;
 }
 
+JNI_METHOD_AOSP_OLD(void, nativeSetGetReflectionTextureFromIblSuccessToken)
+(JNIEnv* env, jclass clazz, jlong texture_token) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetGetReflectionTextureFromIblSuccessToken(  // NOLINT
+      env, clazz, texture_token);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedBorrowTexture)
 (JNIEnv* env, jclass /*clazz*/, jlong texture_handle) {
   imp::TextureTestContext& context = imp::TextureTestContext::Get();
   context.borrow_texture.expected_handle = texture_handle;
+}
+
+JNI_METHOD_AOSP_OLD(void, nativeSetExpectedBorrowTexture)
+(JNIEnv* env, jclass clazz, jlong texture_handle) {
+  Java_androidx_xr_scenecore_spatial_rendering_impress_ImpressApiTestHelper_nativeSetExpectedBorrowTexture(  // NOLINT
+      env, clazz, texture_handle);
 }
 
 }  // extern "C"

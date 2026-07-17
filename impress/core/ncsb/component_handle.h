@@ -74,6 +74,8 @@ class ComponentHandle {
 
   bool operator==(const ComponentHandle<T>& other) const;
   bool operator!=(const ComponentHandle<T>& other) const;
+
+  // Returns true if IsValid() is true.
   explicit operator bool() const noexcept;
 
   T* Get() const noexcept;
@@ -83,6 +85,12 @@ class ComponentHandle {
   // filament.
   utils::Entity GetEntity() const noexcept;
 
+  // Returns true if the Component is valid and safe to access.
+  //
+  // A Component is invalid in the following cases:
+  //   - The component is removed from the node.
+  //   - The node is destroyed.
+  //   - The ComponentHandle was default constructed.
   bool IsValid() const;
 
   template <typename Sink>

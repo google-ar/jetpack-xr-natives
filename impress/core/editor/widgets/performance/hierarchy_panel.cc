@@ -36,6 +36,8 @@
 namespace imp::editor {
 
 namespace {
+// Color to highlight a selected row.
+constexpr ImU32 kSelectedRowColor = IM_COL32(11, 87, 208, 128);
 // Minimum height for the panel no matter how small the window is.
 constexpr float kMinPanelHeight = 250.0f;
 // Width of the columns that display details about the sample.
@@ -54,7 +56,7 @@ void HierarchyPanel::DrawPanel(const float width, const int start_frame,
   IMP_TRACE();
 
   if (!thread_set_) {
-    current_thread_id_ = Profiler::GetMainThreadId();
+    current_thread_id_ = Profiler::GetCachedThreadId();
     thread_set_ = true;
   }
 
@@ -89,6 +91,8 @@ void HierarchyPanel::DrawPanel(const float width, const int start_frame,
     ImGui::TableSetupScrollFreeze(0, 1);  // Freeze the first row.
     ImGui::TableHeadersRow();             // First row contains the headers.
 
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, kSelectedRowColor);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, kSelectedRowColor);
     bool any_valid_frames = false;
     if (current_thread_id_ == Profiler::GetMainThreadId()) {
       any_valid_frames = DrawMainThreadSamples(
@@ -98,6 +102,8 @@ void HierarchyPanel::DrawPanel(const float width, const int start_frame,
           DrawWorkerThreadSamples(start_frame, end_frame, sample_processor,
                                   current_thread_id_, frame_time_panel);
     }
+    ImGui::PopStyleColor();  // ImGuiCol_HeaderActive
+    ImGui::PopStyleColor();  // ImGuiCol_HeaderHovered
 
     if (!any_valid_frames) {
       ImGui::TableNextRow();
@@ -359,12 +365,11 @@ void HierarchyPanel::DrawThreadSelector() {
   if (!ImGui::BeginCombo("##combo", current_thread_)) return;
 
   absl::string_view it_thread_name;
-  const std::vector<std::thread::id> thread_ids =
-      Profiler::GetWorkerThreadIds();
+  const std::vector<std::thread::id> thread_ids = Profiler::GetThreadIds();
 
   for (int i = 0; i < thread_ids.size(); ++i) {
     it_thread_name = Profiler::GetThreadName(thread_ids[i]);
-    bool is_selected = (current_thread_ == it_thread_name);
+    const bool is_selected = (current_thread_ == it_thread_name);
 
     if (ImGui::Selectable(it_thread_name.data(), is_selected)) {
       current_thread_ = it_thread_name.data();
@@ -379,9 +384,12 @@ void HierarchyPanel::DrawThreadSelector() {
   ImGui::EndCombo();
 }
 
-std::vector<SampleNode*> HierarchyPanel::GetTreeHardCopy(
+std::vector<SampleNode*>& HierarchyPanel::GetTreeHardCopy(
     const std::vector<SampleNode*>& roots, NodePool& node_pool) {
-  std::vector<SampleNode*> tree_copy;
+  // Static vector to avoid allocating memory each time a tree is drawn.
+  // Safe to do since we are only calling this from main thread.
+  static std::vector<SampleNode*> tree_copy;
+  tree_copy.clear();
   tree_copy.reserve(roots.size());
   node_pool.ResetIndex();
   for (const SampleNode* source_root : roots) {

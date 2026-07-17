@@ -144,10 +144,13 @@ std::vector<Future<BuiltInMaterialPtr>> SplitEngineBuiltinMaterialFactory::
   for (android_xr::schemas::BuiltInMaterialSpec spec_type :
        android_xr::schemas::EnumValuesBuiltInMaterialSpec()) {
     // Skip NONE as it is not a actionable spec type.
-    // Skip the generic material spec, as it is not a custom material.
+    // Skip the generic and gsplat material specs, as they are not custom
+    // materials.
     if (spec_type == android_xr::schemas::BuiltInMaterialSpec::NONE ||
         spec_type ==
-            android_xr::schemas::BuiltInMaterialSpec::GenericMaterialSpec) {
+            android_xr::schemas::BuiltInMaterialSpec::GenericMaterialSpec ||
+        spec_type == android_xr::schemas::BuiltInMaterialSpec::
+                         BuiltInMaterialGsplatSpec) {
       continue;
     }
 

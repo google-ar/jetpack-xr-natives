@@ -23,16 +23,13 @@
 #include <string>
 
 #include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/async/future.h"
 #include "core/ncsb/node_handle.h"
 #include "core/particle/custom_particle_behavior.h"
-#include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
-#include "core/particle/utils/particle_behavior.h"
 #include "core/particle/utils/particle_emitter.h"
-#include "core/particle/utils/particle_pool.h"
-#include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp::imp_particle {
@@ -51,9 +48,6 @@ class NodeParticleEmitter : public ParticleEmitter {
   // as defined by the ParticleEmitterConfig.
   void UpdateParticleSystem(const FrameTime& frame_time) override;
 
-  // Returns information about the emitter used to update particle behavior.
-  ParticleEmitterInfo GetParticleEmitterInfo() const override;
-
  protected:
   // Destroys the emitter and all nodes that were created for it.
   ~NodeParticleEmitter() override;
@@ -68,21 +62,12 @@ class NodeParticleEmitter : public ParticleEmitter {
   // node is stored here so particles may be emitted from it using its position
   // and orientation when configured to emit into world space.
   NodeParticleEmitter(
-      NodeHandle emitter_node, AssetPtr<GltfAsset> gltf_asset,
-      const ParticleEmitterState& emitter_state,
-      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior);
+      NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
+      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior,
+      AssetPtr<GltfAsset> gltf_asset);
 
   // Synchronizes the scene node with the current state of the particle.
   void SyncNode(const ParticleInstance& particle_instance, NodeHandle node);
-
-  // Performs updates that effect the emitter itself, such as it's own lifetime.
-  void UpdateEmitterBehavior(const FrameTime& frame_time);
-
-  // Determines if particles may be emitted. This will check different factors
-  // such as the current particle delay, number of active particles, and the
-  // Emitter lifetime. It does not emit a particle. The return value should not
-  // be used to determine if the Emitter is active.
-  bool CanEmitParticles();
 
   // Node particles include a scene node and a particle index, which refers to
   // the particle state stored in the ParticlePool, and updated by a
@@ -92,31 +77,12 @@ class NodeParticleEmitter : public ParticleEmitter {
     int32_t particle_index;
   };
 
-  // Holds data for all particles.
-  ParticlePool particle_pool_;
-
-  // Behaviors to perform behaviors on particles.
-  ParticleBehavior particle_behavior_;
-
   // List of active particles.
   std::list<NodeParticle> active_particles_;
-
-  // Reference to the emitter node.
-  NodeHandle emitter_node_;
 
   // Particle asset, by holding this when the emitter is created, we ensure
   // that the asset is loaded and available when instantiating particles.
   AssetPtr<GltfAsset> gltf_asset_;
-
-  // Emitter lifetime.
-  bool emitter_duration_finite_ = false;
-  float remaining_emitter_duration_ = 0.0f;
-  float emitter_duration_ = 0.0f;
-  bool looping_ = false;
-
-  // Particle emission control.
-  float particles_per_second_;
-  float particle_delay_;
 };
 
 }  // namespace imp::imp_particle

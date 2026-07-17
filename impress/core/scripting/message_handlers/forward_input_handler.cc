@@ -68,7 +68,7 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
 
   if (auto status = input_manager.ProcessPointerInput(
           static_cast<uint8_t>(native_type), ids, points,
-          absl::Milliseconds(message.elapsed_time));
+          absl::Milliseconds(message.elapsed_time), message.device_type);
       !status.ok()) {
     return Future<absl::Status>(absl::InvalidArgumentError(kProcessError));
   }

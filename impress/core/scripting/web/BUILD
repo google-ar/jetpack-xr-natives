@@ -83,7 +83,6 @@ cc_library(
         "//core/proto:proto_writer",
         "//core/scripting:message_helpers",
         "//core/scripting/proto:bridge_cc_proto",
-        "//core/view:view_host",
         "//core/view/scripting",
         "@com_google_impress//core/common:log",
     ],

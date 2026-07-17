@@ -26,6 +26,7 @@
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/utils/frame_time.h"
+#include "extensions/sceneviewerxr/ux/footprint.h"
 #include "extensions/sceneviewerxr/ux/input_flag.h"
 #include "extensions/sceneviewerxr/ux/interaction_mode.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
@@ -38,98 +39,103 @@ namespace interaction_states {
 using float3 = ::imp::float3;
 using float4 = ::imp::float4;
 using quatf = ::imp::quatf;
+using SnapMode = Footprint::SnapMode;
 
 namespace {
-constexpr auto kMinimumRotationDelta = .5f;
+constexpr float kMinimumRotationDelta = 0.5f;
+constexpr float kFreeFormRotationScale = 8.0f;
+
+// Calculates the hand's translation delta projected onto a vertical plane
+// aligned with the camera's view direction. This ensures that real-world
+// horizontal movement only drives Yaw, and vertical movement drives Pitch.
+float3 CalculateHandTranslationInVerticalCameraPlane(
+    const imp::Ray& initial_ray, const imp::Ray& current_ray,
+    const imp::mat4& world_from_camera) {
+  float3 delta_translation_world = current_ray.origin - initial_ray.origin;
+  float3 camera_right_in_world =
+      (world_from_camera * float4(imp::kRight, 0.f)).xyz;
+
+  return float3(dot(delta_translation_world, camera_right_in_world),
+                dot(delta_translation_world, imp::kUp), 0.f);
+}
+
+// Converts 2D hand movement into 3D rotation angles (Yaw and Pitch).
+void CalculateRotationAngles(const float3& delta_translation_xy,
+                             float& turntable_angle, float& pitch_angle) {
+  // Use pure translation to normalize rotation and remove directional tension.
+  turntable_angle = kFreeFormRotationScale * delta_translation_xy.x;
+
+  // Add a deadzone for the vertical axis to allow easier Y-only rotation.
+  constexpr float kPitchDeadzone = 0.02f;  // 2cm
+  float adjusted_y = 0.f;
+  if (std::abs(delta_translation_xy.y) > kPitchDeadzone) {
+    adjusted_y = delta_translation_xy.y > 0
+                     ? delta_translation_xy.y - kPitchDeadzone
+                     : delta_translation_xy.y + kPitchDeadzone;
+  }
+  pitch_angle = -kFreeFormRotationScale * adjusted_y;
+}
+
 }  // namespace
 
 Machine::OptionalState Update(Rotation& state, const imp::FrameTime& delta_time,
                               InteractionOwner& owner) {
   state.active_duration += delta_time.GetDeltaTime();
+
   imp::mat4 world_from_camera =
       owner.GetCamera()->GetCamera()->getModelMatrix();
-  imp::mat4 camera_from_world = inverse(world_from_camera);
 
-  float rotation_turntable_angle = 0.f;
-  float rotation_scaling_delta = 0.f;
-  {
-    // Project the initial and current ray direction into the XZ and YZ planes.
-    float3 initial_direction_world = state.initial_world_space_ray.direction;
-    float3 current_direction_world = state.current_world_space_ray.direction;
+  float3 delta_translation_xy = CalculateHandTranslationInVerticalCameraPlane(
+      state.initial_world_space_ray, state.current_world_space_ray,
+      world_from_camera);
 
-    float3 initial_direction =
-        (camera_from_world * float4(initial_direction_world, 0.f)).xyz;
-    float3 current_direction =
-        (camera_from_world * float4(current_direction_world, 0.f)).xyz;
-
-    float3 initial_ray_xz =
-        initial_direction - dot(initial_direction, imp::kUp);
-    float3 current_ray_xz =
-        current_direction - dot(current_direction, imp::kUp);
-    float3 initial_ray_yz =
-        initial_direction - dot(initial_direction, imp::kRight);
-    float3 current_ray_yz =
-        current_direction - dot(current_direction, imp::kRight);
-
-    float dot_xz = dot(initial_ray_xz, current_ray_xz);
-    float dot_yz = dot(initial_ray_yz, current_ray_yz);
-    float determinant_xz = current_ray_xz.x * initial_ray_xz.z -
-                           current_ray_xz.z * initial_ray_xz.x;
-    float determinant_yz = initial_ray_yz.y * current_ray_yz.z -
-                           initial_ray_yz.z * current_ray_yz.y;
-    float angle_xz = atan2(determinant_xz, dot_xz);
-    float angle_yz = atan2(determinant_yz, dot_yz);
-
-    constexpr auto kRotationTurntableAmplificationScale = -1.0f;
-    rotation_turntable_angle = kRotationTurntableAmplificationScale * angle_xz;
-
-    constexpr auto kRotationScaleAmplificationScale = 0.07f;
-    constexpr auto kRotationScalingDeadzoneSize = 0.125f;
-    float adjusted_angle_yz =
-        angle_yz > 0 ? std::max(0.f, angle_yz - kRotationScalingDeadzoneSize)
-                     : std::min(0.f, angle_yz + kRotationScalingDeadzoneSize);
-    rotation_scaling_delta =
-        kRotationScaleAmplificationScale * adjusted_angle_yz;
+  if (!state.has_initialized_smoothing) {
+    state.smoothed_delta_translation_xy = delta_translation_xy;
+    state.has_initialized_smoothing = true;
+  } else {
+    constexpr float kSmoothingFactor = 0.8f;
+    state.smoothed_delta_translation_xy =
+        state.smoothed_delta_translation_xy * kSmoothingFactor +
+        delta_translation_xy * (1.0f - kSmoothingFactor);
   }
 
-  float translation_turntable_angle = 0.f;
-  float translation_scaling_delta = 0.f;
-  {
-    // Project the delta translation into the XY plane.
-    float3 delta_translation_world = state.current_world_space_ray.origin -
-                                     state.initial_world_space_ray.origin;
-    float3 delta_translation =
-        (camera_from_world * float4(delta_translation_world, 0.f)).xyz;
-    float3 delta_translation_xy =
-        delta_translation - dot(delta_translation, imp::kForward);
+  float turntable_angle = 0.f;
+  float pitch_angle = 0.f;
+  CalculateRotationAngles(state.smoothed_delta_translation_xy, turntable_angle,
+                          pitch_angle);
 
-    constexpr auto kTranslationTurntableAmplificationScale = 4.0f;
-    translation_turntable_angle =
-        kTranslationTurntableAmplificationScale * delta_translation_xy.x;
-
-    constexpr auto kTranslationScaleAmplificationScale = 2.0f;
-    constexpr auto kTranslationScaleDeadzoneSize = 0.1f;
-    float adjusted_delta_translation =
-        delta_translation_xy.y > 0
-            ? std::max(0.f,
-                       delta_translation_xy.y - kTranslationScaleDeadzoneSize)
-            : std::min(0.f,
-                       delta_translation_xy.y + kTranslationScaleDeadzoneSize);
-    translation_scaling_delta =
-        kTranslationScaleAmplificationScale * adjusted_delta_translation;
-  }
-
-  float turntable_angle =
-      rotation_turntable_angle + translation_turntable_angle;
   state.cumulative_change_delta += turntable_angle;
+  state.turntable_angle = turntable_angle;
+  state.pitch_angle = pitch_angle;
 
   if (state.cumulative_change_delta > kMinimumRotationDelta ||
       state.cumulative_change_delta < -kMinimumRotationDelta) {
     state.has_rotated = true;
   }
 
-  auto turntable_rotation = quatf::fromAxisAngle(imp::kUp, turntable_angle);
-  owner.SetRigRotationTarget(state.initial_rig_rotation * turntable_rotation);
+  bool is_anchored = false;
+  if (owner.GetFootprint().IsValid()) {
+    is_anchored = owner.GetFootprint()->IsSnapMode(SnapMode::kSnappedToPlane);
+  }
+
+  if (is_anchored) {
+    quatf turntable_rotation = quatf::fromAxisAngle(imp::kUp, turntable_angle);
+    // Multiply on the left to match world-space application.
+    owner.SetRigRotationTarget(turntable_rotation * state.initial_rig_rotation);
+  } else {
+    float3 camera_right_in_world =
+        (world_from_camera * float4(imp::kRight, 0.f)).xyz;
+
+    quatf turntable_rotation = quatf::fromAxisAngle(imp::kUp, turntable_angle);
+    quatf pitch_rotation =
+        quatf::fromAxisAngle(camera_right_in_world, pitch_angle);
+
+    // Multiply on the left to apply rotations in world/camera space.
+    // Multiplying on the right would apply them in local space, which
+    // depends on the model's current orientation.
+    owner.SetRigRotationTarget(pitch_rotation * turntable_rotation *
+                               state.initial_rig_rotation);
+  }
 
   return {};
 }
@@ -143,12 +149,14 @@ Machine::OptionalState HandleInput(Rotation& state, const imp::Ray& ray,
     if (input_flags.Test(InputFlag::kIsDownStarting)) {
       // Start two-handed scale.
       owner.GetInteractionData().SetScaleHandle(ScaleHandle::kTwoHanded);
-      auto model_scale = owner.GetModelNode()->GetLocalScale().x;
-      constexpr auto kEpsilon = 1e-5f;
-      auto model_log_scale = std::log(std::max(kEpsilon, model_scale));
+      float model_scale = owner.GetModelNode()->GetLocalScale().x;
+      constexpr float kEpsilon = 1e-5f;
+      float model_log_scale = std::log(std::max(kEpsilon, model_scale));
 
-      auto& ray_right = state.is_right ? state.current_world_space_ray : ray;
-      auto& ray_left = state.is_right ? ray : state.current_world_space_ray;
+      const imp::Ray& ray_right =
+          state.is_right ? state.current_world_space_ray : ray;
+      const imp::Ray& ray_left =
+          state.is_right ? ray : state.current_world_space_ray;
       return Machine::OptionalState{TwoHandedScale{
           .initial_world_space_ray_right = ray_right,
           .initial_world_space_ray_left = ray_left,
@@ -183,6 +191,20 @@ Machine::OptionalState HandleInput(Rotation& state, const imp::Ray& ray,
   if (!input_flags.Test(InputFlag::kIsDown)) {
     owner.GetInteractionData().SetTransform(
         InteractionMode::TransformMode::kNothing);
+
+    bool is_anchored = false;
+    if (owner.GetFootprint().IsValid()) {
+      is_anchored = owner.GetFootprint()->IsSnapMode(SnapMode::kSnappedToPlane);
+    }
+
+    if (!is_anchored) {
+      quatf turntable_rotation =
+          quatf::fromAxisAngle(imp::kUp, state.turntable_angle);
+      // Multiply on the left to match world-space application in Update.
+      owner.SetRigRotationTarget(turntable_rotation *
+                                 state.initial_rig_rotation);
+    }
+
     return Machine::OptionalState{SetupIdleState()};
   } else {
     state.current_world_space_ray = ray;

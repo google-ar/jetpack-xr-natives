@@ -27,11 +27,13 @@
 
 #define IMP_TRACE_ENABLED 1
 #define IMP_TRACE_IMPL_PROFILER(name) imp::Timer timer##__LINE__(name);
+#define IMP_TRACE_COUNTER_IMPL_PROFILER(name, value)
 #define IMP_PROFILE_START_FRAME() imp::Profiler::AdvanceFrame();
 #define IMP_PROFILE_REGISTER_THREAD(name) imp::Profiler::SetThreadName(name);
 #else  // IMP_RUNTIME(DEV)
 #define IMP_PROFILE_START_FRAME()
 #define IMP_TRACE_IMPL_PROFILER(name)
+#define IMP_TRACE_COUNTER_IMPL_PROFILER(name, value)
 #define IMP_PROFILE_REGISTER_THREAD(name)
 #endif  // IMP_RUNTIME(DEV)
 
@@ -66,6 +68,9 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 #define IMP_TRACE_IMPL_PERFETTO(name) \
   TRACE_EVENT(IMP_TRACE_CATEGORY, perfetto::StaticString{name})
 
+#define IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value) \
+  TRACE_COUNTER(IMP_TRACE_CATEGORY, perfetto::StaticString{name}, value)
+
 #define IMP_TRACE_INIT() imp_perfetto_tracing::InitializePerfetto();
 
 #ifndef IMP_TRACE_ENABLED
@@ -73,9 +78,12 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 #endif  // IMP_TRACE_ENABLED
 
 #define IMP_TRACE_IMPL_SYSTRACE(name)
+#define IMP_TRACE_COUNTER_IMPL_SYSTRACE(name, value)
 #else  // IMP_TRACE_USE_PERFETTO
 #include "filament/libs/utils/include/utils/Systrace.h"
 #define IMP_TRACE_IMPL_SYSTRACE(name) SYSTRACE_NAME(name)
+#define IMP_TRACE_COUNTER_IMPL_SYSTRACE(name, value) \
+  SYSTRACE_VALUE32(name, value)
 
 #ifndef IMP_TRACE_ENABLED
 #if defined(SYSTRACE_TAG) && SYSTRACE_TAG
@@ -86,12 +94,18 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 #endif  // IMP_TRACE_ENABLED
 
 #define IMP_TRACE_IMPL_PERFETTO(name)
+#define IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value)
 #endif  // IMP_TRACE_USE_PERFETTO
 
 #define IMP_TRACE_PRIVATE_IMPL(name) \
   IMP_TRACE_IMPL_PERFETTO(name);     \
   IMP_TRACE_IMPL_SYSTRACE(name);     \
   IMP_TRACE_IMPL_PROFILER(name);
+
+#define IMP_TRACE_PRIVATE_COUNTER_IMPL(name, value) \
+  IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value);     \
+  IMP_TRACE_COUNTER_IMPL_SYSTRACE(name, value);     \
+  IMP_TRACE_COUNTER_IMPL_PROFILER(name, value);
 
 // Define Perfetto-specific symbols to empty when unused
 #ifndef IMP_TRACE_INIT
@@ -151,12 +165,15 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 #define IMP_TRACE_NAME(name) IMP_TRACE_PRIVATE_NAME(name)
 #define IMP_TRACE_NAME_TEMPLATED(name, types...) \
   IMP_TRACE_PRIVATE_NAME_TEMPLATED(name, types)
+#define IMP_TRACE_COUNTER(name, value) \
+  IMP_TRACE_PRIVATE_COUNTER_IMPL(name, value)
 #else  // IMP_TRACE_ENABLED
 #define IMP_TRACE()
 #define IMP_TRACE_TEMPLATED(types...)
 #define IMP_TRACE_BLOCK(name)
 #define IMP_TRACE_NAME(name)
 #define IMP_TRACE_NAME_TEMPLATED(name, types...)
+#define IMP_TRACE_COUNTER(name, value)
 #endif  // IMP_TRACE_ENABLED
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_COMMON_TRACE_H_

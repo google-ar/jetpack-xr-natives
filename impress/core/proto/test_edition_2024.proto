@@ -117,3 +117,12 @@ message TestEdition2024MessageWithNativeType {
   NativeMessage native_msg = 1;
   NativeMessageWithPresenceNoCodegen native_msg_with_presence_no_codegen = 2;
 }
+
+message OneofMessage2024 {
+  oneof variant {
+    int32 i32 = 1 [default = 42];
+    double dbl = 2;
+    string str = 3;
+    TestEdition2024Message.TestNestedMessage msg = 4;
+  }
+}

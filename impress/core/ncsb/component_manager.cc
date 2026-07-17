@@ -29,12 +29,11 @@ ComponentManager::ComponentManager(BaseView* view) : view_(view) {}
 
 BaseComponentPool* ComponentManager::GetComponentPoolById(
     ComponentId component_id) {
-  auto iter = component_pools_.find(component_id);
-  if (iter == component_pools_.end()) {
-    return nullptr;
+  BaseComponentPool* base_pool = nullptr;
+  if (component_pools_.size() > component_id) {
+    base_pool = component_pools_[component_id].get();
   }
-
-  return iter->second.get();
+  return base_pool;
 }
 
 UpdateSystem& ComponentManager::GetUpdateSystem() {
@@ -43,8 +42,11 @@ UpdateSystem& ComponentManager::GetUpdateSystem() {
 
 void ComponentManager::NotifyActiveForEntity(utils::Entity entity,
                                              bool active) {
-  for (size_t i = 0; i < component_pools_list_view_.size(); i++) {
-    BaseComponentPool* pool = component_pools_list_view_.at(i);
+  for (size_t i = 0; i < component_pools_.size(); i++) {
+    BaseComponentPool* pool = component_pools_[i].get();
+    if (!pool) {
+      continue;
+    }
     Component* component = pool->TryGetRawComponentFromEntity(entity);
     if (component != nullptr && component->IsEnabled()) {
       pool->NotifyActive(component, active);
@@ -78,7 +80,6 @@ void ComponentManager::DetachAll() {
 }
 
 void ComponentManager::DestroyPools() {
-  component_pools_list_view_.clear();
   component_pools_.clear();
   cleanup_graph_ = {};
 }

@@ -487,8 +487,12 @@ std::string AssetLibrary::AddResource(
 #if IMP_RUNTIME(DEV)
 
   // Need to permanently store the resource here.
+  absl::string_view type = pending_resource.type;
+  if (!type.empty() && type[0] == '.') {
+    type = type.substr(1);
+  }
   const auto resource_name =
-      absl::StrFormat("%s.%s", pending_resource.name, pending_resource.type);
+      absl::StrFormat("%s.%s", pending_resource.name, type);
 
   std::string resource_path = directory_ui_->GetPathInDirectory(resource_name);
 

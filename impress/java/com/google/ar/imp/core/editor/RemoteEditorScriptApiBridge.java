@@ -61,8 +61,30 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
           if (nativeScriptApiBridgeWrapperPtr == 0) {
             return;
           }
-          nativePostMessageToNative(
-              nativeScriptApiBridgeWrapperPtr, viewHandle, executorHandle, requestBytes);
+          if (!nativePostMessageToNative(
+              nativeScriptApiBridgeWrapperPtr, viewHandle, executorHandle, requestBytes)) {
+            Log.e(TAG, "Failed to post message to native.");
+          }
+        }
+
+        @Override
+        public void onClientConnected(long nativeScriptApiBridgeWrapperPtr) {
+          if (nativeScriptApiBridgeWrapperPtr == 0) {
+            return;
+          }
+          if (!nativeOnClientConnected(nativeScriptApiBridgeWrapperPtr)) {
+            Log.e(TAG, "Failed to notify native of client connection.");
+          }
+        }
+
+        @Override
+        public void onClientDisconnected(long nativeScriptApiBridgeWrapperPtr) {
+          if (nativeScriptApiBridgeWrapperPtr == 0) {
+            return;
+          }
+          if (!nativeOnClientDisconnected(nativeScriptApiBridgeWrapperPtr)) {
+            Log.e(TAG, "Failed to notify native of client disconnection.");
+          }
         }
       };
 
@@ -106,13 +128,20 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
       }
       webSocketServer = null;
     }
+    // Zero the pointer. Asynchronous WebSocket callbacks (like onDisconnected)
+    // may still be queued on the main thread even after the server is stopped.
+    nativeScriptApiBridgeWrapperPtr = 0;
   }
 
   @Override
-  public void onConnected(WebSocket conn) {}
+  public void onConnected(WebSocket conn) {
+    nativeInterface.onClientConnected(nativeScriptApiBridgeWrapperPtr);
+  }
 
   @Override
-  public void onDisconnected(WebSocket conn) {}
+  public void onDisconnected(WebSocket conn) {
+    nativeInterface.onClientDisconnected(nativeScriptApiBridgeWrapperPtr);
+  }
 
   @Override
   public void onStringMessage(String message) {}
@@ -155,6 +184,10 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
         long viewHandle,
         long executorHandle,
         byte[] requestBytes);
+
+    void onClientConnected(long nativeScriptApiBridgeWrapperPtr);
+
+    void onClientDisconnected(long nativeScriptApiBridgeWrapperPtr);
   }
 
   // LINT.IfChange(postMessageToScript)
@@ -186,10 +219,21 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
    * @param executorHandle The handle to the native Executor.
    * @param requestBytes The binary-encoded {@code MessageToNative} protobuf.
    */
-  private native void nativePostMessageToNative(
+  private native boolean nativePostMessageToNative(
       long nativeScriptApiBridgeWrapperPtr,
       long viewHandle,
       long executorHandle,
       byte[] requestBytes);
+
   // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_script_api_bridge_jni.cc:nativePostMessageToNative)
+
+  // LINT.IfChange(nativeOnClientConnected)
+  private native boolean nativeOnClientConnected(long nativeScriptApiBridgeWrapperPtr);
+
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_script_api_bridge_jni.cc:nativeOnClientConnected)
+
+  // LINT.IfChange(nativeOnClientDisconnected)
+  private native boolean nativeOnClientDisconnected(long nativeScriptApiBridgeWrapperPtr);
+
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_script_api_bridge_jni.cc:nativeOnClientDisconnected)
 }

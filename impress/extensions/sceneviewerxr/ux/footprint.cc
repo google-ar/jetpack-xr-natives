@@ -322,10 +322,15 @@ absl::Status Footprint::Setup(
     imp::AssetPtr<imp::GltfAsset> scale_handle_asset) {
   edge_material_ = std::move(edge_material);
   fill_material_ = std::move(fill_material);
-  auto node = GetNode();
+  imp::NodeHandle node = GetNode();
   footprint_node_ = GetView().CreateNode();
-  footprint_node_->SetParent(node);
-  auto model =
+  imp::NodeHandle rotation_node = model_node_->GetParent();
+  if (rotation_node) {
+    footprint_node_->SetParent(rotation_node);
+  } else {
+    footprint_node_->SetParent(node);
+  }
+  imp::ComponentHandle<imp::GltfRenderer> model =
       footprint_node_->AddComponent<imp::GltfRenderer>(footprint_asset);
   auto& model_data = model->GetGltfAsset()->GetModelData();
   if (model_data.Skins().empty()) {
@@ -544,6 +549,14 @@ void Footprint::Cleanup() {
 
 void Footprint::OnUpdate(const imp::FrameTime& delta_time,
                          const InteractionMode& interaction) {
+  if (footprint_node_) {
+    imp::NodeHandle rotation_node = footprint_node_->GetParent();
+    if (rotation_node && rotation_node != GetNode()) {
+      imp::float3 parent_translation = rotation_node->GetLocalPosition();
+      footprint_node_->SetLocalPosition(-parent_translation);
+    }
+  }
+
   machine_.UpdateWithAlternatives(
       [this](FootprintInteractionStates::Initialized& state)
           -> InteractionMachine::OptionalState {

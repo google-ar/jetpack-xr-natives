@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_FILE_LOADER_HELPER_H_
 
 #include <memory>
+#include <optional>
 #include <variant>
 
 #include "absl/container/flat_hash_map.h"
@@ -28,6 +29,7 @@
 #include "core/common/invocable.h"
 #include "core/editor/editor.h"
 #include "core/editor/file_type_loader.h"
+#include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
 
@@ -35,7 +37,7 @@ namespace imp::editor {
 
 // Indicates how to load a file from a path when not getting the data directly
 // from a Cord.
-enum class LoadFileFromPathSource {
+enum class LoadAssetFileFromPathSource {
   // Indicates that the file is an asset that is already available in the
   // AssetManager.
   kAsset,
@@ -47,8 +49,9 @@ enum class LoadFileFromPathSource {
 // If an absl::Cord is provided, the file is loaded from the provided data.
 //
 // Otherwise, the file is loaded from the file path based on the
-// LoadFileFromPathSource enum.
-using LoadFileSource = std::variant<absl::Cord, LoadFileFromPathSource>;
+// LoadAssetFileFromPathSource enum.
+using LoadAssetFileSource =
+    std::variant<absl::Cord, LoadAssetFileFromPathSource>;
 
 // Helper function to load an ISF file, glb file, or ImageBasedLighting
 // asset. Loading a glb file and ImageBasedLighting asset is supported by
@@ -61,9 +64,15 @@ using LoadFileSource = std::variant<absl::Cord, LoadFileFromPathSource>;
 // ModelLoadedEvent to reposition the model without being clobbered.
 // TODO: Change how ModelLoadedEvent is sent so this is
 // cleaner.
-Future<absl::Status> LoadFile(BaseView& view, absl::string_view path,
-                              LoadFileSource source,
-                              Invocable<void(NodeHandle)> placement_func = {});
+Future<absl::Status> LoadAssetFile(
+    BaseView& view, absl::string_view path, LoadAssetFileSource source,
+    Invocable<void(NodeHandle)> placement_func = {});
+
+// Loads an asset from file and places the node at the cursor location.
+// If cursor is nullopt, the center of the view is used.
+void LoadAssetFileAtCursor(BaseView& view, absl::string_view filename,
+                           LoadAssetFileSource source,
+                           std::optional<float2> cursor = std::nullopt);
 
 // Sends events to notify the editor that a node is being loaded.
 void BeginLoadingNode(Editor& editor, BaseView& view);

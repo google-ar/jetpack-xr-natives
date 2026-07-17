@@ -131,6 +131,7 @@ cc_library(
         "//core/math",
         "//core/ncsb",
         "//core/view/utils:frame_time",
+        "//extensions/sceneviewerxr/ux:footprint",
         "//extensions/sceneviewerxr/ux:input_flag",
         "//extensions/sceneviewerxr/ux:interaction_mode",
     ],

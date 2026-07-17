@@ -71,7 +71,7 @@ using ::testing::TestWithParam;
 //   RunOnSerializerView([](testing::GenericTestView<View>& view) {
 //     // Do stuff on the serializer view.
 //     Future<NodeHandle> model_future =
-//         view.GetView()->GetAssetManager().LoadModel(kHumanSkeletonGlb);
+//         view.GetView()->GetModelFactory().LoadModel(kHumanSkeletonGlb);
 //     view.GetFuture(model_future);
 //   });
 //   // Do stuff on the renderer view, i.e. take a screenshot of the scene.

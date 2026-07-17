@@ -70,16 +70,6 @@ material {
         //   //depot/google3/third_party/split_engine/schemas/split_engine_material.fbs,
         // )
   ],
-  constants : [
-        {
-           // TODO: Remove this once we have uint render targets.
-           // a workaround for Metal devices where packing bits into floats can
-           // result in values being dropped entirely.
-           type      : float,
-           name      : fix,
-           value     : 0.0
-        }
-  ],
   variables : [
         hasStereoAndEyeIndex //stereo info must be passed from fs to vs.
   ],
@@ -93,6 +83,9 @@ material {
   blending : opaque,
   interpolation : flat,
   apiLevel : 2,
+  outputs : [
+         { name : data, target : color, type : uint4, precision : high }
+  ]
 }
 
 vertex {
@@ -164,9 +157,9 @@ fragment {
       color.a = 0.0;
     }
 
-    material.baseColor = vec4(uintBitsToFloat(packHalf2x16(clipPos.xy)) + materialConstants_fix,
-                              uintBitsToFloat(packHalf2x16(vec2(clipPos.z, aspectRatio))) + materialConstants_fix,
-                              uintBitsToFloat(packHalf2x16(basisAxisX)) + materialConstants_fix,
-                              uintBitsToFloat(packUnorm4x8(color)) + materialConstants_fix);
+    material.data = uint4(packHalf2x16(clipPos.xy),
+                          packHalf2x16(vec2(clipPos.z, aspectRatio)),
+                          packHalf2x16(basisAxisX),
+                          _packUnorm4x8(color));
   }
 }

@@ -27,6 +27,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -86,6 +87,7 @@
 #include "core/model/model_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/render/texture_factory.h"
 #include "core/view/base_view.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -305,13 +307,16 @@ OptionalError CreateModelEntityGraph(
 Future<absl::Status> CreateModelResources(
     BaseView& view, filament::Engine* engine, const LoaderOptions options,
     const schemas::LoadedModel* model,
-    std::vector<std::unique_ptr<image::ImageContents>> images,
+    std::vector<std::variant<std::unique_ptr<image::ImageContents>,
+                             std::unique_ptr<TextureAsset>>>
+        images_or_texture_assets,
     TypedVector<filament::VertexBuffer*>* out_vertex_buffers,
     TypedVector<filament::IndexBuffer*>* out_index_buffers,
     TypedVector<filament::MorphTargetBuffer*>* out_morph_target_buffers,
     PairedVector<OwnedTexturePtr, filament::MorphTargetBuffer*>*
         out_morph_target_uv0_textures,
     TypedVector<OwnedTexturePtr>* out_textures,
+    std::vector<std::unique_ptr<TextureAsset>>* out_texture_assets,
     TypedVector<GenericMaterialPtr>* out_materials,
     MeshVertexDataLookup* stored_vertex_data,
     MeshIndexDataLookup* stored_index_data,
@@ -471,7 +476,7 @@ Future<absl::Status> CreateModelResources(
 
   // Create textures.
   if (model->textures()->size() != model->images()->size() ||
-      model->images()->size() != images.size()) {
+      model->images()->size() != images_or_texture_assets.size()) {
     return Future<absl::Status>(absl::InvalidArgumentError(
         "texture infos and texture contents did not match"));
   }
@@ -482,14 +487,30 @@ Future<absl::Status> CreateModelResources(
       return Future<absl::Status>(status);
     }
 
-    Texture* texture = details::BuildAndFillTexture(
-        view, engine, texture_info, std::move(images[i]), out_inflight_creation,
-        name);
-    if (!texture)
-      return Future<absl::Status>(
-          absl::InternalError("Failed to create Texture"));
-    imp::OwnedTexturePtr owned_texture(
-        view.GetTextureFactory().WrapTexture(texture));
+    imp::OwnedTexturePtr owned_texture;
+
+    if (std::holds_alternative<std::unique_ptr<TextureAsset>>(
+            images_or_texture_assets[i])) {
+      auto texture_asset = std::get<std::unique_ptr<TextureAsset>>(
+          std::move(images_or_texture_assets[i]));
+      filament::Texture* texture = texture_asset->ReleaseFilamentTexture();
+      out_texture_assets->push_back(std::move(texture_asset));
+
+      owned_texture =
+          imp::OwnedTexturePtr(view.GetTextureFactory().WrapTexture(texture));
+    } else {
+      auto image_contents = std::get<std::unique_ptr<image::ImageContents>>(
+          std::move(images_or_texture_assets[i]));
+      Texture* texture = details::BuildAndFillTexture(
+          view, engine, texture_info, std::move(image_contents),
+          out_inflight_creation, name);
+      if (!texture)
+        return Future<absl::Status>(
+            absl::InternalError("Failed to create Texture"));
+      owned_texture =
+          imp::OwnedTexturePtr(view.GetTextureFactory().WrapTexture(texture));
+    }
+
     if (texture_info->name()) {
       owned_texture->SetName(texture_info->name()->str());
     }
@@ -810,7 +831,9 @@ ModelCreator::~ModelCreator() {
 Future<absl::Status> ModelCreator::LoadAll(
     BaseView& view, const schemas::LoadedModel* model,
     MaterialPackage* material_package,
-    std::vector<std::unique_ptr<image::ImageContents>> images,
+    std::vector<std::variant<std::unique_ptr<image::ImageContents>,
+                             std::unique_ptr<TextureAsset>>>
+        images,
     std::optional<absl::string_view> name) {
   return LoadAllInternal(view, model, material_package, std::move(images),
                          name);
@@ -819,7 +842,9 @@ Future<absl::Status> ModelCreator::LoadAll(
 Future<absl::Status> ModelCreator::LoadAllInternal(
     BaseView& view, const schemas::LoadedModel* model,
     MaterialPackage* material_package,
-    std::vector<std::unique_ptr<image::ImageContents>> images,
+    std::vector<std::variant<std::unique_ptr<image::ImageContents>,
+                             std::unique_ptr<TextureAsset>>>
+        images,
     std::optional<absl::string_view> name) {
   IMP_TRACE();
   return CreateModelResources(view, material_package, model, std::move(images),
@@ -983,7 +1008,9 @@ void ModelCreator::RemoveWhenFullyLoadedCallback() {
 Future<absl::Status> ModelCreator::CreateModelResources(
     BaseView& view, MaterialPackage* material_package,
     const schemas::LoadedModel* model,
-    std::vector<std::unique_ptr<image::ImageContents>> images,
+    std::vector<std::variant<std::unique_ptr<image::ImageContents>,
+                             std::unique_ptr<TextureAsset>>>
+        images,
     std::optional<absl::string_view> name) {
   IMP_TRACE();
   // Immediately start unzipping raw material data on a background thread.
@@ -996,19 +1023,18 @@ Future<absl::Status> ModelCreator::CreateModelResources(
   // Loader already has the correct material package.
   return material_package
       ->GetOrLoadMaterials(view, engine_, requested_materials)
-      .Then(
-          [this, &view, model, name = std::optional<std::string>(name),
-           images = std::move(images)](const MaterialPackage::MaterialCache&
-                                           materials_by_params) mutable {
-            IMP_TRACE_BLOCK("Then");
-            return imp::loader::details::CreateModelResources(
-                view, engine_, loader_options_, model, std::move(images),
-                &vertex_buffers_, &index_buffers_, &morph_target_buffers_,
-                &morph_target_uv0_textures_, &textures_, &materials_,
-                &stored_vertex_data_, &stored_index_data_,
-                &material_config_info_, &inflight_creation_,
-                materials_by_params, material_id_lookup_, name);
-          });
+      .Then([this, &view, model, name = std::optional<std::string>(name),
+             images = std::move(images)](
+                MaterialPackage::MaterialCache materials_by_params) mutable {
+        IMP_TRACE_BLOCK("Then");
+        return imp::loader::details::CreateModelResources(
+            view, engine_, loader_options_, model, std::move(images),
+            &vertex_buffers_, &index_buffers_, &morph_target_buffers_,
+            &morph_target_uv0_textures_, &textures_, &loaded_texture_assets_,
+            &materials_, &stored_vertex_data_, &stored_index_data_,
+            &material_config_info_, &inflight_creation_, materials_by_params,
+            material_id_lookup_, name);
+      });
 }
 
 absl::StatusOr<std::unique_ptr<model::ModelData>> ModelCreator::CreateModelData(

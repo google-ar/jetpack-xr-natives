@@ -55,6 +55,8 @@ enum class AppPermissionTypes : uint8_t {
   kHasUnrestrictedSystemAccess = (1 << 0),
   // The app is allowed to control transforms on nodes with user IDs.
   kAllowCustomTransformsOnNodesWithUserIds = (1 << 1),
+  // The app is allowed to use unstable_api attributes in Flatbuffers schemas.
+  kAllowUnstableApiAttributes = (1 << 2),
 };
 // enum_flag type that encapsulates the application permissions.
 using AppPermission = imp::Flags<AppPermissionTypes>;

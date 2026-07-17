@@ -25,7 +25,7 @@
 #include "core/proto/proto_writer.h"
 #include "core/scripting/proto/bridge.proto.imp.h"
 #include "core/view/scripting/script_message_handler.h"
-#include "core/view/view_host.h"
+#include "core/view/scripting/script_message_handler_provider.h"
 
 #define JNI_METHOD(return_type, method_name) \
   IMP_JNI return_type JNICALL                \
@@ -36,14 +36,10 @@ namespace {
 using ::imp::JniAllowlist;
 using ::imp::scripting::MessageToNative;
 
-// template <class T>
-// inline jlong ToJava(T* p) {
-//   return JniAllowlist<T, imp::ViewHost>::ToJava(p);
-// }
-
 template <class T>
 inline T* FromJava(jlong n) {
-  return JniAllowlist<T, imp::ViewHost>::FromJava(n);
+  return JniAllowlist<
+      T, imp::scripting::ScriptMessageHandlerProvider>::FromJava(n);
 }
 
 }  // namespace
@@ -52,8 +48,9 @@ extern "C" {
 // LINT.IfChange(scripting)
 
 JNI_METHOD(void, nPostMessage)
-(JNIEnv* env, jclass /*clazz*/, jobject script_bridge, jlong view_host_handle,
- jbyteArray request_bytes, jobject jargs) {
+(JNIEnv* env, jclass /*clazz*/, jobject script_bridge,
+ jlong script_message_handler_provider_handle, jbyteArray request_bytes,
+ jobject jargs) {
   imp::BufferAccess byte_buffer = imp::FromByteArray(env, request_bytes);
   imp::scripting::MessageToNative request;
   imp::proto::ParseMessage(byte_buffer.StringView(), &request);
@@ -78,9 +75,17 @@ JNI_METHOD(void, nPostMessage)
     }
   }
 
-  auto* view_host = FromJava<imp::ViewHost>(view_host_handle);
+  imp::scripting::ScriptMessageHandlerProvider*
+      script_message_handler_provider =
+          FromJava<imp::scripting::ScriptMessageHandlerProvider>(
+              script_message_handler_provider_handle);
+  if (!script_message_handler_provider) {
+    IMP_LOG(imp::ERROR)
+        << "ScriptMessageHandlerProvider is null, unable to post message.";
+    return;
+  }
   imp::scripting::ScriptMessageHandler* script_message_handler =
-      view_host->GetView()->GetScriptMessageHandler();
+      script_message_handler_provider->GetScriptMessageHandler();
   if (!script_message_handler) {
     IMP_LOG(imp::FATAL) << "Unable to post script message with no bridge!";
   }
@@ -96,7 +101,8 @@ JNI_METHOD(void, nPostMessage)
         // Env* for this object without capturing in the lambda, which would
         // result in the lambda being 24 bytes and unable to use
         // small-object-optimization.
-        auto& custom_deleter = script_bridge_global.get_deleter();
+        const imp::details::JniDeleter<jobject>& custom_deleter =
+            script_bridge_global.get_deleter();
         JNIEnv* env = custom_deleter.env();
         if (env->IsSameObject(script_bridge_global.get(), nullptr)) {
           IMP_LOG(imp::ERROR) << "Script bridge is null in response_handler!";

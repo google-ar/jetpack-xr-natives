@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "imp_defines", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_dev_runtime", "imp_defines", "imp_google3_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
     "imp_cc_proto_library",
@@ -71,6 +71,8 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:utils_hdrs",
-    ],
+    ] + if_dev_runtime([
+        "//core/editor/widgets/viewport:viewport_helpers",
+    ]),
     alwayslink = 1,
 )

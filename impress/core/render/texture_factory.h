@@ -270,6 +270,10 @@ class TextureFactory {
   BorrowedTexturePtr BorrowRGBA32FPlaceholderTexture(
       SmallSourceLocation loc = SmallSourceLocation::Current());
 
+  // Borrows a placeholder texture for assigning to unused texture samplers.
+  BorrowedTexturePtr BorrowRGBA32UIPlaceholderTexture(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
+
  private:
   // Creates a singleton placeholder to borrow via BorrowPlaceholderTexture().
   OwnedTexturePtr CreatePlaceholderTexture(uint32_t pixel);
@@ -278,12 +282,15 @@ class TextureFactory {
   OwnedTexturePtr CreatePlaceholderCubemapTexture();
   // Creates a singleton RGBA32F placeholder to borrow.
   OwnedTexturePtr CreateRGBA32FPlaceholderTexture();
+  // Creates a singleton RGBA32UI placeholder to borrow.
+  OwnedTexturePtr CreateRGBA32UIPlaceholderTexture();
 
   BaseView& view_;
   OwnedTexturePtr placeholder_texture_;
   OwnedTexturePtr placeholder_texture_black_;
   OwnedTexturePtr placeholder_cubemap_texture_;
   OwnedTexturePtr rgba32f_placeholder_texture_;
+  OwnedTexturePtr rgba32ui_placeholder_texture_;
 };
 
 }  // namespace imp

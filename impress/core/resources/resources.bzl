@@ -24,17 +24,21 @@ load("@com_google_impress//build_tools:imp.bzl", "imp_google3_copts")
 load("@com_google_impress//build_tools:path_tools.bzl", "rlocation_path")
 
 def _snakecase(name):
-    return name.replace(".", "_").replace("/", "_").replace("-", "_").replace("+", "_").replace("{", "_").replace("}", "_").split("_")
+    chars_to_replace = "./-+{}"
+    for i in range(len(chars_to_replace)):
+        char = chars_to_replace[i]
+        name = name.replace(char, "_")
+    return name.split("_")
 
 # len(x) > 0 is to avoid empty strings from splitting.
-def _camelcase(name):
+def camelcase(name):
     return "".join([x[0].capitalize() + x[1:] for x in _snakecase(name) if len(x) > 0])
 
 def _upcase(name):
     return "_".join([x.upper() for x in _snakecase(name) if len(x) > 0])
 
 def _resource_identifier(ctx, r):
-    return "k{0}".format(_camelcase(paths.basename(rlocation_path(ctx, r))))
+    return "k{0}".format(camelcase(paths.basename(rlocation_path(ctx, r))))
 
 def _resource_url_and_identifier_args(ctx, r, base_url, urls):
     short_path = rlocation_path(ctx, r)
@@ -80,7 +84,7 @@ def _gen_resources_rule(ctx):
 
     # Use the path of the resource header as the package id so that it is
     # unique even if other rules use the same name and namespace.
-    package_id = _camelcase(rlocation_path(ctx, resource_h))[:-1]
+    package_id = camelcase(rlocation_path(ctx, resource_h))[:-1]
 
     if ctx.attr.embed:
         filewrapper_h, filewrapper_cc = _create_filewrapper(ctx, package_id)
@@ -113,7 +117,7 @@ def _gen_resources_rule(ctx):
         substitutions = {
             "{UPCASE_PATH}": _upcase(resource_h.short_path),
             "{name}": ctx.attr.basename,
-            "{camel_name}": _camelcase(ctx.attr.basename),
+            "{camel_name}": camelcase(ctx.attr.basename),
             "{namespace}": ctx.attr.namespace,
             "{base_url}": base_url or "",
             "{resources}": resources,
@@ -130,7 +134,7 @@ def _gen_resources_rule(ctx):
             substitutions = {
                 "{header_path}": resource_h.short_path,
                 "{name}": ctx.attr.basename,
-                "{camel_name}": _camelcase(ctx.attr.basename),
+                "{camel_name}": camelcase(ctx.attr.basename),
                 "{namespace}": ctx.attr.namespace,
                 "{package_id}": package_id,
             },

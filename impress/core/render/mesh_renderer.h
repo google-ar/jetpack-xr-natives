@@ -207,6 +207,12 @@ class MeshRenderer : public Component {
   // called again.
   void SetMaterial(BorrowedMaterialPtr material, size_t primitive_index = 0);
 
+  // Clears the Material used to render the specified primitive.
+  //
+  // Note: This is not supported in Split Engine mode and will crash if called.
+  // TODO: Support this in Split Engine mode.
+  void ClearMaterial(size_t primitive_index = 0);
+
   // Gets the material for the specified primitive if previously set, otherwise
   // returns nullptr.
   Material* GetMaterial(size_t primitive_index = 0) const;
@@ -391,8 +397,16 @@ class MeshRenderer : public Component {
   uint8_t priority_ = kDefaultPriority;
   uint8_t channel_ = kDefaultChannel;
 
+#if IMP_RUNTIME(DEV)
+  void DrawPrimitiveEditorUi(size_t primitive_index);
+#endif
+
  public:
   static constexpr bool kRunInEditMode = true;
+
+#if IMP_RUNTIME(DEV)
+  void DrawEditorUi();
+#endif
 
   using FrustrumCullingMode = FrustumCullingMode;
 };

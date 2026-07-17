@@ -36,7 +36,8 @@ Future<std::unique_ptr<ImageContents>> WasmDecodeImage(
 Future<WasmTextureContents> WasmDecodeImageToTexture(
     absl::string_view name, resources::Resource resource,
     filament::backend::TextureFormat format =
-        filament::backend::TextureFormat::SRGB8_A8);
+        filament::backend::TextureFormat::SRGB8_A8,
+    uint8_t requested_levels = 1);
 
 // Sets whether label prep profile logging is enabled.
 void SetLabelPrepProfileLogging(bool enabled);

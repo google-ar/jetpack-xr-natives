@@ -63,6 +63,19 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "texture_pipeline_renderer_helper",
+    srcs = ["texture_pipeline_renderer_helper.cc"],
+    hdrs = ["texture_pipeline_renderer_helper.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/view:base_view",
+        "//core/view/utils:view_config_proto_cc_imp",
+        "@third_party//filament/filament/backend:driver_enums",
+    ],
+    alwayslink = 1,
+)
+
 proto_library(
     name = "surface_renderer_scripting_proto",
     srcs = [

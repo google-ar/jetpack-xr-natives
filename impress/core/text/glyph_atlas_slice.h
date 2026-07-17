@@ -332,6 +332,10 @@ class Slice {
   // A set of futures which will resolve the next time the texture is uploaded.
   std::vector<Future<absl::Status>> texture_blit_futures_;
 
+  // Whether there are any pending draw commands that have not been applied to
+  // the canvas.
+  bool has_pending_draw_commands_ ABSL_GUARDED_BY(canvas_mutex_) = false;
+
   // The currently pending prepare request. This may be a completed future if
   // there is no active request. This is not thread-safe but does not need
   // a mutex since it is only accessed within PrepareToUpdateTexture. See

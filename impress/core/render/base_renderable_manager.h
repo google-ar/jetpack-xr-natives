@@ -55,6 +55,9 @@ struct BaseRenderableManager {
   virtual void SetMaterialInstanceAt(
       filament::RenderableManager::Instance instance, size_t primitiveIndex,
       const filament::MaterialInstance* material_instance) = 0;
+  virtual void ClearMaterialInstanceAt(
+      filament::RenderableManager::Instance instance,
+      size_t primitiveIndex) = 0;
   virtual void SetGeometryAt(filament::RenderableManager::Instance instance,
                              size_t primitiveIndex,
                              filament::backend::PrimitiveType type,

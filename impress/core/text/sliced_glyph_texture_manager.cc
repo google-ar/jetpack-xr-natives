@@ -77,9 +77,15 @@ static constexpr std::array<float2, 4> kBlitTexCoords = {
 Future<std::unique_ptr<SlicedGlyphTextureManager>>
 SlicedGlyphTextureManager::CreateAsync(BaseView& view, uint2 atlas_size,
                                        uint2 grid_size,
-                                       Texture* composite_texture) {
+                                       BorrowedTexturePtr composite_texture,
+                                       bool use_bitmap_surface_provider) {
+  auto blit_material =
+      use_bitmap_surface_provider
+          ? sliced_glyph_atlas_assets::kBlitSliceMaterialCmat
+          : sliced_glyph_atlas_assets::kBlitSliceExternalMaterialCmat;
+
   return view.GetAssetManager()
-      .LoadMaterial(sliced_glyph_atlas_assets::kBlitSliceMaterialCmat)
+      .LoadMaterial(blit_material)
       .Then(
           [&view, atlas_size, grid_size,
            composite_texture](AssetPtr<MaterialAsset> blit_material) {
@@ -90,7 +96,7 @@ SlicedGlyphTextureManager::CreateAsync(BaseView& view, uint2 atlas_size,
           Executor::Type::kForeground);
 }
 
-std::unique_ptr<Texture> SlicedGlyphTextureManager::CreateCompositeTexture(
+OwnedTexturePtr SlicedGlyphTextureManager::CreateCompositeTexture(
     BaseView& view, uint2 atlas_size, uint2 grid_size) {
   filament::Engine& engine = *view.GetSharedEngine();
   uint2 composite_size = atlas_size * grid_size;
@@ -98,11 +104,14 @@ std::unique_ptr<Texture> SlicedGlyphTextureManager::CreateCompositeTexture(
   using Usage = TextureFactory::Usage;
 
   // Create the composite texture that slices will blit into.
-  std::unique_ptr<Texture> composite_texture =
-      view.GetTextureFactory().CreateTexture(
-          composite_size.x, composite_size.y, Format::RGBA8,
-          Usage::DEFAULT | Usage::COLOR_ATTACHMENT | Usage::BLIT_SRC |
-              Usage::BLIT_DST);
+  OwnedTexturePtr composite_texture = view.GetTextureFactory().CreateTexture(
+      TextureFactory::TextureCreationSettings{
+          .width = composite_size.x,
+          .height = composite_size.y,
+          .format = Format::RGBA8,
+          .usage = Usage::DEFAULT | Usage::COLOR_ATTACHMENT | Usage::BLIT_SRC |
+                   Usage::BLIT_DST,
+      });
 
   // Create a fractlish checkerboard on checkerboard pattern to initialize the
   // composite texture.
@@ -153,7 +162,7 @@ std::unique_ptr<Texture> SlicedGlyphTextureManager::CreateCompositeTexture(
 
 SlicedGlyphTextureManager::SlicedGlyphTextureManager(
     BaseView& view, AssetPtr<MaterialAsset> blit_material, uint2 atlas_size,
-    uint2 grid_size, Texture* composite_texture)
+    uint2 grid_size, BorrowedTexturePtr composite_texture)
     : atlas_size_(atlas_size),
       grid_size_(grid_size),
       engine_(*view.GetSharedEngine()),

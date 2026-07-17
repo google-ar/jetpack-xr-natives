@@ -78,6 +78,25 @@ imp_material(
     src = "gizmo_visualizer_overlay.mat",
 )
 
+imp_material(
+    name = "transform_gizmo_material",
+    src = "transform_gizmo_material.mat",
+)
+
+imp_material(
+    name = "transform_gizmo_rotate_material",
+    src = "transform_gizmo_rotate_material.mat",
+)
+
+imp_assets(
+    name = "transform_gizmo_assets",
+    srcs = [
+        ":transform_gizmo_material",
+        ":transform_gizmo_rotate_material",
+    ],
+    namespace = "imp::editor::transform_gizmo_assets",
+)
+
 imp_assets(
     name = "camera_visualizer_assets",
     srcs = [
@@ -108,6 +127,7 @@ cc_library(
     deps = [
         ":material_visualizer_assets",
         "//core/assets",
+        "//core/assets:proto_asset",
         "//core/async:future",
         "//core/common:hash",
         "//core/common:registry",

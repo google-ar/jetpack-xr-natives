@@ -159,6 +159,7 @@ table Texture (requires_api: 1) {
   mips: bool (id: 6, requires_api: 1);
   image_params: [ImageParams] (required, id: 7, requires_api: 1);
   pixel_buffers: [PixelBuffer] (required, id: 8, requires_api: 1);
+  name: string (id: 9);
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
 

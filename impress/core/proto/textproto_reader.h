@@ -149,7 +149,15 @@ class TextprotoReader {
   static const char* Consume(const char* ptr, const char* end, char end_token);
 
   const char* SkipWhitespace(const char* ptr) {
-    while (ptr && ptr < end_ && absl::ascii_isspace(*ptr)) ++ptr;
+    while (ptr && ptr < end_) {
+      if (absl::ascii_isspace(*ptr)) {
+        ++ptr;
+      } else if (*ptr == '#') {
+        while (ptr < end_ && *ptr != '\n') ++ptr;
+      } else {
+        break;
+      }
+    }
     return ptr;
   }
 

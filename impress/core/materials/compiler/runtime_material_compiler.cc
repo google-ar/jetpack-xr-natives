@@ -45,13 +45,34 @@ Future<filament::Material*> RuntimeMaterialCompiler::CompileMaterial(
     absl::string_view source_material_string,
     const MaterialCompilerConfig& config,
     const MaterialPreCompileOptions& material_precompile_options) {
-  // Check if material exists in the cache.
+  return CompileMaterialInternal(source_material_string, config)
+      .Then(
+          [this, material_precompile_options](std::vector<uint8_t> bytes)
+              -> absl::StatusOr<filament::Material*> {
+            return MaterialAsset::BuildMaterial(*(view_.GetSharedEngine()),
+                                                bytes.data(), bytes.size(),
+                                                material_precompile_options);
+          },
+          // Creating a Filament Material (runtime representation) in the
+          // foreground, since we need the filament Engine.
+          {.executor = Executor::Type::kForeground});
+}
+
+Future<std::vector<uint8_t>> RuntimeMaterialCompiler::CompileMaterialToBytes(
+    absl::string_view source_material_string, Platform platform,
+    TargetApi target_api) {
+  return CompileMaterialInternal(source_material_string,
+                                 MaterialCompilerConfig{platform, target_api});
+}
+
+Future<std::vector<uint8_t>> RuntimeMaterialCompiler::CompileMaterialInternal(
+    absl::string_view source_material_string,
+    const MaterialCompilerConfig& config) {
+  // Check if material exists in the cache first.
   MaterialHash hash = cache_->Hash(source_material_string);
   absl::StatusOr<std::vector<uint8_t>> cached_cmat = cache_->Get(hash);
   if (cached_cmat.ok()) {
-    return Future<filament::Material*>(MaterialAsset::BuildMaterial(
-        *(view_.GetSharedEngine()), cached_cmat->data(), cached_cmat->size(),
-        material_precompile_options));
+    return Future<std::vector<uint8_t>>(*cached_cmat);
   }
 
   return Future<FlatBufferAccess<const schemas::CompileResponse>>::Schedule(
@@ -63,11 +84,9 @@ Future<filament::Material*> RuntimeMaterialCompiler::CompileMaterial(
              },
              {.executor = Executor::Type::kBackground})
       .Then(
-          // Creating a Filament Material (runtime representation) in the
-          // foreground, since we need the filament Engine.
-          [this, hash, material_precompile_options](
-              FlatBufferAccess<const schemas::CompileResponse> response)
-              -> absl::StatusOr<filament::Material*> {
+          [this,
+           hash](FlatBufferAccess<const schemas::CompileResponse> response)
+              -> absl::StatusOr<std::vector<uint8_t>> {
             const flatbuffers::Vector<uint8_t>* compiled_material =
                 response->compiled_material();
 
@@ -78,20 +97,19 @@ Future<filament::Material*> RuntimeMaterialCompiler::CompileMaterial(
               return absl::InternalError("Compiled material data is null");
             }
 
-            if (absl::Status status = cache_->Store(
-                    hash, std::vector<uint8_t>(compiled_material->begin(),
-                                               compiled_material->end()));
+            std::vector<uint8_t> bytes(compiled_material->begin(),
+                                       compiled_material->end());
+
+            if (absl::Status status = cache_->Store(hash, bytes);
                 !status.ok()) {
               // Do not return an error here, since the material compiled and
               // can be used, even if it wasn't cached.
               IMP_LOG(imp::ERROR) << "Failed to store material in cache: " << status;
             }
 
-            return MaterialAsset::BuildMaterial(
-                *(view_.GetSharedEngine()), compiled_material->data(),
-                compiled_material->size(), material_precompile_options);
+            return bytes;
           },
-          {.executor = Executor::Type::kForeground});
+          {.executor = Executor::Type::kBackground});
 }
 
 }  // namespace imp

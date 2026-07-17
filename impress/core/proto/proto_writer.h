@@ -17,12 +17,16 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_PROTO_PROTO_WRITER_H_
 #define THIRD_PARTY_IMPRESS_CORE_PROTO_PROTO_WRITER_H_
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/memory/memory.h"
@@ -33,7 +37,9 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/one_of.h"
 #include "core/common/optional_with_default.h"
+#include "core/common/template_helpers.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/proto_common.h"
 #include "boost_beast/varint.hpp"
@@ -223,6 +229,20 @@ class ProtoWriter : public Impl {
   template <typename Proto>
   Cursor VisitStandardProto(Cursor ptr, int field_id, Proto* proto,
                             Proto* other);
+
+  template <typename... Tags, typename FieldType, FieldType... field_types,
+            size_t... I>
+  Cursor VisitOneOf(Cursor ptr, imp::OneOf<Tags...>* field,
+                    imp::OneOf<Tags...>* other, absl::string_view field_name,
+                    std::integer_sequence<FieldType, field_types...>,
+                    const std::vector<int>& variant_field_ids,
+                    std::index_sequence<I...>);
+
+  template <typename T, typename FieldType, FieldType... field_types>
+  Cursor VisitVariant(
+      Cursor ptr, T* field, T* other, absl::string_view field_name,
+      std::integer_sequence<int, field_types...> variant_field_types,
+      const std::vector<int>& variant_field_ids);
 
   Cursor Unknown(Cursor ptr) { return ptr; }
 
@@ -581,6 +601,75 @@ bool SerializeTo(const T* msg, std::string* str) {
   ProtoWriter<WriterImpl> stream(str, *scratch);
   auto end = ::imp::proto::Visit(m, &stream, str->data());
   return stream.Finish(end);
+}
+
+template <typename Impl>
+template <typename... Tags, typename FieldType, FieldType... field_types,
+          size_t... I>
+typename Impl::Cursor ProtoWriter<Impl>::VisitOneOf(
+    Cursor ptr, imp::OneOf<Tags...>* field, imp::OneOf<Tags...>* other,
+    absl::string_view field_name,
+    std::integer_sequence<FieldType, field_types...>,
+    const std::vector<int>& variant_field_ids, std::index_sequence<I...>) {
+  constexpr FieldType types_array[] = {field_types...};
+  (
+      [&]() {
+        if (!field->template Holds<Tags>()) {
+          return;
+        }
+
+        constexpr FieldType field_type = types_array[I];
+        int variant_field_id = variant_field_ids[I];
+
+        if constexpr (proto_traits::kIsStandardProto<typename Tags::Type>) {
+          ptr = VisitStandardProto(ptr, variant_field_id,
+                                   field->template GetIf<Tags>(),
+                                   (other && other->template Holds<Tags>())
+                                       ? other->template GetIf<Tags>()
+                                       : nullptr);
+        } else {
+          ptr = Visit<field_type>(ptr, variant_field_id,
+                                  field->template GetIf<Tags>(),
+                                  (other && other->template Holds<Tags>())
+                                      ? other->template GetIf<Tags>()
+                                      : nullptr,
+                                  /*optional=*/true);
+        }
+      }(),
+      ...);
+  return ptr;
+}
+
+template <typename Impl>
+template <typename T, typename FieldType, FieldType... field_types>
+typename Impl::Cursor ProtoWriter<Impl>::VisitVariant(
+    Cursor ptr, T* field, T* other, absl::string_view field_name,
+    std::integer_sequence<int, field_types...> variant_field_types,
+    const std::vector<int>& variant_field_ids) {
+  ForConstexpr<0, std::variant_size_v<T>>([&ptr, &variant_field_ids,
+                                           &variant_field_types, field, other,
+                                           this](auto i) mutable {
+    if (field->index() != i) {
+      return;
+    }
+    if constexpr (i != 0) {
+      using VariantAlternativeT = std::variant_alternative_t<i, T>;
+      constexpr int field_type = GetAt<i - 1>(variant_field_types);
+      int variant_field_id = variant_field_ids[i - 1];
+
+      if constexpr (proto_traits::kIsStandardProto<VariantAlternativeT>) {
+        ptr = this->VisitStandardProto(
+            ptr, variant_field_id, absl::get_if<i>(field),
+            (!other || other->index() != i) ? nullptr : absl::get_if<i>(other));
+      } else {
+        ptr = this->template Visit<field_type>(
+            ptr, variant_field_id, absl::get_if<i>(field),
+            (!other || other->index() != i) ? nullptr : absl::get_if<i>(other),
+            /*optional=*/true);
+      }
+    }
+  });
+  return ptr;
 }
 
 template <typename T>

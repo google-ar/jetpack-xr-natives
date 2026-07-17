@@ -27,10 +27,11 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
-#if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
+#if IMP_MATERIAL_API(VULKAN)
 #include "core/view/platforms/xr_android/xr_vulkan_swap_chain_image_handler.h"
 #else
 #include "core/view/platforms/xr_android/xr_opengl_swap_chain_image_handler.h"
@@ -104,6 +105,7 @@ absl::StatusOr<XrSwapchain> CreateSwapChain(XrSessionHost* host,
   }
 
   XrSwapchain swapchain = XR_NULL_HANDLE;
+
   MP_RETURN_IF_ERROR(host->ToStatus(xrCreateSwapchain(
       host->GetXrSession(), &swapchain_create_info, &swapchain)));
 

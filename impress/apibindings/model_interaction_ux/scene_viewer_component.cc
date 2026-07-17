@@ -94,10 +94,6 @@ constexpr float kElasticScale = 10.f;
 constexpr auto kTranslationRigCorrectionRate = 5.0f;
 constexpr auto kIdleRigCorrectionRate = 0.15f;
 
-// The delay before the footprint is initialized. This is to avoid the
-// footprint being initialized when the model is not fully loaded.
-constexpr auto kFootprintInitializationDelay = 2.5f;
-
 // Ray origin/forward are in world space.
 mat4f GetRayFromWorldSpace(const imp::Ray& ray) {
   auto world_from_ray =
@@ -139,8 +135,9 @@ absl::Status SceneViewerComponent::Setup(imp::NodeHandle target_node,
   // Position the rig node at the bottom-center of the model's bounding box,
   // without visually moving the model itself.
   imp::Box local_bounds = GetModelBounds();
-  imp::float3 local_bottom_center =
-      local_bounds.center - imp::float3(0.f, local_bounds.halfExtent.y, 0.f);
+  initial_half_extent_y_ = local_bounds.halfExtent.y;
+  ideal_center_ = imp::float3(0.f, initial_half_extent_y_, 0.f);
+  imp::float3 local_bottom_center = local_bounds.center - ideal_center_;
 
   mat4f model_world_trs = model_node_->GetWorldTrs();
   imp::float3 world_bottom_center =
@@ -148,16 +145,23 @@ absl::Status SceneViewerComponent::Setup(imp::NodeHandle target_node,
 
   // Position the rig node at the bottom-center of the model's bounding box in
   // world space.
-  auto rig_world_trs = imp::Transform<float>(
+  imp::Transform<float> rig_world_trs = imp::Transform<float>(
       world_bottom_center, imp::Transform<float>(model_world_trs).rotation,
       imp::float3(1.0f));
   rig_node_->SetWorldTrs(rig_world_trs.AsMat4());
 
-  // Parent the model to the rig while preserving its exact world transform.
-  model_node_->SetParentKeepWorldTransform(rig_node_);
+  // Create rotation node
+  rotation_node_ = view.CreateNode();
+  rotation_node_->SetParent(rig_node_);
+  rotation_node_->SetLocalPosition(ideal_center_);
 
-  // Calculate the new local offset of the model relative to the rig node.
-  auto model_local_trs = imp::Transform<float>(model_node_->GetLocalTrs());
+  // Parent the model to the rotation node while preserving its exact world
+  // transform.
+  model_node_->SetParentKeepWorldTransform(rotation_node_);
+
+  // Calculate the new local offset of the model relative to the rotation node.
+  imp::Transform<float> model_local_trs =
+      imp::Transform<float>(model_node_->GetLocalTrs());
   if (model_local_trs.scale.x == 0.0f || model_local_trs.scale.y == 0.0f ||
       model_local_trs.scale.z == 0.0f) {
     model_offset_ = imp::kZero3;
@@ -165,33 +169,10 @@ absl::Status SceneViewerComponent::Setup(imp::NodeHandle target_node,
     model_offset_ = model_local_trs.translation / model_local_trs.scale;
   }
 
-  model_event_connection_ = model_node_->Connect(
-      [this](const SplitEngineInputEvent& event) mutable {
-        HandleInputEvent(event, InputEventSource::kModel);
-      },
-      this);
-
   // Setup initial flags
   interaction_data_ = InteractionMode();
-  system_movable_ = system_movable;
 
-  return absl::OkStatus();
-}
-
-void SceneViewerComponent::CreateFootprint(const imp::FrameTime& delta_time) {
-  // TODO: Remove initialization delay for footprint component.
-  // This is a temporary solution to avoid an edge case where the footprint
-  // doesn't get get mirrored correctly if the component is created immediately
-  // after the subspace is has been created.
-  if (delta_time.GetElapsedSeconds() < kFootprintInitializationDelay) {
-    return;
-  }
-  is_footprint_initialized_ = true;
-  std::optional<imp::Box> initial_bounds = std::nullopt;
-  if (!model_node_->GetComponent<imp::GltfRenderer>()) {
-    initial_bounds = GetModelBounds();
-  }
-  rig_node_->AddComponent<svxr::Footprint>(model_node_, initial_bounds)
+  rig_node_->AddComponent<svxr::Footprint>(model_node_, local_bounds)
       .Then([this](imp::ComponentHandle<svxr::Footprint> footprint) {
         footprint_ = footprint;
         // Listen to input events on the footprint
@@ -207,6 +188,8 @@ void SceneViewerComponent::CreateFootprint(const imp::FrameTime& delta_time) {
             this);
       })
       .KeptBy(this);
+
+  return absl::OkStatus();
 }
 
 void SceneViewerComponent::Cleanup() {
@@ -216,10 +199,13 @@ void SceneViewerComponent::Cleanup() {
 }
 
 void SceneViewerComponent::SetModelScale(float model_scale) {
-  auto model_transform = imp::Transform<float>(model_node_->GetLocalTrs());
+  imp::Transform<float> model_transform =
+      imp::Transform<float>(model_node_->GetLocalTrs());
   model_transform.scale = float3(model_scale);
   model_transform.translation = model_offset_ * model_scale;
   model_node_->SetLocalTrs(model_transform.AsMat4());
+
+  rotation_node_->SetLocalPosition(ideal_center_ * model_scale);
 
   footprint_->OnModelSizeChanged();
 }
@@ -569,8 +555,6 @@ void SceneViewerComponent::Update(const imp::FrameTime& delta_time) {
       [](auto& state) -> OptionalInteractionState { return {}; });
   if (footprint_) {
     footprint_->OnUpdate(delta_time, interaction_data_);
-  } else if (!is_footprint_initialized_) {
-    CreateFootprint(delta_time);
   }
 }
 

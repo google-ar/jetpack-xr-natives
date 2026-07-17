@@ -42,7 +42,7 @@ struct EmbeddedImage {
 struct LinkedImage {
   std::string resource_name;
 };
-using TrackedImage = absl::variant<EmbeddedImage, LinkedImage>;
+using TrackedImage = std::variant<EmbeddedImage, LinkedImage>;
 
 //
 class LoaderState {

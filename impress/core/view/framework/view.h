@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -34,6 +35,7 @@
 #include "core/common/context.h"
 #include "core/common/invocable.h"
 #include "core/common/registry.h"
+#include "core/config.h"
 #include "core/input/input_manager.h"
 #include "core/lighting/environment_light_factory.h"
 #include "core/math/vec.h"
@@ -59,6 +61,7 @@
 #include "core/view/framework/gestures/gesture_manager.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/lighting/light_manager.h"
+#include "core/view/framework/model_factory.h"
 #include "core/view/framework/render/mesh_factory.h"  // IWYU pragma: keep
 #include "core/view/framework/scene/scene_system.h"
 #include "core/view/scripting/script_message_handler.h"
@@ -183,6 +186,9 @@ class View : public BaseView {
   // Returns a factory to create materials.
   MaterialFactory& GetMaterialFactory() noexcept override;
 
+  // Returns a factory to create models.
+  ModelFactory& GetModelFactory() noexcept override;
+
   // Returns a factory to create EnvironmentLights.
   EnvironmentLightFactory& GetEnvironmentLightFactory() noexcept override;
 
@@ -222,6 +228,12 @@ class View : public BaseView {
 
   // Returns the dimensions of the view being rendered to in UI pixels.
   uint2 GetSize() const override;
+
+#if IMP_RUNTIME(DEV)
+  // Overrides the size of the view returned by GetSize().
+  void SetSizeOverride(std::optional<uint2> size_override) override;
+#endif  // IMP_RUNTIME(DEV)
+
   // Returns the margins of the viewport being rendered to in UI pixels.
   uint4 GetMargins() const override;
 
@@ -288,6 +300,15 @@ class View : public BaseView {
   // explanation of these fields.
   void UpdateTransitionParameters(float2 transition_scale_adjustment,
                                   float transition_counter_rotation) override;
+
+  const ViewConfig& GetConfig() const override { return view_config_; }
+
+  // The ViewConfig can be used to configure various systems and components in
+  // impress. For some settings, it may be appropriate to call ApplyViewConfig()
+  // afterwards.
+  void SetConfig(const ViewConfig& view_config) override {
+    view_config_ = view_config;
+  }
 
   filament::View* CreateFilamentView() override;
   void DestroyFilamentView(filament::View* view) override;
@@ -358,9 +379,6 @@ class View : public BaseView {
 
   // Called after the frame is complete.
   virtual void OnPostFrame() {}
-
-  const ViewConfig& GetConfig() const override { return view_config_; }
-  void SetConfig(const ViewConfig& view_config) { view_config_ = view_config; }
 
  private:
   using RenderResultFlags = window::FilamentHost::RenderResultFlags;
@@ -451,6 +469,7 @@ class View : public BaseView {
   std::unique_ptr<TextureFactory> texture_factory_;
   MeshFactory mesh_factory_;
   MaterialFactory material_factory_;
+  ModelFactory model_factory_;
   EnvironmentLightFactory environment_light_factory_;
   std::unique_ptr<GroupsManager> groups_manager_;
   std::unique_ptr<BaseRenderableManager> renderable_manager_;
@@ -458,6 +477,7 @@ class View : public BaseView {
   Device device_;
   Registry registry_;
   uint2 size_;
+  std::optional<uint2> size_override_;
   uint4 margins_;
   window::WindowRotation window_rotation_;
   absl::Duration asset_manager_cache_cleanup_interval_;

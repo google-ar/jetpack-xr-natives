@@ -14,6 +14,7 @@
 
 #include "core/render/texture_asset.h"
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
@@ -62,8 +63,17 @@ Future<std::unique_ptr<TextureAsset>> TextureAsset::Load(
         filament::backend::TextureFormat format =
             options.texture_format_override.value_or(
                 filament::backend::TextureFormat::SRGB8_A8);
-        return image::details::WasmDecodeImageToTexture(asset_url_copy,
-                                                        resource, format)
+        uint8_t requested_levels = 1;
+        if (options.generated_mipmap_levels.has_value()) {
+          requested_levels = options.generated_mipmap_levels.value();
+        } else if (options.generate_mipmaps) {
+          // We want to generate all levels, but since we don't know the
+          // dimensions of the image yet we leave the calculation to after the
+          // image has been decoded.
+          requested_levels = 0xff;
+        }
+        return image::details::WasmDecodeImageToTexture(
+                   asset_url_copy, resource, format, requested_levels)
             .Then([view, asset_url_copy,
                    options](WasmTextureContents texture_contents)
                       -> std::unique_ptr<TextureAsset> {
@@ -112,7 +122,9 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
   texture_builder.Height(image_contents->GetHeight());
   uint8_t levels = 1;
   if (options.generated_mipmap_levels.has_value()) {
-    levels = options.generated_mipmap_levels.value();
+    levels = std::min(options.generated_mipmap_levels.value(),
+                      GetMipmapLevelCount(image_contents->GetWidth(),
+                                          image_contents->GetHeight()));
   } else if (options.generate_mipmaps) {
     levels = GetMipmapLevelCount(image_contents->GetWidth(),
                                  image_contents->GetHeight());
@@ -129,7 +141,9 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
 TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
                            WasmTextureContents texture_contents,
                            TextureGenerationOptions options)
-    : view_(view), texture_name_(texture_name) {
+    : view_(view),
+      texture_name_(texture_name),
+      gl_texture_id_(texture_contents.GetTextureId()) {
   if (!Executor::IsOnForegroundExecutor()) {
     IMP_LOG(imp::FATAL) << "Texture asset needs to be created on the main thread.";
   }
@@ -150,7 +164,9 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
           filament::Texture::InternalFormat::SRGB8_A8);
   uint8_t levels = 1;
   if (options.generated_mipmap_levels.has_value()) {
-    levels = options.generated_mipmap_levels.value();
+    levels = std::min(options.generated_mipmap_levels.value(),
+                      GetMipmapLevelCount(texture_contents.GetWidth(),
+                                          texture_contents.GetHeight()));
   } else if (options.generate_mipmaps) {
     // We use the dimensions of the image to estimate the number of mip levels.
     levels = GetMipmapLevelCount(texture_contents.GetWidth(),
@@ -180,6 +196,18 @@ TextureAsset::~TextureAsset() {
     view_->GetSharedEngine()->destroy(texture_);
     texture_ = nullptr;
   }
+#if IMP_PLATFORM(WASM)
+  if (gl_texture_id_ != 0) {
+    glDeleteTextures(1, &gl_texture_id_);
+    gl_texture_id_ = 0;
+  }
+#endif
+}
+
+filament::Texture* TextureAsset::ReleaseFilamentTexture() {
+  filament::Texture* texture = texture_;
+  texture_ = nullptr;
+  return texture;
 }
 
 }  // namespace imp

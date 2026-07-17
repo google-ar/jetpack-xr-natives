@@ -113,8 +113,6 @@ cc_library(
     alwayslink = 1,
 )
 
-# Requires: --config=android_arm
-
 cc_library(
     name = "request_handlers",
     hdrs = ["request_handlers.h"],

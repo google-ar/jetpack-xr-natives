@@ -175,10 +175,8 @@ android_library(
         ":setup_params_java_proto_lite",
         ":view",
         "//core/view/utils:view_config_java_proto_lite",
-        "//java/com/google/ar/imp/core/media:media_no_jni",  # buildcleaner: keep
         "//java/com/google/ar/imp/core/scripting:script_endpoint",
         "//java/com/google/ar/imp/core/web:fragment_host",
-        "//java/com/google/ar/imp/view/input:input_manager",
         "@maven//:androidx_annotation_annotation",
         "@maven//:com_google_guava_guava",
         "@third_party//filament/android:filament_android_no_jni",

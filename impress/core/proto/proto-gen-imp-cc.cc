@@ -696,46 +696,89 @@ class ImpCodeGenerator {
 
   absl::Status PrintOneof(google::protobuf::io::Printer* printer,
                           const google::protobuf::OneofDescriptor* oneof) const {
-    printer->Print("absl::variant<absl::monostate");
-    for (int i = 0; i < oneof->field_count(); ++i) {
-      absl::StatusOr<std::pair<std::string, std::string>> field_info_or =
-          FieldInfo(oneof->field(i));
-      MP_RETURN_IF_ERROR(field_info_or.status());
-      auto [type_name, info] = field_info_or.value();
-      printer->Print(",\n              $type$", "type", type_name);
-    }
-    printer->Print("> $name$;\n", "name", oneof->name());
-    std::string oneof_title(oneof->name());
-    MakeAsciiTitlecase(&oneof_title, "_");
-    printer->Print("static constexpr int k$oneof$_Unknown = 0;\n", "oneof",
-                   oneof_title);
-    for (int i = 0; i < oneof->field_count(); ++i) {
-      std::string field_title(oneof->field(i)->camelcase_name());
-      MakeAsciiTitlecase(&field_title, "");
-      auto index = absl::StrCat(i + 1);
-      absl::StatusOr<std::pair<std::string, std::string>> field_info_or =
-          FieldInfo(oneof->field(i));
-      MP_RETURN_IF_ERROR(field_info_or.status());
-      auto [type_name, info] = field_info_or.value();
-      std::map<std::string, std::string> vars = {
-          {"oneof", oneof_title},
-          {"cap", field_title},
-          {"field", std::string(oneof->field(i)->name())},
-          {"index", index},
-          {"name", std::string(oneof->name())},
-          {"type", type_name}};
-      printer->Print(vars, "static constexpr int k$oneof$_$cap$ = $index$;\n");
-      printer->Print(vars,
-                     "const $type$* $field$() const {\n"
-                     "  return absl::get_if<$index$>(&this->$name$);\n"
-                     "}\n");
-      printer->Print(vars,
-                     "$type$* mutable_$field$() {\n"
-                     "  if ($name$.index() != $index$) {\n"
-                     "    this->$name$.emplace<$index$>($type${});\n"
-                     "  }\n"
-                     "  return absl::get_if<$index$>(&this->$name$);\n"
-                     "}\n");
+    imp::ImpressFeatureSet feature_set =
+        CodeGeneratorHelper::GetResolvedFeatureSet(*oneof->field(0));
+
+    if (feature_set.presence_mode() ==
+        imp::ImpressFeatureSet::OPTIONAL_WITH_DEFAULT) {
+      for (int i = 0; i < oneof->field_count(); ++i) {
+        std::string field_title(oneof->field(i)->camelcase_name());
+        MakeAsciiTitlecase(&field_title, "");
+        absl::StatusOr<std::pair<std::string, std::string>> field_info_or =
+            FieldInfo(oneof->field(i));
+        MP_RETURN_IF_ERROR(field_info_or.status());
+        auto [type_name, info] = field_info_or.value();
+
+        std::string k_default_str;
+        if (HasDefault(oneof->field(i))) {
+          k_default_str = absl::StrCat(
+              "  static constexpr ", DefaultConstantTypeName(oneof->field(i)),
+              " kDefault = ", DefaultValue(oneof->field(i)), ";\n");
+        }
+
+        printer->Print(
+            "struct $tag$ {\n"
+            "  using Type = $type$;\n"
+            "$k_default_str$"
+            "};\n",
+            "tag", field_title, "type", type_name, "k_default_str",
+            k_default_str);
+      }
+      printer->Print("::imp::OneOf<");
+      for (int i = 0; i < oneof->field_count(); ++i) {
+        std::string field_title(oneof->field(i)->camelcase_name());
+        MakeAsciiTitlecase(&field_title, "");
+        printer->Print(i > 0 ? ", $tag$" : "$tag$", "tag", field_title);
+      }
+      printer->Print("> $name$;\n", "name", oneof->name());
+      std::string oneof_title(oneof->name());
+      MakeAsciiTitlecase(&oneof_title, "_");
+      printer->Print("static constexpr int k$oneof$_Unknown = 0;\n", "oneof",
+                     oneof_title);
+    } else {
+      printer->Print("absl::variant<absl::monostate");
+      for (int i = 0; i < oneof->field_count(); ++i) {
+        absl::StatusOr<std::pair<std::string, std::string>> field_info_or =
+            FieldInfo(oneof->field(i));
+        MP_RETURN_IF_ERROR(field_info_or.status());
+        auto [type_name, info] = field_info_or.value();
+        printer->Print(",\n              $type$", "type", type_name);
+      }
+      printer->Print("> $name$;\n", "name", oneof->name());
+      std::string oneof_title(oneof->name());
+      MakeAsciiTitlecase(&oneof_title, "_");
+      printer->Print("static constexpr int k$oneof$_Unknown = 0;\n", "oneof",
+                     oneof_title);
+      for (int i = 0; i < oneof->field_count(); ++i) {
+        std::string field_title(oneof->field(i)->camelcase_name());
+        MakeAsciiTitlecase(&field_title, "");
+        auto index = absl::StrCat(i + 1);
+        absl::StatusOr<std::pair<std::string, std::string>> field_info_or =
+            FieldInfo(oneof->field(i));
+        MP_RETURN_IF_ERROR(field_info_or.status());
+        auto [type_name, info] = field_info_or.value();
+        std::map<std::string, std::string> vars = {
+            {"oneof", oneof_title},
+            {"cap", field_title},
+            {"field", std::string(oneof->field(i)->name())},
+            {"index", index},
+            {"name", std::string(oneof->name())},
+            {"type", type_name}};
+
+        printer->Print(vars,
+                       "static constexpr int k$oneof$_$cap$ = $index$;\n");
+        printer->Print(vars,
+                       "const $type$* $field$() const {\n"
+                       "  return absl::get_if<$index$>(&this->$name$);\n"
+                       "}\n");
+        printer->Print(vars,
+                       "$type$* mutable_$field$() {\n"
+                       "  if ($name$.index() != $index$) {\n"
+                       "    this->$name$.emplace<$index$>($type${});\n"
+                       "  }\n"
+                       "  return absl::get_if<$index$>(&this->$name$);\n"
+                       "}\n");
+      }
     }
     return absl::OkStatus();
   }
@@ -787,12 +830,27 @@ class ImpCodeGenerator {
         std::string oneof_name_capitalized(oneof->name());
         oneof_name_capitalized[0] = toupper(oneof_name_capitalized[0]);
         if (printed_oneofs.find(oneof->name()) == printed_oneofs.end()) {
+          imp::ImpressFeatureSet feature_set =
+              CodeGeneratorHelper::GetResolvedFeatureSet(*field);
+
+          std::string prefix = (feature_set.presence_mode() ==
+                                imp::ImpressFeatureSet::OPTIONAL_WITH_DEFAULT)
+                                   ? "OneOf"
+                                   : "Variant";
+          std::string count_str = absl::StrCat(oneof->field_count());
+          std::string index_seq_str =
+              (feature_set.presence_mode() ==
+               imp::ImpressFeatureSet::OPTIONAL_WITH_DEFAULT)
+                  ? absl::StrCat(", std::make_index_sequence<", count_str, ">")
+                  : "";
           printer->Print(
-              "constexpr bool kHasVisitVariant$oneof_capitalized$Fn = "
-              "::imp::proto_traits::kHasVisitVariantFunction<Visitor, Cursor, "
-              "decltype(this->$oneof$), std::integer_sequence<int, 0>>;\n",
-              "oneof_capitalized", oneof_name_capitalized, "oneof",
-              oneof->name());
+              "constexpr bool kHasVisit$prefix$$oneof_capitalized$Fn = "
+              "::imp::proto_traits::kHasVisit$prefix$Function<Visitor, Cursor, "
+              "decltype(this->$oneof$), std::integer_sequence<int, "
+              "0>$index_seq$>;\n",
+              "prefix", prefix, "oneof_capitalized", oneof_name_capitalized,
+              "oneof", oneof->name(), "index_seq", index_seq_str);
+
           OneofFieldInfo fields;
           fields.field_types.resize(oneof->field_count());
           fields.field_ids.resize(oneof->field_count());
@@ -803,21 +861,46 @@ class ImpCodeGenerator {
         oneof_field_info.field_types[field->index_in_oneof()] = field->type();
         oneof_field_info.field_ids[field->index_in_oneof()] = field->number();
 
-        std::string ref_other = absl::StrCat(
-            "(!other || other->", oneof->name(),
-            ".index() != ", field->index_in_oneof() + 1,
-            ") ? nullptr : absl::get_if<", field->index_in_oneof() + 1,
-            ">(&other->", oneof->name(), ")");
-        printer->Print(
-            "cursor = (!kHasVisitVariant$oneof_capitalized$Fn && "
-            "$oneof$.index() == $index$) ? "
-            "v.$disambiguator$$visit_method$(cursor, $field_id$, "
-            "absl::get_if<$index$>(&this->$oneof$), $ref_other$, "
-            "std::forward<Args>(args)...) : cursor;\n",
-            "oneof_capitalized", oneof_name_capitalized, "oneof", oneof->name(),
-            "index", absl::StrCat(field->index_in_oneof() + 1), "disambiguator",
-            disambiguator, "visit_method", visit_method, "field_id",
-            absl::StrCat(field->number()), "ref_other", ref_other);
+        imp::ImpressFeatureSet feature_set =
+            CodeGeneratorHelper::GetResolvedFeatureSet(*field);
+
+        if (feature_set.presence_mode() ==
+            imp::ImpressFeatureSet::OPTIONAL_WITH_DEFAULT) {
+          std::string field_title(field->camelcase_name());
+          MakeAsciiTitlecase(&field_title, "");
+          std::string tag = absl::StrCat(TypeName(desc), "::", field_title);
+
+          std::string ref_other =
+              absl::StrCat("!other ? nullptr : other->", oneof->name(),
+                           ".GetIf<", tag, ">()");
+          printer->Print(
+              "cursor = (!kHasVisitOneOf$oneof_capitalized$Fn && "
+              "$oneof$.Holds<$tag$>()) ? "
+              "v.$disambiguator$$visit_method$(cursor, $field_id$, "
+              "this->$oneof$.GetIf<$tag$>(), $ref_other$, "
+              "std::forward<Args>(args)...) : cursor;\n",
+              "oneof_capitalized", oneof_name_capitalized, "oneof",
+              oneof->name(), "tag", tag, "disambiguator", disambiguator,
+              "visit_method", visit_method, "field_id",
+              absl::StrCat(field->number()), "ref_other", ref_other);
+        } else {
+          std::string ref_other = absl::StrCat(
+              "(!other || other->", oneof->name(),
+              ".index() != ", field->index_in_oneof() + 1,
+              ") ? nullptr : absl::get_if<", field->index_in_oneof() + 1,
+              ">(&other->", oneof->name(), ")");
+          printer->Print(
+              "cursor = (!kHasVisitVariant$oneof_capitalized$Fn && "
+              "$oneof$.index() == $index$) ? "
+              "v.$disambiguator$$visit_method$(cursor, $field_id$, "
+              "absl::get_if<$index$>(&this->$oneof$), $ref_other$, "
+              "std::forward<Args>(args)...) : cursor;\n",
+              "oneof_capitalized", oneof_name_capitalized, "oneof",
+              oneof->name(), "index", absl::StrCat(field->index_in_oneof() + 1),
+              "disambiguator", disambiguator, "visit_method", visit_method,
+              "field_id", absl::StrCat(field->number()), "ref_other",
+              ref_other);
+        }
 
         if (field->index_in_oneof() == oneof->field_count() - 1) {
           std::string field_types_str =
@@ -825,17 +908,34 @@ class ImpCodeGenerator {
                               absl::StrJoin(oneof_field_info.field_types, ","));
           std::string field_ids_str = absl::StrFormat(
               "{%s}", absl::StrJoin(oneof_field_info.field_ids, ","));
-          std::string oneof_name_capitalized(oneof->name());
-          oneof_name_capitalized[0] = toupper(oneof_name_capitalized[0]);
-          printer->Print(
-              "if constexpr (kHasVisitVariant$oneof_capitalized$Fn) {\n"
-              "  cursor = v.VisitVariant(cursor, &this->$oneof$, !other ? "
-              "nullptr : &other->$oneof$, \"$oneof$\", $field_types_str$, "
-              "$field_ids_str$, std::forward<Args>(args)...);\n"
-              "}\n",
-              "oneof_capitalized", oneof_name_capitalized, "oneof",
-              oneof->name(), "field_types_str", field_types_str,
-              "field_ids_str", field_ids_str);
+
+          imp::ImpressFeatureSet feature_set =
+              CodeGeneratorHelper::GetResolvedFeatureSet(*field);
+
+          if (feature_set.presence_mode() ==
+              imp::ImpressFeatureSet::OPTIONAL_WITH_DEFAULT) {
+            std::string count_str = absl::StrCat(oneof->field_count());
+            printer->Print(
+                "if constexpr (kHasVisitOneOf$oneof_capitalized$Fn) {\n"
+                "  cursor = v.VisitOneOf(cursor, &this->$oneof$, !other ? "
+                "nullptr : &other->$oneof$, \"$oneof$\", $field_types_str$, "
+                "$field_ids_str$, std::make_index_sequence<$count$>{}, "
+                "std::forward<Args>(args)...);\n"
+                "}\n",
+                "oneof_capitalized", oneof_name_capitalized, "oneof",
+                oneof->name(), "field_types_str", field_types_str,
+                "field_ids_str", field_ids_str, "count", count_str);
+          } else {
+            printer->Print(
+                "if constexpr (kHasVisitVariant$oneof_capitalized$Fn) {\n"
+                "  cursor = v.VisitVariant(cursor, &this->$oneof$, !other ? "
+                "nullptr : &other->$oneof$, \"$oneof$\", $field_types_str$, "
+                "$field_ids_str$, std::forward<Args>(args)...);\n"
+                "}\n",
+                "oneof_capitalized", oneof_name_capitalized, "oneof",
+                oneof->name(), "field_types_str", field_types_str,
+                "field_ids_str", field_ids_str);
+          }
         }
         continue;
       }
@@ -893,18 +993,35 @@ class ImpCodeGenerator {
       std::string visit_method_template;
       const auto* oneof = field->real_containing_oneof();
       if (oneof != nullptr) {
-        printer->Print(
-            "  if ($oneof$.index() != $index$) {\n"
-            "    $oneof$.emplace<$index$>($type_name${});\n"
-            "  }\n",
-            "oneof", oneof->name(), "index",
-            absl::StrCat(field->index_in_oneof() + 1), "type_name",
-            FieldInfo(field)->first);
-        field_ref = absl::StrFormat("absl::get_if<%d>(&this->%s)",
-                                    field->index_in_oneof() + 1, oneof->name());
-        field_ref_other =
-            absl::StrFormat("!other ? nullptr : absl::get_if<%d>(&other->%s)",
-                            field->index_in_oneof() + 1, oneof->name());
+        imp::ImpressFeatureSet feature_set =
+            CodeGeneratorHelper::GetResolvedFeatureSet(*field);
+
+        if (feature_set.presence_mode() ==
+            imp::ImpressFeatureSet::OPTIONAL_WITH_DEFAULT) {
+          std::string field_title(field->camelcase_name());
+          MakeAsciiTitlecase(&field_title, "");
+          std::string tag = absl::StrCat(TypeName(desc), "::", field_title);
+
+          field_ref = absl::StrFormat("&this->%s.MutableValue<%s>()",
+                                      oneof->name(), tag);
+          field_ref_other = absl::StrFormat(
+              "!other ? nullptr : other->%s.GetIf<%s>()", oneof->name(), tag);
+        } else {
+          printer->Print(
+              "  if ($oneof$.index() != $index$) {\n"
+              "    $oneof$.emplace<$index$>($type_name${});\n"
+              "  }\n",
+              "oneof", oneof->name(), "index",
+              absl::StrCat(field->index_in_oneof() + 1), "type_name",
+              FieldInfo(field).value().first);
+
+          field_ref =
+              absl::StrFormat("absl::get_if<%d>(&this->%s)",
+                              field->index_in_oneof() + 1, oneof->name());
+          field_ref_other =
+              absl::StrFormat("!other ? nullptr : absl::get_if<%d>(&other->%s)",
+                              field->index_in_oneof() + 1, oneof->name());
+        }
       } else if (IsScalar(field) && !NativeType(desc).empty()) {
         field_ref = absl::StrFormat("reinterpret_cast<%s*>(&this->%s)",
                                     CppTypeName(field), field->name());
@@ -1557,6 +1674,26 @@ class ImpCodeGenerator {
   bool Generate(const google::protobuf::FileDescriptor* file,
                 const std::string& parameter, google::protobuf::io::Printer* printer,
                 std::string* error) const {
+    // Search for any oneof declarations in the file, including those nested
+    // inside other messages. This determines if we need to include oneof or
+    // variant headers.
+    bool has_oneof = false;
+    std::vector<const google::protobuf::Descriptor*> stack;
+    stack.reserve(file->message_type_count());
+    for (int i = 0; i < file->message_type_count(); ++i) {
+      stack.push_back(file->message_type(i));
+    }
+    while (!stack.empty()) {
+      const auto* desc = stack.back();
+      stack.pop_back();
+      if (desc->real_oneof_decl_count() > 0) {
+        has_oneof = true;
+        break;
+      }
+      for (int i = 0; i < desc->nested_type_count(); ++i) {
+        stack.push_back(desc->nested_type(i));
+      }
+    }
     auto h_name = absl::StrCat(file->name(), ".imp.h");
 
     auto include_guard = absl::AsciiStrToUpper(
@@ -1573,7 +1710,10 @@ class ImpCodeGenerator {
     printer->Print("#include \"absl/strings/cord.h\"\n");
     printer->Print("#include \"absl/strings/string_view.h\"\n");
     printer->Print("#include \"absl/types/optional.h\"\n");
-    printer->Print("#include \"absl/types/variant.h\"\n");
+    if (has_oneof) {
+      printer->Print("#include \"core/common/one_of.h\"\n");
+      printer->Print("#include \"absl/types/variant.h\"\n");
+    }
     printer->Print(
         "#include \"core/proto/proto_common.h\"\n");
     // Prevent circular dependency. Textproto writer depends on any.proto.

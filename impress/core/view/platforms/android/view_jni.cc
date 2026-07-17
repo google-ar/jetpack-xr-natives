@@ -37,6 +37,7 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/view.h"
 #include "core/view/platforms/android/wrappers/imp_lifecycle_callback.h"
+#include "core/view/scripting/script_message_handler_provider.h"
 #include "core/view/utils/proto/view_config.proto.imp.h"
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
@@ -66,7 +67,8 @@ template <class T>
 inline jlong ToJava(T* p) {
   return JniAllowlist<T, BaseView, ViewHost, filament::Engine,
                       filament::Renderer, filament::View, filament::Scene,
-                      imp::Executor>::ToJava(p);
+                      imp::Executor,
+                      imp::scripting::ScriptMessageHandlerProvider>::ToJava(p);
 }
 
 template <class T>
@@ -173,6 +175,14 @@ JNI_METHOD(jlong, nGetViewHandle)
   IMP_TRACE();
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   return ToJava(view_host->GetView());
+}
+
+JNI_METHOD(jlong, nGetScriptMessageHandlerProviderHandle)
+(JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
+  IMP_TRACE();
+  auto* view_host = FromJava<ViewHost>(view_host_handle);
+  return ToJava(static_cast<imp::scripting::ScriptMessageHandlerProvider*>(
+      view_host->GetView()));
 }
 
 JNI_METHOD(void, nSetLifeCycleCallback)

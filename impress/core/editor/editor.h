@@ -21,6 +21,7 @@
 #include <optional>
 
 #include "absl/container/flat_hash_set.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/camera/camera_component.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/editor_plugin.h"
@@ -29,7 +30,6 @@
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/system.h"
-#include "core/view/framework/assets/gltf_asset.h"
 
 namespace imp::editor {
 
@@ -210,10 +210,22 @@ class Editor : public System {
 
   // Returns the screen-space rect of the 3D viewport widget.
   virtual std::optional<Rect> GetViewportRect() const = 0;
+
+  // Toggles the legacy camera controls (left click drag to rotate, right click
+  // drag to pan).
+  virtual void SetUseLegacyCameraControls(bool use_legacy) = 0;
+
+  // Returns true if legacy camera controls are enabled.
+  virtual bool UseLegacyCameraControls() const = 0;
 };
 
 // Gets the Editor from the Registry. If no Editor is present in the Registry,
 // it first creates an Editor then stores it in the Registry.
+//
+// NOTE: This function should only be called directly during app/plugin
+// initialization if you need to provide a custom EditorPlugin or set the
+// is_sandbox flag. For general access to the editor instance, use
+// view->GetRegistry().Get<Editor>() instead.
 //
 // An EditorPlugin may be passed in to extend Editor functionality. The
 // EditorPlugin may only be passed to the Editor during construction. If an

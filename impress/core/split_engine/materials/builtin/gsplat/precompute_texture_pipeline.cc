@@ -84,7 +84,7 @@ imp::TexturePipelineRendererState::Pass ConfigurePrecomputeDataTexture(
       .color_texture_config =
           imp::TexturePipelineRendererState::Texture{
               .name = texture_group_name,
-              .format = imp::TexturePipelineRendererState::Texture::RGBA32F,
+              .format = imp::TexturePipelineRendererState::Texture::RGBA32UI,
           },
       .texture_size = size,
       .render_settings =
@@ -127,28 +127,30 @@ imp::Future<absl::Status> PrecomputeTexturePipeline::Setup(
     resources::ResourceDefinition precompute_material_definition,
     std::optional<imp::Box> aabb_override) {
   imp::BaseView& view = GetView();
-  imp::NodeHandle precompute_node = GetNode();
 
   return view.GetAssetManager()
       .LoadMaterial(precompute_material_definition)
-      .Then([this](AssetPtr<MaterialAsset> material_asset) -> absl::Status {
-        precompute_material_ = OwnedMaterialPtr(
+      .Then([this, aabb_override](AssetPtr<MaterialAsset> material_asset)
+                -> imp::Future<absl::Status> {
+        OwnedMaterialPtr precompute_material(
             GetView().GetMaterialFactory().CreateMaterial(material_asset));
+        return Setup(std::move(precompute_material), aabb_override);
+      });
+}
+
+imp::Future<absl::Status> PrecomputeTexturePipeline::Setup(
+    imp::OwnedMaterialPtr precompute_material,
+    std::optional<imp::Box> aabb_override) {
+  precompute_material_ = std::move(precompute_material);
+  imp::NodeHandle precompute_node = GetNode();
+
+  mesh_renderer_ = CreateMeshRenderer(
+      precompute_node, precompute_material_.Borrow(), aabb_override);
+
+  return CreateTexturePipelineRenderer(precompute_node, size_, camera_override_)
+      .Then([this](ComponentHandle<TexturePipelineRenderer> renderer) {
+        texture_pipeline_renderer_ = renderer;
         return absl::OkStatus();
-      })
-      .Then(
-          [this, precompute_node, aabb_override](absl::Status status) mutable {
-            mesh_renderer_ = CreateMeshRenderer(
-                precompute_node, precompute_material_.Borrow(), aabb_override);
-            return absl::OkStatus();
-          })
-      .Then([this, precompute_node](absl::Status status) mutable {
-        return CreateTexturePipelineRenderer(precompute_node, size_,
-                                             camera_override_)
-            .Then([this](ComponentHandle<TexturePipelineRenderer> renderer) {
-              texture_pipeline_renderer_ = renderer;
-              return absl::OkStatus();
-            });
       });
 }
 

@@ -44,7 +44,17 @@ enum PointerEventTypeMessage {
 
 // Represents an input pointer event
 message PointerEventMessage {
+  // Describes the source of the input.
+  enum DeviceType {
+    // Unknown device type.
+    UNKNOWN = 0;
+    // Input came from a mouse.
+    MOUSE = 1;
+    // Input came from a touch screen.
+    TOUCH = 2;
+  }
   PointerEventTypeMessage type = 1;
   repeated PointerMessage pointers = 2;
   int64 elapsed_time = 3;
+  DeviceType device_type = 4;
 }

@@ -21,10 +21,10 @@ import android.util.Log;
 import com.google.android.filament.proguard.UsedByNative;
 import java.io.IOException;
 
-// LINT.IfChange(remote_editor_server)
+// LINT.IfChange(remote_editor)
 
 /**
- * Manages the server components for the Impress Remote Editor.
+ * Manages the services for the Impress Remote Editor.
  *
  * <p>This class is responsible for orchestrating the lifecycle of the remote editor's components:
  *
@@ -44,9 +44,9 @@ import java.io.IOException;
  *
  * <p>It is instantiated and controlled from native code via JNI.
  */
-@UsedByNative("android_remote_editor_server_wrapper.cc")
-public final class RemoteEditorServer {
-  private static final String TAG = RemoteEditorServer.class.getSimpleName();
+@UsedByNative("android_remote_editor_wrapper.cc")
+public final class RemoteEditor {
+  private static final String TAG = RemoteEditor.class.getSimpleName();
 
   private RemoteEditorHttpServer httpServer;
   private final RemoteEditorScriptApiBridge scriptApiBridge;
@@ -55,40 +55,38 @@ public final class RemoteEditorServer {
   private final Context context;
 
   /**
-   * Constructs a new RemoteEditorServer.
+   * Constructs a new RemoteEditor.
    *
    * @param context The application context.
    * @param viewHandle The native handle to the Impress View.
    * @param executorHandle The native handle to the Executor.
    */
-  @UsedByNative("android_remote_editor_server_wrapper.cc")
-  public RemoteEditorServer(Context context, long viewHandle, long executorHandle) {
+  @UsedByNative("android_remote_editor_wrapper.cc")
+  public RemoteEditor(Context context, long viewHandle, long executorHandle) {
     this.context = context;
     scriptApiBridge = new RemoteEditorScriptApiBridge(viewHandle, executorHandle);
     videoStreamer = new RemoteEditorVideoStreamer();
   }
 
   /**
-   * Starts the server.
+   * Starts the remote editor services.
    *
-   * @param nativeServerWrapperPtr The pointer to the native RemoteEditorServer C++ wrapper.
+   * @param nativeRemoteEditorWrapperPtr The pointer to the native RemoteEditor C++ wrapper.
    * @param nativeScriptApiBridgeWrapperPtr The pointer to the native RemoteEditorScriptApiBridge
    *     C++ wrapper.
    * @param httpPort The port for the HTTP server.
    * @param scriptApiBridgePort The port for the Script API bridge WebSocket server.
    * @param uiStreamingPort The port for the UI Streaming WebSocket server.
-   * @param videoStreaming If true, enables video streaming of the Impress editor UI.
    */
-  @UsedByNative("android_remote_editor_server_wrapper.cc")
-  public void startServer(
-      long nativeServerWrapperPtr,
+  @UsedByNative("android_remote_editor_wrapper.cc")
+  public void start(
+      long nativeRemoteEditorWrapperPtr,
       long nativeScriptApiBridgeWrapperPtr,
       int httpPort,
       int scriptApiBridgePort,
-      int uiStreamingPort,
-      boolean videoStreaming) {
-    // Defensive call: ensure any previously running servers are stopped and their ports freed.
-    stopServer();
+      int uiStreamingPort) {
+    // Defensive call: ensure any previously running services are stopped and their ports freed.
+    stop();
 
     scriptApiBridge.startBridge(scriptApiBridgePort, nativeScriptApiBridgeWrapperPtr);
 
@@ -96,19 +94,19 @@ public final class RemoteEditorServer {
         new RemoteEditorHttpServer(context, httpPort, scriptApiBridgePort, uiStreamingPort);
     httpServer.startServer();
 
-    if (videoStreaming) {
+    if (uiStreamingPort != 0) {
       httpServer.setIndexFilename("ui_stream/index.html");
       try {
-        videoStreamer.startStreaming(uiStreamingPort, nativeServerWrapperPtr);
+        videoStreamer.startStreaming(uiStreamingPort, nativeRemoteEditorWrapperPtr);
       } catch (IOException | RuntimeException e) {
         Log.e(TAG, "Failed to initialize media codec", e);
       }
     }
   }
 
-  /** Stops all servers. */
-  @UsedByNative("android_remote_editor_server_wrapper.cc")
-  public void stopServer() {
+  /** Stops the remote editor services. */
+  @UsedByNative("android_remote_editor_wrapper.cc")
+  public void stop() {
     scriptApiBridge.stopBridge();
     if (httpServer != null) {
       httpServer.stopServer();
@@ -118,15 +116,15 @@ public final class RemoteEditorServer {
   }
 
   /** Final release of all resources. Cannot be restarted after this. */
-  @UsedByNative("android_remote_editor_server_wrapper.cc")
+  @UsedByNative("android_remote_editor_wrapper.cc")
   public void release() {
-    stopServer();
+    stop();
     if (videoStreamer != null) {
       videoStreamer.release();
     }
   }
 
-  @UsedByNative("android_remote_editor_server_wrapper.cc")
+  @UsedByNative("android_remote_editor_wrapper.cc")
   public RemoteEditorScriptApiBridge getScriptApiBridge() {
     return scriptApiBridge;
   }
@@ -134,6 +132,4 @@ public final class RemoteEditorServer {
 
 // LINT.ThenChange(
 //
-// //depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_server.cc:remote_editor_server,
-//
-// //depot/google3/third_party/impress/core/editor/remote_editor/android_remote_editor_server_wrapper.cc:remote_editor_server)
+// //depot/google3/third_party/impress/core/editor/remote_editor/android_remote_editor_wrapper.cc:remote_editor)

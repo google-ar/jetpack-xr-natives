@@ -50,7 +50,7 @@ std::string SerializeToBase64(T const& message) {
   std::string serialized;
   proto::SerializeTo(&message, &serialized);
   std::string encoded;
-  absl::Base64Escape(serialized, &encoded);
+  encoded = absl::Base64Escape(serialized);
   return encoded;
 }
 

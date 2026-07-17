@@ -38,6 +38,7 @@
 #include "absl/types/optional.h"
 #include "core/common/bit_flag.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/one_of.h"
 #include "core/common/optional_with_default.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/template_helpers.h"
@@ -82,6 +83,14 @@ class TextprotoWriter {
       M* m, T* field, T* other, absl::string_view field_name,
       std::integer_sequence<int, field_types...> variant_field_types,
       const std::vector<int>& variant_field_ids, BitFlag flags = 0);
+
+  template <typename M, typename... Tags, typename FieldType,
+            FieldType... field_types, size_t... I>
+  M* VisitOneOf(M* m, imp::OneOf<Tags...>* field, imp::OneOf<Tags...>* other,
+                absl::string_view field_name,
+                std::integer_sequence<FieldType, field_types...>,
+                const std::vector<int>& variant_field_ids,
+                std::index_sequence<I...>, BitFlag flags = 0);
 
   template <int field_type, typename M, typename T>
   M* Visit(M* m, int field_id, absl::optional<T>* field,
@@ -325,17 +334,56 @@ M* TextprotoWriter::VisitVariant(
         constexpr int field_type = GetAt<i - 1>(variant_field_types);
         int variant_field_id = variant_field_ids[i - 1];
 
-        // We need a special VisitVariant method so we can set this flag
-        // ensuring that empty messages are printed when they are part of a
-        // variant.
-        flags = SetBit(kKeepEmptyMessage, flags);
         m = Visit<field_type>(
             m, variant_field_id, absl::get_if<i>(field),
             (!other || other->index() != i) ? nullptr : absl::get_if<i>(other),
-            flags);
+            flags | kOptional);
       }
     }
   });
+
+  return m;
+}
+
+template <typename M, typename... Tags, typename FieldType,
+          FieldType... field_types, size_t... I>
+M* TextprotoWriter::VisitOneOf(M* m, imp::OneOf<Tags...>* field,
+                               imp::OneOf<Tags...>* other,
+                               absl::string_view field_name,
+                               std::integer_sequence<FieldType, field_types...>,
+                               const std::vector<int>& variant_field_ids,
+                               std::index_sequence<I...>, BitFlag flags) {
+  // Extract the field types into a constexpr array so we can index into it
+  // safely during the fold expression expansion.
+  constexpr FieldType types_array[] = {field_types...};
+
+  (
+      [this, field, other, &variant_field_ids, flags, &m]() mutable {
+        if (!field->template Holds<Tags>()) {
+          return;
+        }
+
+        int variant_field_id = variant_field_ids[I];
+        if constexpr (proto_traits::kIsStandardProto<typename Tags::Type>) {
+          flags = flags | kOptional;
+          m = VisitStandardProto(m, variant_field_id,
+                                 field->template GetIf<Tags>(),
+                                 (other && other->template Holds<Tags>())
+                                     ? other->template GetIf<Tags>()
+                                     : nullptr,
+                                 flags);
+        } else {
+          constexpr FieldType field_type = types_array[I];
+          flags = flags | kOptional;
+          m = Visit<field_type>(m, variant_field_id,
+                                field->template GetIf<Tags>(),
+                                (other && other->template Holds<Tags>())
+                                    ? other->template GetIf<Tags>()
+                                    : nullptr,
+                                flags);
+        }
+      }(),
+      ...);
 
   return m;
 }

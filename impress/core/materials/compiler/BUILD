@@ -16,12 +16,15 @@ load(
     "@flatbuffers//:build_defs.bzl",
     "flatbuffer_library_public",
 )
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//build_tools:imp.bzl",
     "IMP_FLATBUFFER_INCLUDE_PATHS",
     "IMP_FLATC_ARGS",
     "if_android",
+    "if_linux",
+    "if_macos",
     "if_non_android",
     "imp_copts",
 )
@@ -115,20 +118,33 @@ cc_library(
         ":fbs",
         ":runtime_material_compiler_config",
         "//core/common:filament_status_helpers",
+        "//core/common:invocable",
         "//core/ipc:common",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/synchronization",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
-        "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament/backend:platform",
         "@third_party//filament/libs:filamat",
         "@third_party//filament/libs:matp",
         "@third_party//filament/libs:utils_hdrs",
     ],
     alwayslink = 1,
+)
+
+cc_binary(
+    name = "desktop_runtime_material_compiler_main",
+    srcs = ["desktop_runtime_material_compiler_main.cc"],
+    copts = imp_copts(),
+    deps = [
+        ":material_compiler_service",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+    ],
 )
 
 # Compiles source materials (.mat) to Filament compiled material (.cmat). Android only.
@@ -159,15 +175,17 @@ cc_library(
     srcs = ["desktop_runtime_material_compiler.cc"],
     hdrs = ["desktop_runtime_material_compiler.h"],
     copts = imp_copts(),
+    data = [":desktop_runtime_material_compiler_main"],
     deps = [
         ":material_cache",
         ":material_compiler_client",
-        ":material_compiler_service",
-        ":material_compiler_service_jni",
         ":runtime_material_compiler",
         "//core/async:future",
         "//core/view:base_view",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
@@ -207,7 +225,6 @@ cc_library(
     copts = imp_copts(),
     linkstatic = True,
     deps = [
-        ":desktop_runtime_material_compiler",
         ":runtime_material_compiler",
         "//core:config",
         "//core/async:future",
@@ -215,6 +232,10 @@ cc_library(
         "@com_google_absl//absl/strings:string_view",
     ] + if_android([
         ":android_runtime_material_compiler",
+    ]) + if_linux([
+        ":desktop_runtime_material_compiler",
+    ]) + if_macos([
+        ":desktop_runtime_material_compiler",
     ]),
     alwayslink = 1,
 )

@@ -363,6 +363,17 @@ public class View {
     return viewHostHandle;
   }
 
+  /**
+   * Gets the script message handler provider handle. Returns a value of 0 if this View has been
+   * destroyed.
+   */
+  public long getScriptMessageHandlerProviderHandle() {
+    if (viewHostHandle == 0) {
+      return 0;
+    }
+    return nGetScriptMessageHandlerProviderHandle(viewHostHandle);
+  }
+
   void clearViewHostHandle() {
     viewHostHandle = 0;
   }
@@ -386,6 +397,8 @@ public class View {
   protected static native void nDestroyView(long viewHostHandle);
 
   protected static native long nGetViewHandle(long viewHostHandle);
+
+  protected static native long nGetScriptMessageHandlerProviderHandle(long viewHostHandle);
 
   protected static native void nSetLifeCycleCallback(long viewHostHandle, Object callback);
 

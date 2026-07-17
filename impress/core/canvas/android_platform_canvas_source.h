@@ -36,9 +36,6 @@
 #include "core/view/base_view.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
 #include "core/view/platforms/android/wrappers/paint.h"
-#include "core/view/platforms/android/wrappers/picture.h"
-#include "core/view/platforms/android/wrappers/surface.h"
-#include "core/view/platforms/android/wrappers/surface_texture.h"
 
 namespace imp {
 
@@ -50,7 +47,8 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
       bool use_hardware_rendering = true,
       int glyph_cache_size_bytes =
           PlatformCanvasSource::kDefaultGlyphCacheSizeBytes,
-      bool force_individual_glyph_source_instances = false);
+      bool force_individual_glyph_source_instances = false,
+      bool use_bitmap_surface_provider = false);
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
 
@@ -100,12 +98,35 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
   void ForceReset() override;
+  void OnPause() override;
+  void OnResume() override;
+
+  class SurfaceProvider {
+   public:
+    virtual ~SurfaceProvider() = default;
+    virtual void OnPause(Context& context) = 0;
+    virtual void OnResume(Context& context) = 0;
+    virtual bool StartDrawing(BaseView& view, Context& context,
+                              uint2 pixel_size) = 0;
+    virtual bool StartDrawing(
+        BaseView& view, Context& context, uint2 pixel_size,
+        ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+        SmallSourceLocation loc) = 0;
+
+    virtual Texture* GetTexture() = 0;
+    virtual void ForceReset(Context& context) = 0;
+    virtual bool SupportsKeepContents() const = 0;
+    virtual void ApplyDrawCommands(Context& context, android::Canvas& canvas,
+                                   const absl::Span<Rect>& dirty_rects) = 0;
+    virtual JniUniquePtr<jobject> GetCanvas(Context& context) = 0;
+  };
 
  private:
   class AndroidScopedCanvas : public ScopedCanvas {
    public:
     explicit AndroidScopedCanvas(AndroidPlatformCanvasSource& source,
-                                 uint2 pixel_size, bool did_texture_change);
+                                 uint2 pixel_size, bool did_texture_change,
+                                 ScopedCanvas::DrawMode draw_mode);
     ~AndroidScopedCanvas() override;
 
     Texture* GetTexture() override;
@@ -119,30 +140,37 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
                          const Rect& rect) override;
     void DrawText(absl::string_view text, float2 pos,
                   const TextOptions& text_options) override;
-    void DrawGlyph(GlyphId glyph, float2 pos,
-                   const TextOptions& text_options) override;
+    void DrawGlyph(GlyphId glyph, float2 pos, const TextOptions& text_options,
+                   const TextMetrics* pre_cached_metrics) override;
     void ClearRect(const Rect& rect) override;
 
    private:
+    void AddDirtyRect(const Rect& rect);
+
     AndroidPlatformCanvasSource& source_;
 
-    android::Picture picture_;
     android::Canvas canvas_;
+    // A pair of paint objects used for rendering text on the impress thread.
+    android::Paint paint_;
+    // Used to render an outstroke for text.
+    android::Paint stroke_paint_;
     bool did_texture_change_;
+    std::vector<Rect> dirty_rects_;
+    uint2 pixel_size_;
   };
+
+  std::unique_ptr<SurfaceProvider> surface_provider_;
 
   Context context_;
 
-  std::unique_ptr<android::SurfaceTexture> surface_texture_;
-  std::unique_ptr<android::Surface> surface_;
+  // A pair of paint objects used for measuring text on various threads.
   android::Paint paint_;
   // Used to render an outstroke for text.
   android::Paint stroke_paint_;
+  // Paint object initialized to clear mode.
+  android::Paint clear_paint_;
 
   AndroidGlyphSource glyph_source_;
-
-  OwnedTexturePtr texture_;
-  bool use_hardware_rendering_;
 };
 
 }  // namespace imp

@@ -79,7 +79,7 @@ class ComponentPool : public BaseComponentPool {
 
 template <typename T>
 ComponentPool<T>::ComponentPool(BaseView& view)
-    : BaseComponentPool(view, nullptr, kComponentId<T>) {
+    : BaseComponentPool(view, nullptr, GetComponentTypeId<T>()) {
   if (*view.GetConfig().experimental_feature_flags->enable_pool_allocator) {
     allocator_.emplace();
     // Assign the allocator to the base class after it is created. After the

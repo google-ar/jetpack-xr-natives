@@ -14,6 +14,7 @@
 
 #include "core/ar/android/depth_texture_controller.h"
 
+#include <cstdint>
 #include <limits>
 #include <memory>
 
@@ -127,7 +128,11 @@ void DepthTextureController::UpdateFromArImage(ArSession_* session,
       !texture_ || (texture_->GetSize() != uint2{width, height});
   if (is_texture_create_necessary) {
     texture_ = texture_factory_->CreateTexture(
-        width, height, filament::Texture::InternalFormat::RG8);
+        imp::TextureFactory::TextureCreationSettings{
+            .width = static_cast<uint32_t>(width),
+            .height = static_cast<uint32_t>(height),
+            .format = filament::Texture::InternalFormat::RG8,
+        });
   }
 
   // Copies image data into to the filament texture.

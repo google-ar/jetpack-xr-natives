@@ -14,69 +14,46 @@
 
 #include "core/editor/widgets/file_drag_and_drop.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
-#include "filament/libs/math/include/math/TVecHelpers.h"
+#include "core/async/executor.h"
+#include "core/async/future.h"
+#include "core/common/buffer_access.h"
+#include "core/common/file_helpers.h"
 #include "core/common/registry.h"
 #include "core/config.h"
-#include "core/editor/editor_utils.h"
+#include "core/editor/editor.h"
 #include "core/editor/file_loader_helper.h"
 #include "core/editor/file_type_loader.h"
 #include "core/editor/file_type_registry.h"
 #include "core/editor/ui/drag_and_drop.h"
+#include "core/editor/widgets/asset_library.h"
+#include "core/materials/compiler/runtime_material_compiler.h"
+#include "core/materials/compiler/runtime_material_compiler_creator.h"
+#include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
 #include "core/math/math.h"
-#include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/collision/collision_manager.h"
-#include "core/view/framework/collision/ray_hit.h"
 #include "core/view/view_events.h"
 
 namespace imp::editor {
 
-namespace {
-
-// The threshold to snap the spawn_point to the origin.
-constexpr float kSnapThreshold = 0.1f;
-
-// Load a node from file and places the node at the cursor location.
-void LoadFileAtCursor(BaseView& view, absl::string_view filename,
-                      LoadFileSource source,
-                      std::optional<float2> cursor = std::nullopt) {
-  if (!cursor.has_value()) {
-    cursor = view.GetSize() / 2.0f;
-  }
-  std::optional<RayHit> hit = std::nullopt;
-  std::optional<float3> spawn_point =
-      GetPointerIntersectionWithGroundPlane(view, *cursor);
-
-  if (spawn_point.has_value()) {
-    if (length(*spawn_point) < kSnapThreshold) {
-      spawn_point = kZero3;
-    }
-    hit.emplace(0, kIdentityQuatf, *spawn_point, NodeHandle(), kUp);
-  }
-
-  LoadFile(view, filename, std::move(source), [hit](NodeHandle scene) {
-    if (hit.has_value()) {
-      // Place the scene at the orientation and
-      // position of the cursor hit location.
-      float3 target_center = hit->world_point;
-      scene->SetWorldPosition(target_center);
-    }
-  }).KeptBy(&view);
-}
-
-}  // namespace
+namespace {}  // namespace
 
 FileDragAndDrop::FileDragAndDrop(BaseView& view) : view_(view) {
 #if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
@@ -84,7 +61,8 @@ FileDragAndDrop::FileDragAndDrop(BaseView& view) : view_(view) {
   // path does not handle ImGui-based drag-and-drop. See below for that path.
 
   view_.GetDispatcher().Connect(
-      [this](const DropFileEvent& drop_file_event) {
+      [this, &view](const DropFileEvent& drop_file_event) {
+        std::string filename = drop_file_event.filename;
         FileTypeRegistry& file_type_registry =
             view_.GetRegistry().GetOrCreate<FileTypeRegistry>();
 
@@ -96,16 +74,29 @@ FileDragAndDrop::FileDragAndDrop(BaseView& view) : view_(view) {
           pending_drag_and_drop_payload_ =
               std::make_pair(DragAndDropType::kTexture,
                              absl::StrCat("file://", drop_file_event.filename));
+        } else if (kFileTypeMat.PathMatchesFileType(filename)) {
+#if IMP_PLATFORM(DESKTOP)
+          GetOrCreateMaterialCompiler(view_)
+              .Then(
+                  [this, filename](
+                      RuntimeMaterialCompiler* runtime_material_compiler) {
+                    ProcessMatFile(filename);
+                  },
+                  Executor::Type::kBackground)
+              .KeptBy(&view);
+#else
+          IMP_LOG(imp::ERROR) << ".mat files not supported on this platform";
+#endif
         } else if (file_type_loader != nullptr) {
           // Note: when dropping from the OS, the cursor location is often
           // incorrect since the Impress app may not have focus. By default,
-          // LoadFileAtCursor will use the screen center as the "cursor"
+          // LoadAssetFileAtCursor will use the screen center as the "cursor"
           // location in this case.
-          LoadFileAtCursor(
+          LoadAssetFileAtCursor(
               view_, drop_file_event.filename,
               drop_file_event.data.has_value()
-                  ? LoadFileSource(std::move(*drop_file_event.data))
-                  : LoadFileFromPathSource::kLocalFile);
+                  ? LoadAssetFileSource(std::move(*drop_file_event.data))
+                  : LoadAssetFileFromPathSource::kLocalFile);
         } else {
           IMP_LOG(imp::ERROR) << "Unsupported file dropped: "
                      << drop_file_event.filename;
@@ -149,8 +140,8 @@ void FileDragAndDrop::DrawImGui() {
         std::optional<std::string> payload =
             AcceptDragAndDropPayload(DragAndDropType::kNodeAsset);
         if (payload.has_value()) {
-          LoadFileAtCursor(
-              view_, *payload, LoadFileFromPathSource::kAsset,
+          LoadAssetFileAtCursor(
+              view_, *payload, LoadAssetFileFromPathSource::kAsset,
               float2(ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y));
         }
         ImGui::EndDragDropTarget();
@@ -160,5 +151,70 @@ void FileDragAndDrop::DrawImGui() {
     }
   }
 }
+
+Future<RuntimeMaterialCompiler*> FileDragAndDrop::GetOrCreateMaterialCompiler(
+    BaseView& view) {
+  
+
+  // If we are not yet waiting for a compiler to be created, then create one.
+  if (!runtime_material_compiler_future_.has_value()) {
+    runtime_material_compiler_future_ =
+        RuntimeMaterialCompilerCreator::Create(view).Then(
+            [this](absl::StatusOr<std::unique_ptr<RuntimeMaterialCompiler>>
+                       compiler) -> absl::StatusOr<RuntimeMaterialCompiler*> {
+              if (!compiler.ok()) {
+                // In a failure case, reset the future to indicate that we are
+                // no longer waiting for the compiler to be created.
+                runtime_material_compiler_future_ = std::nullopt;
+                runtime_material_compiler_.reset();
+                IMP_LOG(imp::ERROR) << "Failed to create runtime material compiler: "
+                           << absl::StrCat(compiler.status().ToString());
+                return compiler.status();
+              }
+              runtime_material_compiler_ = *std::move(compiler);
+              return runtime_material_compiler_.get();
+            });
+  }
+
+  return runtime_material_compiler_future_.value();
+}
+
+#if IMP_PLATFORM(DESKTOP)
+void FileDragAndDrop::ProcessMatFile(std::string filename) {
+  absl::StatusOr<BufferAccess> buffer_access = LoadFile(filename);
+  if (!buffer_access.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to load .mat file: " << buffer_access.status();
+    return;
+  }
+  if (buffer_access.ok()) {
+    IMP_LOG(imp::INFO) << "Compiling .mat file: " << filename;
+    runtime_material_compiler_
+        ->CompileMaterialToBytes(
+            buffer_access->StringView(), schemas::Platform::Desktop,
+            schemas::TargetApi::OpenGL | schemas::TargetApi::Vulkan |
+                schemas::TargetApi::Metal)
+        .Then([filename, this](std::vector<uint8_t> bytes) {
+          IMP_LOG(imp::INFO) << "Compiled .mat file: " << filename;
+          auto editor = view_.GetRegistry().Get<Editor>();
+          if (AssetLibrary* asset_library = editor->get().GetAssetLibrary()) {
+            std::string name = filename;
+            size_t slash = name.find_last_of('/');
+            if (slash != std::string::npos) {
+              name = name.substr(slash + 1);
+            }
+            size_t dot = name.find_last_of('.');
+            if (dot != std::string::npos) {
+              name = name.substr(0, dot);
+            }
+            asset_library->AddResourceInCurrentDirectory(
+                name, ".cmat",
+                absl::string_view(reinterpret_cast<const char*>(bytes.data()),
+                                  bytes.size()));
+          }
+        })
+        .KeptBy(&view_);
+  }
+}
+#endif  // IMP_PLATFORM(DESKTOP)
 
 }  // namespace imp::editor

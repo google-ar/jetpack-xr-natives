@@ -58,7 +58,7 @@ class RecipeEditorGraphBuilder {
       builder_.PopulateValueConnection(value, node_, socket_name_);
     }
 
-    void operator()(const absl::monostate& monostate) {}
+    void operator()(const std::monostate& monostate) {}
   };
 
   struct RecipeNodeVisitor {
@@ -71,7 +71,7 @@ class RecipeEditorGraphBuilder {
     }
 
     template <>
-    void operator()(const absl::monostate& node) {}
+    void operator()(const std::monostate& node) {}
   };
 
   template <typename T>

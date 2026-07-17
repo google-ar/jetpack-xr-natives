@@ -226,7 +226,7 @@ void RenderInfoPanel::Update(absl::Duration elapsed_time,
 
   BaseComponentPool* sprite_pool =
       view_.GetComponentManager().GetComponentPoolById(
-          kComponentId<SpriteRenderer>);
+          GetComponentTypeId<SpriteRenderer>());
   int num_sprite_renderers = 0;
   has_sprites_ = sprite_pool != nullptr;
   if (sprite_pool) {
@@ -235,7 +235,7 @@ void RenderInfoPanel::Update(absl::Duration elapsed_time,
 
   BaseComponentPool* gltf_pool =
       view_.GetComponentManager().GetComponentPoolById(
-          kComponentId<GltfRenderer>);
+          GetComponentTypeId<GltfRenderer>());
 
   int num_gltf_renderers = 0;
   has_gltfs_ = gltf_pool != nullptr;

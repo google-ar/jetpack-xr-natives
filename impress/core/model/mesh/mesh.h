@@ -116,6 +116,10 @@ class Mesh {
   // Returns the range of the mesh data.
   MeshRange GetMeshDataRange() const;
 
+  // Returns the description of the mesh (vertex format, index type, total
+  // counts).
+  MeshDescription GetDescription() const;
+
   MeshData* GetMeshData();
   filament::VertexBuffer* GetVertexBuffer();
   filament::IndexBuffer* GetIndexBuffer();

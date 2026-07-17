@@ -71,8 +71,8 @@ absl::Status XrOpenGLSwapChainImageHandler::Commit(uint32_t fbo) {
     return absl::FailedPreconditionError(
         "Cannot commit a swapchain without a valid host and swapchain.");
   }
-  BindTexturesToFbo(fbo, 0, 0);
   glFlush();
+  BindTexturesToFbo(fbo, 0, 0);
   if (xr_frames_acquired_) {
     XrSwapchainImageReleaseInfo releaseInfo{
         .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO, .next = nullptr};

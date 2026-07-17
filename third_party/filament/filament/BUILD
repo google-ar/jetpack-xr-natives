@@ -326,11 +326,17 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_vulkan_swiftshader",
                 "@third_party//filament/libs:filaflat_vulkan",
-                ":_generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
-            ],
+            ] + if_multiview(
+                [
+                    ":_generated_desktop_vulkan_noFL0_yesMV_noMPC_materials",
+                ],
+                [
+                    ":_generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
+                ],
+            ),
             ["//third_party/swiftshader/src:libvk_swiftshader.so"],
             ["-Wl,-rpath=third_party/swiftshader/src"],
-            [],
+            if_multiview(["FILAMENT_ENABLE_MULTIVIEW=1"]),
             True,
             True,
         ),
@@ -511,8 +517,9 @@ cc_library(
         ("mobile", "metal", "metal", False, False, "device"),
         ("mobile", "gl_vulkan", "all", False, False, None),
         ("desktop", "opengl", "all", False, False, None),
-        ("desktop", "vulkan", "all", False, False, None),
         ("desktop", "metal", "metal", False, False, None),
+        ("desktop", "vulkan", "all", False, False, None),
+        ("desktop", "vulkan", "all", False, True, None),
         ("desktop", "gl_vulkan", "all", False, False, None),
     ]
 ]
@@ -548,8 +555,9 @@ cc_library(
         ("mobile", "vulkan", "noFL0", "yesMV", "noMPC"),
         ("mobile", "gl_vulkan", "noFL0", "noMV", "noMPC"),
         ("desktop", "opengl", "noFL0", "noMV", "noMPC"),
-        ("desktop", "vulkan", "noFL0", "noMV", "noMPC"),
         ("desktop", "metal", "noFL0", "noMV", "noMPC"),
+        ("desktop", "vulkan", "noFL0", "noMV", "noMPC"),
+        ("desktop", "vulkan", "noFL0", "yesMV", "noMPC"),
         ("desktop", "gl_vulkan", "noFL0", "noMV", "noMPC"),
     ]
 ]

@@ -40,7 +40,7 @@ message TexturePipelineRendererState {
   // TODO: Use TextureConfig that's shared with
   // OnDemandTexturePipelineRenderer.
   message Texture {
-    // NextID: 15
+    // NextID: 27
     enum Format {
       // Auto is RGBA8 for Color textures.
       // Auto is Depth24 for Depth textures.
@@ -59,6 +59,18 @@ message TexturePipelineRendererState {
       R16F = 14;
       DEPTH24 = 5;
       DEPTH32F = 6;
+      R8UI = 15;
+      RG8UI = 16;
+      RGB8UI = 17;
+      RGBA8UI = 18;
+      R16UI = 19;
+      RG16UI = 20;
+      RGB16UI = 21;
+      RGBA16UI = 22;
+      R32UI = 23;
+      RG32UI = 24;
+      RGB32UI = 25;
+      RGBA32UI = 26;
       // TODO: Add additional formats.
     }
 

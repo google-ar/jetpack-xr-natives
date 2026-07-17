@@ -45,7 +45,7 @@ class DepthTextureController {
   filament::Engine& engine_;
   TextureFactory* texture_factory_;
   std::function<void(imp::Texture const&)> texture_created_handler_;
-  imp::TexturePtr texture_;
+  imp::OwnedTexturePtr texture_;
   absl::optional<int64_t> last_acquire_image_timestamp_ns_;
   absl::Time timeout_end_ = absl::InfinitePast();
 

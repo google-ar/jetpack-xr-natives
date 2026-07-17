@@ -256,4 +256,29 @@ Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetImageDatabaseMax
 
   return static_cast<jint>(xr_manager.GetMaxLoadedImageCount());
 }
+
+JNIEXPORT jlongArray JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetQrCodes(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  std::vector<XrTrackableANDROID> trackables = xr_manager.GetQrCodes();
+  jlongArray trackables_array = env->NewLongArray(trackables.size());
+  jlong* array_elements =
+      env->GetLongArrayElements(trackables_array, /*isCopy=*/JNI_FALSE);
+  for (int i = 0; i < trackables.size(); i++) {
+    array_elements[i] = static_cast<jlong>(trackables[i]);
+  }
+  env->ReleaseLongArrayElements(trackables_array, array_elements, /*mode=*/0);
+  return trackables_array;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeIsQrCodeSizeEstimationSupported(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  return xr_manager.SupportsQrCodeSizeEstimation();
+}
 }  // extern "C"

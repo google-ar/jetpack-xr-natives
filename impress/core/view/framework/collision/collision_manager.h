@@ -196,20 +196,20 @@ class CollisionManager {
 template <typename ColliderType, template <typename> typename System,
           typename... Args>
 CollisionManager& CollisionManager::AddCollisionSystem(Args&&... args) {
-  ComponentId collider_type_hash = kComponentId<ColliderType>;
-  if (collision_systems_.find(collider_type_hash) != collision_systems_.end()) {
+  ComponentId collider_type_id = GetComponentTypeId<ColliderType>();
+  if (collision_systems_.find(collider_type_id) != collision_systems_.end()) {
     return *this;
   }
   collision_systems_.insert(
-      {collider_type_hash,
+      {collider_type_id,
        std::make_unique<System<ColliderType>>(std::forward<Args>(args)...)});
   return *this;
 }
 
 template <typename ColliderType, template <typename> typename System>
 CollisionManager& CollisionManager::RemoveCollisionSystem() {
-  ComponentId collider_type_hash = kComponentId<ColliderType>;
-  collision_systems_.erase(collider_type_hash);
+  ComponentId collider_type_id = GetComponentTypeId<ColliderType>();
+  collision_systems_.erase(collider_type_id);
   return *this;
 }
 
@@ -273,7 +273,7 @@ size_t CollisionManager::GetColliderCount() {
 
 template <typename ColliderType>
 BaseCollisionSystem* CollisionManager::GetCollisionSystem() {
-  auto iter = collision_systems_.find(kComponentId<ColliderType>);
+  auto iter = collision_systems_.find(GetComponentTypeId<ColliderType>());
   if (iter != collision_systems_.end()) {
     return iter->second.get();
   }
@@ -286,7 +286,7 @@ constexpr void CollisionManager::IntersectForEachColliderType(
     std::vector<RayHit>* out_intersections) {
   // Test colliders of type 'collider_type' against the ray.
   using collider_type = typename std::tuple_element<IDX, TUPLE>::type::type;
-  auto iter = collision_systems_.find(kComponentId<collider_type>);
+  auto iter = collision_systems_.find(GetComponentTypeId<collider_type>());
   if (iter != collision_systems_.end()) {
     iter->second->Intersect(world_ray, mask, out_intersections);
   }
@@ -306,7 +306,7 @@ constexpr void CollisionManager::IntersectPreciseForEachColliderType(
     std::vector<DoubleRayHit>* out_intersections) {
   // Test colliders of type 'collider_type' against the ray.
   using collider_type = typename std::tuple_element<IDX, TUPLE>::type::type;
-  auto iter = collision_systems_.find(kComponentId<collider_type>);
+  auto iter = collision_systems_.find(GetComponentTypeId<collider_type>());
   if (iter != collision_systems_.end()) {
     iter->second->IntersectPrecise(world_ray, mask, out_intersections);
   }
@@ -326,7 +326,7 @@ constexpr void CollisionManager::IntersectScreenForEachColliderType(
     std::vector<RayHit>* out_intersections) {
   // Test colliders of type 'collider_type' against the ray.
   using collider_type = typename std::tuple_element<IDX, TUPLE>::type::type;
-  auto iter = collision_systems_.find(kComponentId<collider_type>);
+  auto iter = collision_systems_.find(GetComponentTypeId<collider_type>());
   if (iter != collision_systems_.end()) {
     iter->second->Intersect(screen_pos, mask, out_intersections);
   }
@@ -346,7 +346,7 @@ constexpr void CollisionManager::IntersectPreciseScreenForEachColliderType(
     std::vector<DoubleRayHit>* out_intersections) {
   // Test colliders of type 'collider_type' against the ray.
   using collider_type = typename std::tuple_element<IDX, TUPLE>::type::type;
-  auto iter = collision_systems_.find(kComponentId<collider_type>);
+  auto iter = collision_systems_.find(GetComponentTypeId<collider_type>());
   if (iter != collision_systems_.end()) {
     iter->second->IntersectPrecise(screen_pos, mask, out_intersections);
   }
@@ -365,7 +365,7 @@ constexpr size_t CollisionManager::GetCountForEachColliderType(
     TUPLE collider_tuple) {
   // Test colliders of type 'collider_type' against the ray.
   using collider_type = typename std::tuple_element<IDX, TUPLE>::type::type;
-  auto iter = collision_systems_.find(kComponentId<collider_type>);
+  auto iter = collision_systems_.find(GetComponentTypeId<collider_type>());
   size_t result = 0;
   if (iter != collision_systems_.end()) {
     result += iter->second->GetColliderCount();

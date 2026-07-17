@@ -25,7 +25,9 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/hash/hash.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/performance/profiler.h"
+#include "core/performance/profiler_state.h"
 #include "core/performance/profiler_structs.h"
 
 namespace imp::editor {
@@ -76,10 +78,8 @@ struct SampleNode {
 };
 
 struct ProcessedSamples {
-  // A map relating a sample name to all samples with that name.
-  absl::flat_hash_map<absl::string_view, std::vector<SampleNode*>,
-                      absl::Hash<absl::string_view>>
-      samples_by_name;
+  // All samples processed for this frame.
+  std::vector<SampleNode*> all_samples;
 
   // The root samples of the tree that all samples fall under.
   std::vector<SampleNode*> sample_roots;
@@ -88,13 +88,24 @@ struct ProcessedSamples {
   // Useful metadata for UI layouts.
   size_t max_depth = 0;
 
-  inline void AddSample(SampleNode* sample) {
-    samples_by_name[sample->result->GetName()].push_back(sample);
-  }
+  inline void AddSample(SampleNode* sample) { all_samples.push_back(sample); }
   void AddRootSample(SampleNode* sample) {
     AddSample(sample);
     sample_roots.push_back(sample);
   }
+
+  // Resets the processed samples for reuse.
+  void Clear() {
+    all_samples.clear();
+    sample_roots.clear();
+    max_depth = 0;
+  }
+
+  // Sorts all_samples by name to allow for fast lookups.
+  void SortSamples();
+
+  // Returns all samples with the given name.
+  absl::Span<SampleNode* const> GetSamplesByName(absl::string_view name) const;
 };
 
 class NodePool {
@@ -119,7 +130,8 @@ class WorkerNodePool final : public NodePool {
   }
 
  private:
-  std::array<SampleNode, Profiler::kMaxWorkerSamples> worker_sample_node_pool_;
+  std::array<SampleNode, WorkerThreadProfilerState::kMaxWorkerSamples>
+      worker_sample_node_pool_;
 };
 
 class MainThreadNodePool final : public NodePool {
@@ -130,7 +142,8 @@ class MainThreadNodePool final : public NodePool {
   inline SampleNode* GetNext() override { return &sample_node_pool_[index_++]; }
 
  private:
-  std::array<SampleNode, Profiler::kMaxSamples> sample_node_pool_;
+  std::array<SampleNode, MainThreadProfilerState::kMaxSamples>
+      sample_node_pool_;
 };
 
 class ResultCollection {
@@ -154,8 +167,9 @@ class WorkerResultCollection final : public ResultCollection {
 
 class MainThreadResultCollection final : public ResultCollection {
  public:
-  MainThreadResultCollection(const std::array<MainThreadProfileResult,
-                                              Profiler::kMaxSamples>* samples) {
+  MainThreadResultCollection(
+      const std::array<MainThreadProfileResult,
+                       MainThreadProfilerState::kMaxSamples>* samples) {
     profiler_samples = samples;
   }
   inline const ProfileResult* Get(int index) const override {
@@ -163,8 +177,23 @@ class MainThreadResultCollection final : public ResultCollection {
   }
 
  private:
-  const std::array<MainThreadProfileResult, Profiler::kMaxSamples>*
-      profiler_samples;
+  const std::array<MainThreadProfileResult,
+                   MainThreadProfilerState::kMaxSamples>* profiler_samples;
+};
+
+// State for the sample processor.
+// This is used for lazy loading of the large memory pools used for processing.
+struct SampleProcessorState {
+  std::array<MainThreadNodePool, MainThreadProfilerState::kMaxFrames>
+      main_thread_node_pools;
+  WorkerNodePool worker_node_pool;
+
+  // Pool of processed samples, one per frame.
+  std::array<ProcessedSamples, MainThreadProfilerState::kMaxFrames>
+      processed_samples;
+
+  // Reusable stack for tree traversal during processing.
+  std::vector<SampleNode*> active_nodes_stack;
 };
 }  // namespace imp::editor
 

@@ -34,9 +34,11 @@
 #include "core/async/executor.h"
 #include "core/image/image_contents.h"
 #include "core/render/image_asset.h"
+#include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 
 namespace imp::split_engine {
 
@@ -54,20 +56,34 @@ class SplitEngineTextureSerializerImpl : public SplitEngineTextureSerializer {
   flatbuffers::Offset<android_xr::schemas::Texture> SerializeTexture(
       flatbuffers::FlatBufferBuilder& fbb) const noexcept override {
     IMP_LOG(imp::INFO) << "[SplitEngineSerializer]: texture " << state_.texture_id;
+    flatbuffers::Offset<flatbuffers::String> name_offset = 0;
+    if (state_.name.has_value()) {
+      name_offset = fbb.CreateString(*state_.name);
+    }
     return android_xr::schemas::CreateTexture(
         fbb, state_.texture_id, state_.width, state_.height,
         static_cast<uint16_t>(state_.format), state_.levels,
         static_cast<uint8_t>(state_.sampler), state_.mips,
-        CreateFlatbufferImageParams(fbb), CreateFlatbufferPixelBuffers(fbb));
+        CreateFlatbufferImageParams(fbb), CreateFlatbufferPixelBuffers(fbb),
+        name_offset);
   }
 
-  std::vector<size_t> GetTextureBufferSizes() const noexcept override {
+  size_t GetSerializedSize() const noexcept override {
     std::vector<size_t> image_buffer_sizes(state_.image_descriptors.size());
     // TODO: (broken link) - support texture arrays in Split Engine.
     for (const auto& image_descriptor : state_.image_descriptors) {
       image_buffer_sizes.push_back(image_descriptor.size);
     }
-    return image_buffer_sizes;
+    const size_t name_size = state_.name.has_value() ? state_.name->size() : 0;
+    constexpr size_t kTextureCount = 1;
+    return FlatbufferSizeCalculator()
+        .AddTextureAndDependentData(image_buffer_sizes, name_size)
+        .AddReferenceVector(kTextureCount)
+        .AddAddTextureRequest(kTextureCount)
+        .AddRequest()
+        .Finish()
+        .AddScratchSpace()
+        .ComputeSize();
   }
 
  private:
@@ -185,8 +201,25 @@ SplitEngineTextureBuilder& SplitEngineTextureBuilder::Name(
     absl::string_view name) {
   
 
-  // TODO: Implement this.
-  IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::Name is not implemented.";
+  // This static assert verifies the production API level. It acts as a guard to
+  // ensure developers verify whether texture naming has been promoted from an
+  // experimental feature to production when the API level is bumped.
+  //
+  // If texture naming is now part of the production API (e.g., API level N),
+  // update the condition below accordingly and consider removing this assert.
+  //
+  // If it remains experimental, update this assert to expect the new production
+  // API level to unblock the build.
+  //
+  static_assert(android_xr::kSplitEngineProductionApiLevel == 1,
+                "Production API level bumped. Verify if texture naming should "
+                "be promoted to production or remain experimental.");
+  if (serializer_->GetApiLevel() ==
+      android_xr::kSplitEngineExperimentalApiLevel) {
+    state_.name = name;
+  } else {
+    IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::Name is not implemented.";
+  }
   return *this;
 }
 

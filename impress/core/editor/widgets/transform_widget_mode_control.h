@@ -17,9 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_TRANSFORM_WIDGET_MODE_CONTROL_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_TRANSFORM_WIDGET_MODE_CONTROL_H_
 
+#include "absl/status/status.h"
+#include "core/async/future.h"
 #include "core/editor/widgets/transform_widget_mode_control_state.proto.imp.h"
+#include "core/materials/material.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
+#include "core/view/framework/assets/gltf_renderer.h"
 
 namespace imp::editor {
 
@@ -30,7 +34,7 @@ class TransformWidgetModeControl : public Component {
  public:
   static constexpr bool kExcludeFromEditor = true;
 
-  void Setup();
+  imp::Future<absl::Status> Setup();
 
   // Cycles through modes.
   void CycleMode();
@@ -42,13 +46,23 @@ class TransformWidgetModeControl : public Component {
   // Sets the mode of the transform widget directly.
   void SetMode(Mode mode);
 
+  // Updates the material parameters based on the current visual state.
+  void UpdateMaterial();
+
   Mode mode_ = Mode::kTranslate;
 
  private:
   TransformWidgetModeControlState state_;
 
+  // The material instance used for the aspect.
+  OwnedMaterialPtr material_;
+
+  // Whether the transform widget handle/aspect is being hovered.
+  bool hovered_ = false;
+
  public:
-  using IsfInfo = IsfInfo<&TransformWidgetModeControl::state_>;
+  using IsfInfo = IsfInfo<&TransformWidgetModeControl::state_,
+                          IsfDependencies<GltfRenderer>>;
 };
 
 }  // namespace imp::editor

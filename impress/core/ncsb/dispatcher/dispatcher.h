@@ -198,7 +198,7 @@ class Dispatcher {
       Invocable<PropagationResult(const Event&)>;
   using EventHandlerVoid = Invocable<void(const Event&)>;
   using EventHandlerVariant =
-      absl::variant<EventHandlerPropagationResult, EventHandlerVoid>;
+      std::variant<EventHandlerPropagationResult, EventHandlerVoid>;
 
   // Connection object returned by Dispatcher::Connect which must be explicitly
   // disconnected by calling Connection::Disconnect().

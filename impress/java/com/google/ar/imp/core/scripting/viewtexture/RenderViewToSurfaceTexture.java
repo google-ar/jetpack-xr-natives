@@ -22,6 +22,9 @@ import android.graphics.Outline;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.view.InputDevice;
 import android.view.MotionEvent;
@@ -30,6 +33,8 @@ import android.view.View;
 import android.view.ViewOutlineProvider;
 import android.view.WindowManager;
 import com.google.android.filament.proguard.UsedByNative;
+import com.google.common.base.Ascii;
+import com.google.common.base.Strings;
 import java.util.ArrayList;
 
 // LINT.IfChange(android_view_renderer)
@@ -45,6 +50,7 @@ import java.util.ArrayList;
  */
 @UsedByNative("android_view_renderer.cc")
 public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
+  private static final String PICO_DEVICE_MANUFACTURER = "Pico";
   private final Context context;
   private final View view;
   private final Surface surface;
@@ -100,6 +106,32 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
 
     // Create a VirtualDisplay that will render into the Surface from the SurfaceTexture based on
     // the size of the view.
+    int displayFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
+    if (!isPicoDevice()) {
+      // This flag does not work on Pico devices.
+      // Causes: PxrPresentationManager: no suitable presentation found
+      displayFlags |= DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
+    }
+
+    // Start the presentation when the virtualDisplay is added.
+    DisplayManager.DisplayListener displayListener =
+        new DisplayManager.DisplayListener() {
+          @Override
+          public void onDisplayAdded(int displayId) {
+            if (virtualDisplay != null && displayId == virtualDisplay.getDisplay().getDisplayId()) {
+              dm.unregisterDisplayListener(this);
+              startPresentation();
+            }
+          }
+
+          @Override
+          public void onDisplayRemoved(int displayId) {}
+
+          @Override
+          public void onDisplayChanged(int displayId) {}
+        };
+
+    dm.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
 
     virtualDisplay =
         dm.createVirtualDisplay(
@@ -108,8 +140,13 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
             virtualDisplayHeight,
             metrics.densityDpi,
             surface,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
-                | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION);
+            displayFlags);
+  }
+
+  private void startPresentation() {
+    if (presentation != null) {
+      return;
+    }
 
     // Creates a Presentation which is necessary to setup a Window & Context that we can add the
     // view to.
@@ -182,7 +219,10 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
 
   @UsedByNative("android_view_renderer.cc")
   public void release() {
-    presentation.cancel();
+    if (presentation != null) {
+      presentation.cancel();
+      presentation = null;
+    }
     virtualDisplay.release();
   }
 
@@ -230,6 +270,11 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
         motionEvent.getEdgeFlags(),
         InputDevice.SOURCE_MOUSE,
         motionEvent.getFlags());
+  }
+
+  private static boolean isPicoDevice() {
+    return !Strings.isNullOrEmpty(Build.MANUFACTURER)
+        && Ascii.equalsIgnoreCase(PICO_DEVICE_MANUFACTURER, Build.MANUFACTURER);
   }
 
   private static native void nSetRenderViewSurfaceDimensions(

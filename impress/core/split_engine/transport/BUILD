@@ -190,21 +190,16 @@ cc_library(
     alwayslink = 1,
 )
 
-test_suite(
-    name = "all_tests",
-    tests = [
-        ":basic_transport_test",
-    ],
-)
-
 cc_library(
     name = "senders",
     srcs = [
+        "message_group_sender.cc",
         "message_sender.cc",
         "request_sender.cc",
     ],
     hdrs = [
         "flatbuffer_builder_holder.h",
+        "message_group_sender.h",
         "message_sender.h",
         "request_sender.h",
     ],
@@ -220,6 +215,7 @@ cc_library(
         "//core/common:owned_ptr",
         "//core/common:pass_key",
         "//core/split_engine:flatbuffer_utils",
+        "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
@@ -229,6 +225,123 @@ cc_library(
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "basic_transport_shmem_hooks",
+    srcs = ["basic_transport_shmem_hooks.cc"],
+    hdrs = ["basic_transport_shmem_hooks.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":message_group_id_generator",
+        ":transport",
+        ":transport_with_hooks",
+        "//core/async:executor",
+        "//core/ncsb",
+        "//core/split_engine:message_group_monitor",
+        "//core/split_engine:split_engine_shared",
+        "//core/view:base_view",
+        "//core/view/utils:frame_time",
+        "//third_party/gloop/util/status:status_macros",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "message_group_sender_discrete",
+    srcs = ["message_group_sender_discrete.cc"],
+    hdrs = ["message_group_sender_discrete.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":message_group_id_generator",
+        ":senders",
+        ":transport",
+        "//core/async:executor",
+        "//core/common:owned_or_borrowed_ptr",
+        "//core/common:owned_ptr",
+        "//core/split_engine:flatbuffer_size_calculator",
+        "//core/split_engine:split_engine_shared",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
+        "@flatbuffers",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "message_group_sender_selfcontained",
+    srcs = ["message_group_sender_selfcontained.cc"],
+    hdrs = ["message_group_sender_selfcontained.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":senders",
+        ":transport",
+        "//core/async:executor",
+        "//core/common:owned_or_borrowed_ptr",
+        "//core/split_engine:split_engine_shared",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@flatbuffers",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "message_group_id_generator",
+    hdrs = ["message_group_id_generator.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":transport",
+        "//core/split_engine:split_engine_shared",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "message_group_sender_discrete_legacy",
+    srcs = ["message_group_sender_discrete_legacy.cc"],
+    hdrs = ["message_group_sender_discrete_legacy.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":message_group_id_generator",
+        ":message_group_sender_discrete",
+        ":senders",
+        "//core/async:executor",
+        "//core/common:owned_or_borrowed_ptr",
+        "//core/split_engine:message_group_monitor",
+        "//core/split_engine:split_engine_shared",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,
 )

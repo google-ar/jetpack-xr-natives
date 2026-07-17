@@ -80,7 +80,7 @@ class GlyphEmulator {
   };
   // Depending on if CanvasSource supports the kGlyph feature, the glyph is
   // either represented by an Id or a string representing the character.
-  using GlyphKeyOrGlyphString = absl::variant<GlyphKey, std::string>;
+  using GlyphKeyOrGlyphString = std::variant<GlyphKey, std::string>;
 
   // Information about a glyph needed to render it and lay it out relative to
   // other glyphs in a string.
@@ -115,7 +115,7 @@ class GlyphEmulator {
     // Variant which is either the name of a font registered by calling
     // GlyphEmulator::AddFont, or a SystemFontParams object which describes the
     // weight, style, and font family of a system font.
-    std::variant<absl::monostate, std::string, SystemFontParams> font_params;
+    std::variant<std::monostate, std::string, SystemFontParams> font_params;
     // The size of the font in pixels to use for drawing the glyphs.
     std::optional<float> font_size_pixels;
     // Specifies the width of the stroke in pixels.
@@ -277,10 +277,13 @@ class GlyphEmulator {
   static constexpr const int kDefaultFontSizePixels = 150.0f;
   // LINT.ThenChange(//depot/google3/third_party/impress/core/text/text_renderer_state.proto:font_size_pixels)
 
-  // Draw a glyph in the given scoped canvas.
+  // Draw a glyph in the given scoped canvas. Pre-cached metrics can be provided
+  // to avoid the canvas source re-doing the work of measuring the glyph when
+  // establishing the affected bounds of the draw call.
   static void DrawGlyph(ScopedCanvas& canvas,
                         const GlyphKeyOrGlyphString& glyph, float2 position,
-                        const ScopedCanvas::TextOptions& canvas_options);
+                        const ScopedCanvas::TextOptions& canvas_options,
+                        const TextMetrics* pre_cached_metrics = nullptr);
 
   static bool CanForceNonSeparable(bool uses_text_layout_provider,
                                    float text_tracking) {

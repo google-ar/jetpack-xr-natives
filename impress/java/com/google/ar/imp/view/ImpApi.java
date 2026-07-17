@@ -580,6 +580,21 @@ public class ImpApi implements ImpApiScuba {
     }
   }
 
+  /** Releases resources asynchronously, avoiding blocking the calling thread. */
+  public void releaseResourcesAsync() {
+    if (isReleased()) {
+      Log.w(
+          TAG,
+          "releaseResourcesAsync() was called on ImpApi after its native resources had been"
+              + " released.");
+      return;
+    }
+    if (impViewController != null) {
+      impViewController.releaseResources(true);
+      released = true;
+    }
+  }
+
   /**
    * Returns whether {@link #isReleased} has been invoked on this instance, releasing the native
    * resources backing it, including any custom C++ imp::View registered by the client. Helpful to

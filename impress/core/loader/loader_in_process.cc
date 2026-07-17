@@ -293,8 +293,8 @@ absl::Status LoaderInProcess::CreateCreator() {
   MP_RETURN_IF_ERROR(provider_->GetLoadedModel(&model));
   MP_RETURN_IF_ERROR(optional_features::VerifyModelNestedData(model.Root()));
 
-  creator_ =
-      std::make_unique<Creator>(view_, material_package_, std::move(model));
+  creator_ = std::make_unique<Creator>(view_, material_package_,
+                                       std::move(model), loader_options_);
   return absl::OkStatus();
 }
 

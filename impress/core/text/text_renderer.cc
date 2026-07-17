@@ -288,7 +288,9 @@ Future<absl::Status> TextRenderer::SetupImpl(
                         .force_auto_method_rendering =
                             *flags.glyph_atlas_force_auto_method_rendering,
                         .force_individual_glyph_source_instances =
-                            *flags.force_individual_glyph_source_instances});
+                            *flags.force_individual_glyph_source_instances,
+                        .use_bitmap_surface_provider =
+                            *flags.glyph_atlas_use_bitmap_surface_provider});
 
               } else {
                 return std::make_unique<SlicedGlyphAtlas>(GetView());
@@ -322,7 +324,9 @@ Future<absl::Status> TextRenderer::SetupImpl(
                     .force_auto_method_rendering =
                         *flags.glyph_atlas_force_auto_method_rendering,
                     .force_individual_glyph_source_instances =
-                        *flags.force_individual_glyph_source_instances});
+                        *flags.force_individual_glyph_source_instances,
+                    .use_bitmap_surface_provider =
+                        *flags.glyph_atlas_use_bitmap_surface_provider});
 
           } else {
             return std::make_unique<GlyphAtlas>(GetView());
@@ -454,6 +458,9 @@ Future<absl::Status> TextRenderer::UpdateMeshesAndMaterials() {
         // Create the root node if it doesn't exist.
         if (!root_) {
           root_ = GetView().CreateNode();
+#if IMP_RUNTIME(DEV)
+          root_->SetName("TextRenderer");
+#endif  // IMP_RUNTIME(DEV)
           root_->SetParent(GetNode());
           MeshRenderer::FrustumCullingMode culling_mode =
               state_.disable_frustum_culling

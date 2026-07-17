@@ -42,7 +42,9 @@ using XrPlatformBase = filament::backend::OpenGLPlatform;
 // Provides functionality for creating & using Xr specific swapchains.
 class XrOpenGLPlatform : public XrPlatformBase {
  public:
+#if IMP_PLATFORM(ANDROID)
   XrGraphicsBindingOpenGLESAndroidKHR GetGraphicsBinding();
+#endif
 
   filament::backend::Driver* createDriver(
       void* sharedContext,

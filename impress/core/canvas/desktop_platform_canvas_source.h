@@ -109,8 +109,8 @@ class DesktopPlatformCanvasSource : public PlatformCanvasSource {
     void DrawText(absl::string_view text, float2 pos,
                   const TextOptions& text_options) override;
 
-    void DrawGlyph(GlyphId glyph, float2 pos,
-                   const TextOptions& text_options) override;
+    void DrawGlyph(GlyphId glyph, float2 pos, const TextOptions& text_options,
+                   const TextMetrics* pre_cached_metrics) override;
 
     void ClearRect(const Rect& rect) override;
 

@@ -403,6 +403,9 @@ void OpenGLDriver::terminate() {
     if (getJobWorker()) {
         getJobWorker()->terminate();
     }
+    // wait for the GPU again because JobWorker might have queued more work.
+    glFinish();
+
     if constexpr (UTILS_HAS_THREADING) {
         stopServiceThread();
     }
@@ -1740,6 +1743,10 @@ void OpenGLDriver::framebufferTexture(TargetBufferInfo const& binfo,
                     assert_invariant(target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES);
                     glFramebufferRenderbuffer(GL_FRAMEBUFFER, attachment,
                             GL_RENDERBUFFER, t->gl.id);
+
+                    // Clear the resolve bit for this particular attachment. Note that other attachment(s)
+                    // might be sampleable, so this does not necessarily prevent the resolve from occurring.
+                    resolveFlags = TargetBufferFlags::NONE;
                 }
                 break;
             case GL_TEXTURE_3D:
@@ -1877,6 +1884,11 @@ void OpenGLDriver::framebufferTexture(TargetBufferInfo const& binfo,
         }
 
         CHECK_GL_ERROR()
+    }
+
+    // We don't need to resolve attachments that match the rendertarget's sample count.
+    if (rt->gl.samples == t->samples) {
+        resolveFlags = TargetBufferFlags::NONE;
     }
 
     rt->gl.resolve |= resolveFlags;
@@ -2065,9 +2077,9 @@ void OpenGLDriver::createFenceR(Handle<HwFence> fh, ImmutableCString&& tag) {
     assert_invariant(f->state);
 
     if (mPlatform.canCreateFence()) {
-        std::lock_guard const lock(f->state->lock);
-        f->fence = mPlatform.createFence();
-        f->state->cond.notify_all();
+        signalFence([&] {
+            f->fence = mPlatform.createFence();
+        });
         return;
     }
 
@@ -2081,11 +2093,11 @@ void OpenGLDriver::createFenceR(Handle<HwFence> fh, ImmutableCString&& tag) {
     // This is the case where we need to use OpenGL fences, as soon as we return, the user
     // is allowed to destroy the fence, so we need to keep a reference to the internal state.
     std::weak_ptr<GLFence::State> const weak = f->state;
-    whenGpuCommandsComplete([weak] {
+    whenGpuCommandsComplete([weak, this] {
         if (auto const state = weak.lock()) {
-            std::lock_guard const lock(state->lock);
-            state->status = FenceStatus::CONDITION_SATISFIED;
-            state->cond.notify_all();
+            signalFence([&] {
+                state->status = FenceStatus::CONDITION_SATISFIED;
+            });
         }
     });
 #else
@@ -2624,9 +2636,9 @@ void OpenGLDriver::fenceCancel(Handle<HwFence> fh) {
     GLFence const* const f = handle_cast<GLFence*>(fh);
     assert_invariant(f->state);
 
-    std::lock_guard const lock(f->state->lock);
-    f->state->status = FenceStatus::ERROR;
-    f->state->cond.notify_all();
+    signalFence([&] {
+        f->state->status = FenceStatus::ERROR;
+    });
 }
 
 FenceStatus OpenGLDriver::getFenceStatus(Handle<HwFence> fh) {
@@ -2652,22 +2664,23 @@ FenceStatus OpenGLDriver::fenceWait(FenceHandle fh, uint64_t const timeout) {
     // `f` is not supposed to become invalid while we wait.
 
     if (mPlatform.canCreateFence()) {
-        std::unique_lock lock(f->state->lock);
-        if (f->fence == nullptr) {
-            // we've been called before the fence was created asynchronously,
-            // so we need to wait for that, before using the real fence.
-            // By construction, "f" can't be destroyed while we wait, because its
-            // construction call is in the queue and a destroy call will have to come later.
-            f->state->cond.wait_until(lock, until, [f] {
-                return f->fence != nullptr;
-            });
-            if (f->fence == nullptr) {
-                // the only possible choice here is that we timed out
-                assert_invariant(f->state->status == FenceStatus::TIMEOUT_EXPIRED);
-                return FenceStatus::TIMEOUT_EXPIRED;
-            }
+        // we've been called before the fence was created asynchronously,
+        // so we need to wait for that, before using the real fence.
+        // By construction, "f" can't be destroyed while we wait, because its
+        // construction call is in the queue and a destroy call will have to come later.
+        FenceStatus status = waitForFence([f] {
+            return f->fence != nullptr;
+        }, until);
+
+        if (status == FenceStatus::ERROR) {
+            return FenceStatus::ERROR;
         }
-        lock.unlock();
+
+        if (f->fence == nullptr) {
+            // the only possible choice here is that we timed out
+            assert_invariant(status == FenceStatus::TIMEOUT_EXPIRED);
+            return FenceStatus::TIMEOUT_EXPIRED;
+        }
         // here we know that we have the platform fence
         assert_invariant(f->fence);
         return mPlatform.waitFence(f->fence, timeout);
@@ -2680,11 +2693,19 @@ FenceStatus OpenGLDriver::fenceWait(FenceHandle fh, uint64_t const timeout) {
 
     // This is the case where we need to use OpenGL fences
 #ifndef FILAMENT_SILENCE_NOT_SUPPORTED_BY_ES2
-    std::unique_lock lock(f->state->lock);
-    f->state->cond.wait_until(lock, until, [f] {
-        return f->state->status != FenceStatus::TIMEOUT_EXPIRED;
-    });
-    return f->state->status;
+    FenceStatus result = FenceStatus::TIMEOUT_EXPIRED;
+    FenceStatus status = waitForFence([&] {
+        if (f->state->status != FenceStatus::TIMEOUT_EXPIRED) {
+            result = f->state->status;
+            return true;
+        }
+        return false;
+    }, until);
+
+    if (status == FenceStatus::ERROR) {
+        return FenceStatus::ERROR;
+    }
+    return result;
 #else
     return FenceStatus::ERROR;
 #endif
@@ -3768,20 +3789,6 @@ void OpenGLDriver::beginRenderPass(Handle<HwRenderTarget> rth,
     // each render-pass starts with a disabled scissor
     gl.disable(GL_SCISSOR_TEST);
 
-    if (gl.ext.EXT_discard_framebuffer
-            && !gl.bugs.disable_invalidate_framebuffer) {
-        AttachmentArray attachments; // NOLINT
-        if (GLsizei const attachmentCount = getAttachments(attachments, discardFlags, !fbo)) {
-            gl.procs.invalidateFramebuffer(GL_FRAMEBUFFER, attachmentCount, attachments.data());
-        }
-        CHECK_GL_ERROR()
-    } else {
-        // It's important to clear the framebuffer before drawing, as it resets
-        // the fb to a known state (resets fb compression and possibly other things).
-        // So we use glClear instead of glInvalidateFramebuffer
-        clearWithRasterPipe(discardFlags & ~clearFlags, { 0.0f }, 0.0f, 0);
-    }
-
     if (rt->gl.fbo_read) {
         // we have a multi-sample RenderTarget with non multi-sample attachments (i.e. this is the
         // EXT_multisampled_render_to_texture emulation).
@@ -3793,9 +3800,26 @@ void OpenGLDriver::beginRenderPass(Handle<HwRenderTarget> rth,
         discardFlags |= rt->gl.resolve;
     }
 
+    // we don't discard attachments that are cleared (because clear is an implicit discard)
+    TargetBufferFlags const discardOnlyFlags = discardFlags & ~clearFlags;
+
+    if (any(discardOnlyFlags)) {
+        if (gl.ext.EXT_discard_framebuffer && !gl.bugs.disable_invalidate_framebuffer) {
+            AttachmentArray attachments; // NOLINT
+            if (GLsizei const attachmentCount = getAttachments(attachments, discardOnlyFlags, !fbo)) {
+                gl.procs.invalidateFramebuffer(GL_FRAMEBUFFER, attachmentCount, attachments.data());
+            }
+            CHECK_GL_ERROR()
+        } else {
+            // It's important to clear the framebuffer before drawing, as it resets
+            // the fb to a known state (resets fb compression and possibly other things).
+            // So we use glClear instead of glInvalidateFramebuffer
+            clearWithRasterPipe(discardOnlyFlags, { 0.0f }, 0.0f, 0);
+        }
+    }
+
     if (any(clearFlags)) {
-        clearWithRasterPipe(clearFlags,
-                params.clearColor, GLfloat(params.clearDepth), GLint(params.clearStencil));
+        clearWithRasterPipe(clearFlags, params.clearColor, GLfloat(params.clearDepth), GLint(params.clearStencil));
     }
 
     // we need to reset those after we call clearWithRasterPipe()
@@ -3812,8 +3836,7 @@ void OpenGLDriver::beginRenderPass(Handle<HwRenderTarget> rth,
 
 #ifndef NDEBUG
     // clear the discarded (but not the cleared ones) buffers in debug builds
-    clearWithRasterPipe(discardFlags & ~clearFlags,
-            { 1, 0, 0, 1 }, 1.0, 0);
+    clearWithRasterPipe(discardOnlyFlags, { 1, 0, 0, 1 }, 1.0, 0);
 #endif
 }
 

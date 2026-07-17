@@ -76,6 +76,7 @@ class GroupToProjectionQuadTextureRenderer : public imp::Component {
 
  public:
   using IsfInfo = IsfInfo<&GroupToProjectionQuadTextureRenderer::state_>;
+  static constexpr bool kRunInEditMode = true;
 };
 
 }  // namespace imp

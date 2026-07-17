@@ -422,15 +422,17 @@ enum_<Engine::Config::ShaderLanguage>("ShaderLanguage")
 
 /// Engine ::core class:: Central manager and resource owner.
 class_<Engine>("Engine")
-    .class_function("_create", (Engine* (*)(Engine::Config)) [] (Engine::Config config) {
-        EM_ASM_INT({
-            const options = window.filament_glOptions;
-            const context = window.filament_glContext;
-            const handle = GL.registerContext(context, options);
-            window.filament_contextHandle = handle;
-            GL.makeContextCurrent(handle);
-        });
-        return Engine::create(Engine::Backend::DEFAULT, nullptr, nullptr, &config);
+    .class_function("_create", (Engine* (*)(backend::Backend, Engine::Config)) [] (backend::Backend backend, Engine::Config config) {
+        if (backend == backend::Backend::DEFAULT || backend == backend::Backend::OPENGL) {
+            EM_ASM_INT({
+                const options = window.filament_glOptions;
+                const context = window.filament_glContext;
+                const handle = GL.registerContext(context, options);
+                window.filament_contextHandle = handle;
+                GL.makeContextCurrent(handle);
+            });
+        }
+        return Engine::create(backend, nullptr, nullptr, &config);
     }, allow_raw_pointers())
 
     // Create a default Engine configuration. This is for internal use to ensure that engine
@@ -449,6 +451,8 @@ class_<Engine>("Engine")
     .function("setAutomaticInstancingEnabled", &Engine::setAutomaticInstancingEnabled)
 
     .function("isAutomaticInstancingEnabled", &Engine::isAutomaticInstancingEnabled)
+
+    .function("hasUnrecoverableFailure", &Engine::hasUnrecoverableFailure)
 
     .function("getSupportedFeatureLevel", &Engine::getSupportedFeatureLevel)
 
@@ -501,8 +505,16 @@ class_<Engine>("Engine")
 
     /// createSwapChain ::method::
     /// ::retval:: an instance of [SwapChain]
-    .function("createSwapChain", (SwapChain* (*)(Engine*)) []
+    .function("_createSwapChain", (SwapChain* (*)(Engine*)) []
             (Engine* engine) { return engine->createSwapChain(nullptr); },
+            allow_raw_pointers())
+    .function("_createSwapChainForCanvas", (SwapChain* (*)(Engine*, std::string)) []
+            (Engine* engine, std::string canvasId) {
+                // Allocate on the heap because nativeWindow is passed asynchronously through the
+                // driver command buffer to the backend thread.
+                std::string* persistentCanvasId = new std::string(canvasId);
+                return engine->createSwapChain((void*)persistentCanvasId->c_str());
+            },
             allow_raw_pointers())
     /// destroySwapChain ::method::
     /// swapChain ::argument:: an instance of [SwapChain]
@@ -725,6 +737,9 @@ class_<View>("View")
     .function("getBlendMode", &View::getBlendMode)
     .function("setViewport", &View::setViewport)
     .function("getViewport", &View::getViewport)
+    .function("setGridSize", &View::setGridSize)
+    .function("getGridSize", &View::getGridSize)
+    .function("getEffectiveGridSize", &View::getEffectiveGridSize)
     .function("setVisibleLayers", &View::setVisibleLayers)
     .function("setPostProcessingEnabled", &View::setPostProcessingEnabled)
     .function("setDithering", &View::setDithering)
@@ -1861,14 +1876,9 @@ class_<KtxInfo>("KtxInfo")
 class_<MeshReader::MaterialRegistry>("MeshReader$MaterialRegistry")
     .constructor<>()
     .function("size", &MeshReader::MaterialRegistry::numRegistered)
-    .function("get", EMBIND_LAMBDA(val, (MeshReader::MaterialRegistry* self, std::string k), {
+    .function("get", EMBIND_LAMBDA(filament::MaterialInstance*, (MeshReader::MaterialRegistry* self, std::string k), {
           const utils::CString name(k.c_str(), k.size());
-          auto i = self->getMaterialInstance(name);
-          if (i == nullptr) {
-              return val::undefined();
-          } else {
-              return val(i);
-          }
+          return self->getMaterialInstance(name);
     }), allow_raw_pointers())
     .function("set", EMBIND_LAMBDA(void, (MeshReader::MaterialRegistry* self, std::string k, filament::MaterialInstance* v), {
           const utils::CString name(k.c_str(), k.size());
@@ -2147,7 +2157,7 @@ class_<Ktx2Provider>("gltfio$Ktx2Provider")
 class_<WebpProvider>("gltfio$WebpProvider")
     .constructor(EMBIND_LAMBDA(WebpProvider, (Engine* engine), {
         return WebpProvider { createWebpProvider(engine) };
-    }))    
+    }))
     .class_function("isWebpSupported", &isWebpSupported);
 
 class_<AssetLoader>("gltfio$AssetLoader")

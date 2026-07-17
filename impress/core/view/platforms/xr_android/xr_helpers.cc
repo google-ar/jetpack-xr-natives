@@ -281,7 +281,7 @@ void SetupXrTimingSummary(
 }
 
 void SetCustomEyeProjectionOnCamera(filament::Camera* camera,
-                                    std::vector<XrView>& latest_views) {
+                                    const std::vector<XrView>& latest_views) {
   // Set the projection matrix of each eye.
   mat4 projection_matrix_array[4];
   for (int i = 0; i < latest_views.size(); i++) {

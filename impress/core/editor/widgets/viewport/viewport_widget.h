@@ -16,6 +16,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_VIEWPORT_VIEWPORT_WIDGET_H_
 
 #include "absl/strings/string_view.h"
+#include "dear_imgui/imgui.h"
 #include "core/editor/widget.h"
 
 namespace imp {
@@ -38,8 +39,11 @@ class ViewportWidget : public Widget {
 
   absl::string_view GetName() const override;
   void DrawImGui() override;
+  bool HasContent() const override;
 
  private:
+  void HandleAssetDragDrop(ImVec2 screen_pos);
+
   Editor& editor_;
   BaseView& view_;
   ViewportRenderTarget* viewport_render_target_;

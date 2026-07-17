@@ -25,6 +25,8 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "filament/filament/include/filament/RenderTarget.h"
+#include "filament/filament/include/filament/Viewport.h"
 #include "core/assets/gltf/gltf_asset.h"
 #include "core/assets/gltf/gltf_audio_extension.h"
 #include "core/assets/gltf/gltf_interactivity_extension.h"
@@ -79,6 +81,9 @@
 #include "core/editor/widgets/toggle_camera.h"
 #include "core/editor/widgets/transform.h"
 #include "core/editor/widgets/vertex_select_widget.h"
+#include "core/editor/widgets/viewport/viewport_helpers.h"
+#include "core/editor/widgets/viewport/viewport_render_target.h"
+#include "core/editor/widgets/viewport/viewport_widget.h"
 #include "core/editor/widgets/visualize_bounds.h"
 #include "core/editor/widgets/visualize_colliders.h"
 #include "core/editor/widgets/visualize_origins.h"
@@ -88,6 +93,7 @@
 #include "core/input/keyboard_event.h"
 #include "core/input/pointer_event.h"
 #include "core/lighting/light_component.h"
+#include "core/math/almost_equal.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
@@ -106,6 +112,7 @@
 #include "core/view/framework/lighting/light_manager.h"
 #include "core/view/framework/scene/scene_reference.h"
 #include "core/view/framework/scene/scene_system.h"
+#include "core/window/filament_host.h"
 
 #if IMP_PLATFORM(ANDROID)
 #include "core/editor/components/world_space_editor_ui.h"
@@ -192,9 +199,12 @@ class EditorImpl : public Editor {
   GltfAsset::LoadOptions GetGltfLoadOptions() const override;
 
   // Sets the rect of the viewport in pixels.
-  void SetViewportRect(std::optional<Rect> rect) override {};
+  void SetViewportRect(std::optional<Rect> rect) override;
   // Returns the rect of the viewport in pixels.
-  std::optional<Rect> GetViewportRect() const override { return std::nullopt; };
+  std::optional<Rect> GetViewportRect() const override;
+
+  void SetUseLegacyCameraControls(bool use_legacy) override;
+  bool UseLegacyCameraControls() const override;
 
  private:
   // Used to provide access to EditorInformation without needing to access the
@@ -241,6 +251,9 @@ class EditorImpl : public Editor {
   // well.
   void ToggleCameraMode();
 
+  // Updates the active camera if it's valid.
+  void UpdateActiveCamera();
+
 #if IMP_PLATFORM(ANDROID)
   // TODO: Find a way to distinguish between SplitEngine app on
   // mobile and Xr.
@@ -271,6 +284,9 @@ class EditorImpl : public Editor {
   std::unique_ptr<EditorPlugin> plugin_;
   Dispatcher dispatcher_;
   WidgetUiSystem widget_ui_system_;
+  std::unique_ptr<ViewportRenderTarget> viewport_widget_render_target_;
+  std::optional<Rect> viewport_widget_rect_;
+  float2 last_pixel_ratio_ = {-1.0f, -1.0f};
   RobinSet<Widget*> selected_node_component_widgets_;
   NodeHandle editor_root_node_;
   EditorState current_state_;
@@ -299,6 +315,7 @@ class EditorImpl : public Editor {
   std::vector<NodeHandle> sandbox_nodes_;
   GltfAsset::LoadOptions gltf_load_options_;
   EditorInfo::PlatformMode platform_mode_ = EditorInfo::PlatformMode::kDefault;
+  bool use_legacy_camera_controls_ = true;
 };
 
 EditorImpl::EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
@@ -313,6 +330,9 @@ EditorImpl::EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
       command_manager_(view->GetRegistry().GetOrCreate<CommandManager>()),
       enabled_(false),
       is_sandbox_(is_sandbox) {
+  viewport_widget_render_target_ = std::make_unique<ViewportRenderTarget>(
+      *view->GetHost()->GetEngine(), uint2{1, 1});
+
   // In sandbox builds, start off in edit mode.
   if (is_sandbox_) {
     run_mode_ = EditorInfo::RunMode::kEditMode;
@@ -514,6 +534,8 @@ void EditorImpl::SetEnabled(bool enabled) {
   enabled_ = enabled;
   widget_ui_system_.SetEnabled(enabled);
 
+  SetViewportRect(std::nullopt);
+
 #if IMP_PLATFORM(ANDROID)
   absl::StatusOr<std::reference_wrapper<ImpLifeCycleCallback>> callback =
       GetView().GetRegistry().Get<ImpLifeCycleCallback>();
@@ -527,6 +549,9 @@ void EditorImpl::SetEnabled(bool enabled) {
   } else {
     saved_state_ = current_state_;
     ApplyEditorState({CameraMode::kApp, InputMode::kApp});
+#if IMP_RUNTIME(DEV)
+    GetView().SetSizeOverride(std::nullopt);
+#endif
   }
 
   GetView().GetDispatcher().Send(EditorEnabledEvent(enabled));
@@ -602,6 +627,11 @@ void EditorImpl::InitializeCameraPosition() {
 
 void EditorImpl::InitializeWidgetUiSystem() {
   BaseView& view = GetView();
+
+  widget_ui_system_.AddWidget<ViewportWidget>(
+      WidgetLayoutInfo(PanelId::kViewport,
+                       WidgetPresence::kOnlyIn2DLargeScreen),
+      *this, view, viewport_widget_render_target_.get());
 
   widget_ui_system_.AddWidget<Hierarchy>(
       WidgetLayoutInfo(PanelId::kSceneWindow), view);
@@ -704,6 +734,9 @@ void EditorImpl::SetCameraMode(CameraMode camera_mode) {
       editor_root_node_->SetEnabled(false);
       GetView().GetDisplayLayerManager().SetLayerEnabled(kOverlayGroup, false);
   }
+
+  // Ensure the active camera's projection matches the current viewport.
+  UpdateActiveCamera();
 }
 
 void EditorImpl::SetInputMode(editor::EditorImpl::InputMode input_mode) {
@@ -905,7 +938,17 @@ EditorInfo::DisplayMode EditorImpl::GetDisplayMode() const {
 }
 
 void EditorImpl::SetDisplayMode(EditorInfo::DisplayMode display_mode) {
+  if (display_mode_ == display_mode) return;
   display_mode_ = display_mode;
+
+  if (display_mode_ == EditorInfo::DisplayMode::kRemoteScreen) {
+    // Do not use the viewport override in Remote Editor.
+    // We continue rendering on the device rather than a viewport widget.
+#if IMP_RUNTIME(DEV)
+    GetView().SetSizeOverride(std::nullopt);
+#endif
+    SetViewportRect(std::nullopt);
+  }
 }
 
 void EditorImpl::SetInEditMode(bool in_edit_mode) {
@@ -1158,6 +1201,50 @@ void EditorImpl::StepNextFrame() { has_frames_to_step_ = true; }
 
 bool EditorImpl::HasFramesToStep() { return has_frames_to_step_; }
 
+void EditorImpl::SetViewportRect(std::optional<Rect> rect) {
+  const float2 pixel_ratio = editor::GetPhysicalPixelRatio(GetView());
+
+  // Return early if the pixel ratio and viewport rect has not changed.
+  // The pixel ratio check is in case you drag the window to a display with a
+  // different pixel density.
+  if (imp::AlmostEqual(pixel_ratio, last_pixel_ratio_) &&
+      viewport_widget_rect_ == rect) {
+    return;
+  }
+
+  last_pixel_ratio_ = pixel_ratio;
+
+  std::optional<filament::Viewport> viewport = std::nullopt;
+  filament::RenderTarget* render_target = nullptr;
+
+  if (rect) {
+    render_target = viewport_widget_render_target_->GetRenderTarget();
+
+    const float2 size = rect->half_extent * 2.0f * pixel_ratio;
+    viewport = filament::Viewport{0, 0, static_cast<uint32_t>(size.x),
+                                  static_cast<uint32_t>(size.y)};
+  }
+
+  GetView().GetHost()->SetEditorViewportOverride({}, viewport);
+  GetView().GetHost()->SetEditorRenderTargetOverride({}, render_target);
+
+  // Ensure the active camera's projection matches the viewport aspect ratio.
+  if (viewport_widget_rect_ != rect) {
+    viewport_widget_rect_ = rect;
+    UpdateActiveCamera();
+  }
+}
+
+std::optional<Rect> EditorImpl::GetViewportRect() const {
+  return viewport_widget_rect_;
+}
+
+void EditorImpl::UpdateActiveCamera() {
+  ComponentHandle<CameraComponent> camera = GetActiveCamera();
+  if (!camera.IsValid()) return;
+  camera->OnIsfStateChanged();
+}
+
 void EditorImpl::AddNode(NodeHandle node) {
   if (node->GetParent()) {
     IMP_LOG(imp::FATAL) << "Only top-level editor nodes should be added to the editor.";
@@ -1232,6 +1319,14 @@ NodeHandle EditorImpl::GetSingleSelectedNode() {
 
 GltfAsset::LoadOptions EditorImpl::GetGltfLoadOptions() const {
   return gltf_load_options_;
+}
+
+void EditorImpl::SetUseLegacyCameraControls(bool use_legacy) {
+  use_legacy_camera_controls_ = use_legacy;
+}
+
+bool EditorImpl::UseLegacyCameraControls() const {
+  return use_legacy_camera_controls_;
 }
 
 Editor& GetOrCreateEditor(BaseView* view, std::unique_ptr<EditorPlugin> plugin,

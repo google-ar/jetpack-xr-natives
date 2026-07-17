@@ -2,7 +2,6 @@
 
 #include <jni.h>
 #include <openxr/openxr_platform.h>
-#include <openxr/openxr_reflection.h>
 #include <openxr/public/all_extensions.h>
 #include <openxr/public/xr_androidx2_geospatial_streetscape.h>
 
@@ -11,13 +10,13 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
-#include <string_view>
 #include <unordered_set>
 #include <vector>
 
 #include "openxr/openxr.h"
 #include "absl/log/log.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
 #include "common/openxr_util.h"
 
 namespace androidx::xr::openxr {
@@ -53,7 +52,7 @@ const std::array<std::string, 13> kRequiredExtensions = {
 
 // Extensions must be listed after their dependencies.
 // LINT.IfChange
-const std::array<OpenXrExtension, 8> kOptionalExtensions = {{
+const std::array<OpenXrExtension, 9> kOptionalExtensions = {{
     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -70,6 +69,8 @@ const std::array<OpenXrExtension, 8> kOptionalExtensions = {{
      {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME,
      {XR_EXT_FUTURE_EXTENSION_NAME}},
+    {XR_ANDROID_TRACKABLES_QR_CODE_EXTENSION_NAME,
+     {XR_EXT_FUTURE_EXTENSION_NAME}},
 }};
 // LINT.ThenChange(//depot/google3/third_party/jetpack_xr_natives/openxr/openxr_manager.cc)
 
@@ -84,6 +85,9 @@ const std::array<std::string, 7> kGeospatialExtensions = {
 };
 }  // namespace
 
+OpenXrInstanceManager::OpenXrInstanceManager(
+    absl::Span<const std::string> extra_extensions)
+    : extra_extensions_(extra_extensions.begin(), extra_extensions.end()) {}
 
 OpenXrInstanceManager::~OpenXrInstanceManager() { DestroyInstance(); }
 
@@ -123,10 +127,10 @@ bool OpenXrInstanceManager::LoadOpenXr(jobject context) {
   return true;
 }
 
-bool OpenXrInstanceManager::GetEnabledExtensions(
-    std::vector<std::string>& enabled_exts) {
+bool OpenXrInstanceManager::GetAvailableExtensions(
+    std::unordered_set<std::string>& available_exts) {
   std::vector<XrExtensionProperties> available_ext_props;
-  uint32_t property_count;
+  uint32_t property_count = 0;
   XR_RETURN_IF_FAILED(xrEnumerateInstanceExtensionProperties(
       /*layerName=*/nullptr, /*propertyCapacityInput=*/0, &property_count,
       /*properties=*/nullptr));
@@ -138,11 +142,16 @@ bool OpenXrInstanceManager::GetEnabledExtensions(
       /*layerName=*/nullptr, property_count, &property_count,
       available_ext_props.data()));
 
-  std::unordered_set<std::string_view> available_exts;
+  available_exts.clear();
   for (const auto& prop : available_ext_props) {
     available_exts.insert(prop.extensionName);
   }
+  return true;
+}
 
+bool OpenXrInstanceManager::GetEnabledExtensions(
+    const std::unordered_set<std::string>& available_exts,
+    std::vector<std::string>& enabled_exts) {
   enabled_exts.clear();
   for (const auto& required_ext : kRequiredExtensions) {
     enabled_exts.push_back(required_ext);
@@ -163,6 +172,20 @@ bool OpenXrInstanceManager::GetEnabledExtensions(
       }
     }
   }
+
+  for (const std::string& extra_extension : extra_extensions_) {
+    if (available_exts.count(extra_extension)) {
+      // Skip if the extension is already in the enabled extensions list.
+      if (std::find(enabled_exts.begin(), enabled_exts.end(),
+                    extra_extension) != enabled_exts.end()) {
+        continue;
+      }
+
+      // Add the extra extension to the list of enabled extensions.
+      enabled_exts.push_back(extra_extension);
+    }
+  }
+
   return true;
 }
 
@@ -295,8 +318,25 @@ bool OpenXrInstanceManager::CreateInstance(JNIEnv* env, jobject context) {
     return false;
   }
 
+  std::unordered_set<std::string> available_exts;
+  if (!GetAvailableExtensions(available_exts)) {
+    return false;
+  }
+
+  for (const std::string& extra_extension : extra_extensions_) {
+    if (available_exts.count(extra_extension) == 0) {
+      std::string error_msg =
+          "The extra extension is not supported by this device: " +
+          extra_extension;
+      java_env_->ThrowNew(
+          java_env_->FindClass("java/lang/UnsupportedOperationException"),
+          error_msg.c_str());
+      return false;
+    }
+  }
+
   std::vector<std::string> enabled_exts_str;
-  if (!GetEnabledExtensions(enabled_exts_str)) {
+  if (!GetEnabledExtensions(available_exts, enabled_exts_str)) {
     return false;
   }
 

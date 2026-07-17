@@ -273,13 +273,21 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
     pixel_size_ = pixel_size;
 #if IMP_RUNTIME(DEV)
     texture_ = view.GetTextureFactory().CreateTexture(
-        pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8,
-        filament::Texture::Usage::COLOR_ATTACHMENT |
-            filament::Texture::Usage::BLIT_SRC |
-            filament::Texture::Usage::DEFAULT);
+        imp::TextureFactory::TextureCreationSettings{
+            .width = pixel_size_.x,
+            .height = pixel_size_.y,
+            .format = filament::Texture::InternalFormat::RGBA8,
+            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                     filament::Texture::Usage::BLIT_SRC |
+                     filament::Texture::Usage::DEFAULT,
+        });
 #else
     texture_ = view.GetTextureFactory().CreateTexture(
-        pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8);
+        imp::TextureFactory::TextureCreationSettings{
+            .width = pixel_size_.x,
+            .height = pixel_size_.y,
+            .format = filament::Texture::InternalFormat::RGBA8,
+        });
 #endif
     drawing_canvas_ = std::make_unique<WasmCanvasManager>(
         std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
@@ -318,12 +326,20 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
 
 #if IMP_RUNTIME(DEV)
     texture_ = view.GetTextureFactory().CreateTexture(
-        pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8,
-        filament::Texture::Usage::COLOR_ATTACHMENT |
-            filament::Texture::Usage::DEFAULT);
+        imp::TextureFactory::TextureCreationSettings{
+            .width = pixel_size_.x,
+            .height = pixel_size_.y,
+            .format = filament::Texture::InternalFormat::RGBA8,
+            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                     filament::Texture::Usage::DEFAULT,
+        });
 #else
     texture_ = view.GetTextureFactory().CreateTexture(
-        pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8);
+        imp::TextureFactory::TextureCreationSettings{
+            .width = pixel_size_.x,
+            .height = pixel_size_.y,
+            .format = filament::Texture::InternalFormat::RGBA8,
+        });
 #endif
     drawing_canvas_ = std::make_unique<WasmCanvasManager>(
         std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
@@ -487,7 +503,8 @@ void WasmAsyncCanvasSource::WasmScopedCanvas::DrawText(
 }
 
 void WasmAsyncCanvasSource::WasmScopedCanvas::DrawGlyph(
-    GlyphId glyph, float2 pos, const TextOptions& text_options) {
+    GlyphId glyph, float2 pos, const TextOptions& text_options,
+    const TextMetrics* pre_cached_metrics) {
   IMP_LOG(imp::FATAL) << "ScopedCanvas::DrawGlyph is unavailable on WASM.";
 }
 

@@ -62,8 +62,7 @@ FallbackComponentWidget::FallbackComponentWidget(NodeHandle node,
 #if IMP_RUNTIME(DEV)
   std::vector<std::string> segments =
       absl::StrSplit(std::string(pool->GetTypeName()), "::");
-  name_ = absl::StrCat(segments.back(),
-                       absl::StrFormat("##%i", node_->GetEntity().getId()));
+  name_ = segments.back();
 #else
   name_ = absl::StrFormat("Component Id: %i", component_->GetComponentId());
 #endif

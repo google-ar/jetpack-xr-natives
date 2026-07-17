@@ -149,7 +149,7 @@ cc_library(
     hdrs = [
         "split_engine_shared_memory_bridge_client_ndk.h",
     ],
-    copts = imp_copts() + if_android(["-Wno-private-header"]),
+    copts = imp_copts(),
     defines = imp_defines(),
     linkopts = [
         "-lbinder_ndk",
@@ -280,7 +280,6 @@ cc_library(
     hdrs = [
         "split_engine_shared_memory_bridge_service.h",
     ],
-    copts = if_android(["-Wno-private-header"]),
     deps = [
         ":split_engine_shared_memory_bridge_service_impl",
         "//core/async:executor",
@@ -405,5 +404,20 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_impress//core/common:log",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_android_external_texture_surface_service",
+    srcs = ["split_engine_android_external_texture_surface_service.cc"],
+    hdrs = ["split_engine_android_external_texture_surface_service.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":split_engine_shared_memory_bridge_client",
+        "//core/split_engine:split_engine_shared",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_impress//core/common:log",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )

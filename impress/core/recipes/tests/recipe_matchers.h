@@ -87,8 +87,8 @@ struct VariantEq {
     return recipe::ToString(std::get<T>(lhs)) == recipe::ToString(rhs);
   }
 
-  bool operator()(const absl::monostate& rhs) const {
-    return std::holds_alternative<absl::monostate>(lhs);
+  bool operator()(const std::monostate& rhs) const {
+    return std::holds_alternative<std::monostate>(lhs);
   }
 
   bool operator()(const google::protobuf::imp_proto::Any& rhs) const {

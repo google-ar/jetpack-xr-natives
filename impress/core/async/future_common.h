@@ -83,7 +83,7 @@ enum class FutureExecutorMode {
   kScheduleAlways
 };
 
-using ExecutorTypeOrExecutor = absl::variant<Executor::Type, Executor*>;
+using ExecutorTypeOrExecutor = std::variant<Executor::Type, Executor*>;
 
 // Options used to configure calls to Future<T>::Schedule.
 struct FutureScheduleOptions {

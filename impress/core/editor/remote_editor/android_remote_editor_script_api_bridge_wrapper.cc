@@ -23,15 +23,17 @@
 #include <utility>
 
 #include "core/common/jni_helpers.h"
+#include "core/editor/remote_editor/android_remote_editor_wrapper.h"
 
 namespace imp {
-namespace android {
 
 AndroidRemoteEditorScriptApiBridgeWrapper::
-    AndroidRemoteEditorScriptApiBridgeWrapper(JNIEnv* env,
-                                              JniUniquePtr<jobject> java_server)
-    : JavaWrapper(env, std::move(java_server),
-                  "com/google/ar/imp/core/editor/RemoteEditorScriptApiBridge") {
+    AndroidRemoteEditorScriptApiBridgeWrapper(
+        JNIEnv* env, JniUniquePtr<jobject> java_script_api_bridge,
+        AndroidRemoteEditorWrapper::Callback* callback)
+    : JavaWrapper(env, std::move(java_script_api_bridge),
+                  "com/google/ar/imp/core/editor/RemoteEditorScriptApiBridge"),
+      callback_(callback) {
   // LINT.IfChange(postMessageToScript)
   post_message_to_script_method_ =
       GetMethodHandle("postMessageToScript", "(Ljava/lang/String;)V");
@@ -46,7 +48,6 @@ void AndroidRemoteEditorScriptApiBridgeWrapper::PostMessageToScript(
   JavaExceptionPrintClear(env);
 }
 
-}  // namespace android
 }  // namespace imp
 
 #endif  // IMP_PLATFORM(ANDROID)

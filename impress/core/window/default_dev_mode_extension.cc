@@ -18,11 +18,14 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
@@ -41,9 +44,11 @@
 #include "core/config.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_info.h"
+#include "core/editor/events.h"
 #include "core/input/key_codes.h"
 #include "core/math/vec.h"
 #include "core/video/video_writer.h"
+#include "core/view/base_view.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filagui_imgui_renderer.h"
 #include "core/window/filament_host.h"
@@ -92,6 +97,9 @@ struct ImGuiMouseInputProcessor {
 };
 }  // namespace
 
+DefaultDevModeExtension::DefaultDevModeExtension(BaseView& view)
+    : base_view_(view) {}
+
 ImFont* DefaultDevModeExtension::LoadFont(const BufferAccess& font_data,
                                           const char* font_name, int size) {
   ImFontConfig font_config;
@@ -132,7 +140,7 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
 
   // The imgui_helper which is wrapped by the FilaguiImGuiRenderer has no status
   //  to return, and, is therefore, initialized here.
-  if (base_view_.GetSplitEngineSerializer()) {
+  if (base_view_.GetSplitEngineSerializer() != nullptr) {
 #if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV)
 
     imgui_renderer_ =
@@ -164,13 +172,6 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
       host_->GetEngine(), host_->GetScene(), custom_debug_draw_material_);
 
   return absl::OkStatus();
-}
-
-bool DefaultDevModeExtension::RemoteUiEnabled(FilamentHost* host) {
-  if (ShouldRenderUiInPlace()) {
-    return false;
-  }
-  return video_writer_ != nullptr && video_writer_->IsReady();
 }
 
 void DefaultDevModeExtension::PreCleanup() {
@@ -209,6 +210,7 @@ bool DefaultDevModeExtension::TryConsumeMouseInput(
 
 void DefaultDevModeExtension::PreRender(absl::Duration previous_vsync,
                                         absl::Duration next_vsync, bool force) {
+
   if (!IsEnabled()) {
     return;
   }

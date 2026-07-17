@@ -23,6 +23,7 @@
 
 #include "core/common/log.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/types/variant.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
@@ -33,7 +34,9 @@
 #include "core/common/trace.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_info.h"
+#include "core/editor/widgets/viewport/viewport_widget.h"
 #include "core/editor/xr/xr_editor_ui.h"
+#include "core/geometry/shapes/rect.h"
 #include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_controller.h"
@@ -54,11 +57,25 @@ namespace imp {
 namespace {
 std::optional<int> PointerToImGuiMouseIndex(Pointer::Id pointer_id) {
   if (pointer_id == kMousePointerIdLeft) {
-    return 0;
+    return ImGuiMouseButton_Left;
   } else if (pointer_id == kMousePointerIdRight) {
-    return 1;
+    return ImGuiMouseButton_Right;
+  } else if (pointer_id == kMousePointerIdMiddle) {
+    return ImGuiMouseButton_Middle;
   }
   return std::nullopt;
+}
+
+bool IsMouseOverViewport(const std::optional<Rect>& viewport_rect,
+                         const float2& point) {
+  if (!viewport_rect) return false;
+
+  const bool point_over_viewport = viewport_rect->Contains(point);
+
+  const ImGuiContext* g = ImGui::GetCurrentContext();
+  return point_over_viewport && g && g->HoveredWindow &&
+         absl::StrContains(g->HoveredWindow->Name,
+                           editor::ViewportWidget::kViewportWindowName);
 }
 
 // Constructs a ControllerHitEvent, if controller input is identified in the
@@ -185,11 +202,30 @@ void DevModeInputInterceptor::FilterPointerEvents(
 
     if (size_t down_count = down_pointer_positions.size()) {
       size_t down_index;
+      std::optional<Rect> viewport_rect = GetViewportRect();
       for (down_index = 0; down_index < down_count; ++down_index) {
-        io.MousePos = ImVec2(down_pointer_positions[down_index].x,
-                             down_pointer_positions[down_index].y);
+        const float2 point = down_pointer_positions[down_index];
+        io.MousePos = ImVec2(point.x, point.y);
         ImGui::UpdateHoveredWindowAndCaptureFlags(io.MousePos);
-        if (io.WantCaptureMouse) break;
+
+        const bool is_over_viewport = IsMouseOverViewport(viewport_rect, point);
+        if (io.WantCaptureMouse) {
+          if (is_over_viewport) {
+            // Don't let ImGui capture the pointer if it's over the 3D viewport
+            // and is not obscured by another ImGui window.
+            // This allows ImGui to overlay the viewport and still get inputs.
+            // e.g. Right-click Hierarchy context menu overlapping the viewport.
+            continue;
+          }
+          break;
+        }
+        auto& editor = view_->GetRegistry().Get<editor::Editor>()->get();
+        if (editor.IsEnabled() && !is_over_viewport) {
+          // If the editor is enabled and we are NOT over a viewport,
+          // then the editor should capture the input to prevent it
+          // from reaching the app.
+          break;
+        }
       }
 
       if (down_index != down_count) {
@@ -198,9 +234,13 @@ void DevModeInputInterceptor::FilterPointerEvents(
       } else {
         // Window should lose focus because we touched outside of ImGui.
         ImGui::SetWindowFocus(nullptr);
-        // Unset mouse button left(0) and button right(1) when losing focus.
-        io.MouseClicked[0] = io.MouseClicked[1] = false;
-        io.MouseDown[0] = io.MouseDown[1] = false;
+        // Unset mouse button left, right and middle when losing focus.
+        io.MouseClicked[ImGuiMouseButton_Left] =
+            io.MouseClicked[ImGuiMouseButton_Right] =
+                io.MouseClicked[ImGuiMouseButton_Middle] = false;
+        io.MouseDown[ImGuiMouseButton_Left] =
+            io.MouseDown[ImGuiMouseButton_Right] =
+                io.MouseDown[ImGuiMouseButton_Middle] = false;
       }
     } else if (!pointer_events.empty()) {
       // No capture, no down events; update mouse pos with first found pointer
@@ -210,38 +250,39 @@ void DevModeInputInterceptor::FilterPointerEvents(
     }
   }
 
-  // Without a capture we are done filtering.
-  if (!captured_id_) {
-    return;
-  }
+  if (captured_id_) {
+    // Remember ahead of time if our captured pointer will release this tick.
+    bool releasing_or_cancelling_capture = false;
 
-  // Remember ahead of time if our captured pointer will release this tick.
-  bool releasing_or_cancelling_capture = false;
+    for (const PointerEvent& event : pointer_events) {
+      if (event.Type() != PointerEventType::kUp &&
+          event.Type() != PointerEventType::kCancel)
+        continue;
 
-  for (auto& event : pointer_events) {
-    if (event.Type() != PointerEventType::kUp &&
-        event.Type() != PointerEventType::kCancel)
-      continue;
-    int up_index;
-    for (up_index = 0; up_index < event.ChangedPointerCount(); ++up_index) {
-      const Pointer& pointer = event.GetPointer(up_index);
-      if (pointer.id == *captured_id_) break;
+      int up_index;
+      for (up_index = 0; up_index < event.ChangedPointerCount(); ++up_index) {
+        const Pointer& pointer = event.GetPointer(up_index);
+        if (pointer.id == *captured_id_) break;
+      }
+
+      if (up_index == event.ChangedPointerCount()) continue;
+
+      releasing_or_cancelling_capture = true;
     }
-    if (up_index == event.ChangedPointerCount()) continue;
-    releasing_or_cancelling_capture = true;
-  }
 
-  // Filter any messages using the captured pointer
-  for (auto event_index = 0; event_index < pointer_events.size();
-       ++event_index) {
-    auto& event = pointer_events[event_index];
-    auto pointer_index = event.GetIndexForPointerId(*captured_id_);
-    if (pointer_index < 0 || pointer_index >= event.PointerCount()) continue;
+    // Filter any messages using the captured pointer
+    for (int event_index = 0; event_index < pointer_events.size();
+         ++event_index) {
+      const PointerEvent& event = pointer_events[event_index];
+      const int pointer_index = event.GetIndexForPointerId(*captured_id_);
 
-    auto& pointer = event.GetPointer(pointer_index);
-    io.MousePos = ImVec2(pointer.point.x, pointer.point.y);
+      if (pointer_index < 0 || pointer_index >= event.PointerCount()) continue;
 
-    if (!use_remote_screen) {
+      const Pointer& pointer = event.GetPointer(pointer_index);
+      io.MousePos = ImVec2(pointer.point.x, pointer.point.y);
+
+      if (use_remote_screen) continue;
+
       if (event.PointerCount() == 1 ||
           (pointer_index == 0 && event.ChangedPointerCount() == 1)) {
         // The removal of this pointer makes the event irrelevant; drop it.
@@ -257,14 +298,36 @@ void DevModeInputInterceptor::FilterPointerEvents(
             event.ElapsedTime());
       }
     }
+
+    if (releasing_or_cancelling_capture) {
+      std::optional<int> mouse_button = PointerToImGuiMouseIndex(*captured_id_);
+
+      if (mouse_button.has_value()) {
+        io.MouseDown[*mouse_button] = false;
+      }
+
+      captured_id_.reset();
+    }
   }
 
-  if (releasing_or_cancelling_capture && captured_id_) {
-    std::optional<int> mouse_button = PointerToImGuiMouseIndex(*captured_id_);
-    if (mouse_button.has_value()) {
-      io.MouseDown[*mouse_button] = false;
+  // Transform remaining events to viewport space
+  if (!editor.ok() || !editor->get().IsEnabled()) return;
+
+  const std::optional<Rect> viewport_rect = editor->get().GetViewportRect();
+
+  if (!viewport_rect) return;
+
+  for (PointerEvent& event : pointer_events) {
+    std::vector<Pointer> transformed_pointers;
+
+    for (const Pointer& p : event.GetPointers()) {
+      Pointer transformed_p = p;
+      transformed_p.point -= viewport_rect->GetMin();
+      transformed_pointers.push_back(transformed_p);
     }
-    captured_id_.reset();
+
+    event = PointerEvent(event.Type(), transformed_pointers,
+                         event.ChangedPointerCount(), event.ElapsedTime());
   }
 }
 
@@ -274,9 +337,19 @@ void DevModeInputInterceptor::FilterKeyboardEvents(
   IMP_TRACE();
   ImGuiIO& io = ImGui::GetIO();
 
+  bool use_remote_screen = false;
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_->GetRegistry().Get<editor::Editor>();
+  if (editor.ok()) {
+    if (editor->get().GetDisplayMode() ==
+        editor::EditorInfo::DisplayMode::kRemoteScreen) {
+      use_remote_screen = true;
+    }
+  }
+
   // To show/hide soft keyboard. Do nothing if the platform doesn't support
   // soft keyboard.
-  if (soft_keyboard_controller_) {
+  if (soft_keyboard_controller_ && !use_remote_screen) {
     soft_keyboard_controller_->SetKeyboardShown(io.WantTextInput);
   }
 
@@ -322,18 +395,28 @@ void DevModeInputInterceptor::FilterKeyboardEvents(
 
 void DevModeInputInterceptor::FilterWheelEvents(
     std::vector<WheelEvent>& wheel_events) {
-  constexpr float kWheelSensitivity = 0.2f;
-  ImGuiIO& io = ImGui::GetIO();
   auto wheel_itr = wheel_events.begin();
   while (wheel_itr != wheel_events.end()) {
-    io.MousePos = ImVec2(wheel_itr->GetPoint().x, wheel_itr->GetPoint().y);
-    ImGui::UpdateHoveredWindowAndCaptureFlags(io.MousePos);
-    if (io.WantCaptureMouse) {
-      io.MouseWheel += wheel_itr->GetDelta().y * kWheelSensitivity;
+    if (TryConsumeWheelEvent(*wheel_itr)) {
       wheel_itr = wheel_events.erase(wheel_itr);
     } else {
       ++wheel_itr;
     }
+  }
+
+  // Transform remaining events to viewport space
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_->GetRegistry().Get<editor::Editor>();
+  if (!editor.ok() || !editor->get().IsEnabled()) return;
+
+  const std::optional<Rect> viewport_rect = editor->get().GetViewportRect();
+
+  if (!viewport_rect) return;
+
+  for (WheelEvent& event : wheel_events) {
+    event =
+        WheelEvent(event.GetDelta(), event.GetPoint() - viewport_rect->GetMin(),
+                   event.GetElapsedTime());
   }
 }
 
@@ -355,5 +438,41 @@ void DevModeInputInterceptor::FilterInputActionEvents(
   for (auto& input_action_event : input_action_events) {
     InterceptXrEditorInput(*view_, input_action_event);
   }
+
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_->GetRegistry().Get<editor::Editor>();
+  if (editor.ok() && editor->get().IsEnabled()) {
+    input_action_events.clear();
+  }
+}
+
+bool DevModeInputInterceptor::TryConsumeWheelEvent(
+    const WheelEvent& wheel_event) {
+  constexpr float kWheelSensitivity = 0.2f;
+
+  ImGuiIO& io = ImGui::GetIO();
+
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_->GetRegistry().Get<editor::Editor>();
+
+  if (!editor.ok()) return false;
+
+  const bool is_over_viewport = IsMouseOverViewport(
+      editor->get().GetViewportRect(), float2(io.MousePos.x, io.MousePos.y));
+
+  // Don't consume the wheel event if it's over the viewport.
+  if (is_over_viewport) return false;
+
+  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+    io.MouseWheel += wheel_event.GetDelta().y * kWheelSensitivity;
+    return true;
+  }
+
+  return editor->get().IsEnabled();
+}
+
+std::optional<Rect> DevModeInputInterceptor::GetViewportRect() const {
+  auto& editor = view_->GetRegistry().Get<editor::Editor>()->get();
+  return editor.GetViewportRect();
 }
 }  // namespace imp

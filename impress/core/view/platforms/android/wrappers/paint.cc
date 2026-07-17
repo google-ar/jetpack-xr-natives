@@ -42,7 +42,8 @@ class StyleWrapper : public JavaEnumWrapper<Paint::Style> {
 };
 
 Paint::Paint(const Context& context)
-    : JavaWrapper(context, "android/graphics/Paint", "()V") {
+    : JavaWrapper(context, "android/graphics/Paint", "()V"),
+      clear_xfermode_(EmptyJniUniquePtr<jobject>(context.GetJniEnv())) {
   set_text_size_ = GetMethodHandle("setTextSize", "(F)V");
   set_letter_spacing_ = GetMethodHandle("setLetterSpacing", "(F)V");
   set_stroke_width_ = GetMethodHandle("setStrokeWidth", "(F)V");
@@ -64,6 +65,26 @@ Paint::Paint(const Context& context)
                                       "()Landroid/graphics/Paint$FontMetrics;");
   get_text_widths_ =
       GetMethodHandle("getTextWidths", "(Ljava/lang/String;[F)I");
+
+  JNIEnv* env = context.GetJniEnv();
+  JniUniquePtr<jclass> blend_mode_class =
+      FindClass(env, "android/graphics/PorterDuff$Mode");
+  auto clear_mode_id = env->GetStaticFieldID(
+      blend_mode_class.get(), "CLEAR", "Landroid/graphics/PorterDuff$Mode;");
+  JniUniquePtr<jobject> clear_mode = WrapJni(
+      env, env->GetStaticObjectField(blend_mode_class.get(), clear_mode_id));
+
+  JniUniquePtr<jclass> xfermode_class =
+      FindClass(env, "android/graphics/PorterDuffXfermode");
+  jmethodID xfermode_ctor = env->GetMethodID(
+      xfermode_class.get(), "<init>", "(Landroid/graphics/PorterDuff$Mode;)V");
+  clear_xfermode_ = LocalToGlobalRef(WrapJni(
+      env,
+      env->NewObject(xfermode_class.get(), xfermode_ctor, clear_mode.get())));
+
+  set_xfermode_ = GetMethodHandle(
+      "setXfermode",
+      "(Landroid/graphics/Xfermode;)Landroid/graphics/Xfermode;");
 }
 
 void Paint::SetTextSize(float text_size) {
@@ -131,6 +152,14 @@ void Paint::SetAntiAlias(bool anti_alias) {
   }
   CallVoidMethod(set_anti_alias_, anti_alias);
   last_anti_alias_ = anti_alias;
+}
+
+void Paint::SetXfermodeClear(bool clear) {
+  if (last_xfermode_clear_.has_value() && *last_xfermode_clear_ == clear) {
+    return;
+  }
+  CallObjectMethod(set_xfermode_, clear ? clear_xfermode_.get() : nullptr);
+  last_xfermode_clear_ = clear;
 }
 
 std::unique_ptr<Rect> Paint::GetTextBounds(absl::string_view text) {

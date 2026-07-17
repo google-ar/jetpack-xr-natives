@@ -25,9 +25,10 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "core/config.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
-#if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
+#if IMP_MATERIAL_API(VULKAN)
 #include "core/view/platforms/xr_android/xr_vulkan_swap_chain_image_handler.h"
 #else
 #include "core/view/platforms/xr_android/xr_opengl_swap_chain_image_handler.h"
@@ -42,7 +43,7 @@ namespace imp {
 // depth textures.
 class XrSwapChain : public filament::backend::Platform::SwapChain {
  public:
-#if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
+#if IMP_MATERIAL_API(VULKAN)
   using ImageHandlerType = imp::XrVulkanSwapChainImageHandler;
 #else
   using ImageHandlerType = imp::XrOpenGLSwapChainImageHandler;

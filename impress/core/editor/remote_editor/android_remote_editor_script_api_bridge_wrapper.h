@@ -24,25 +24,30 @@
 #include <string>
 
 #include "core/common/jni_helpers.h"
+#include "core/editor/remote_editor/android_remote_editor_wrapper.h"
 
 namespace imp {
-namespace android {
 
 // Android implementation of a C++ wrapper for the Java
 // RemoteEditorScriptApiBridge class.
 class AndroidRemoteEditorScriptApiBridgeWrapper : public JavaWrapper {
  public:
-  AndroidRemoteEditorScriptApiBridgeWrapper(JNIEnv* env,
-                                            JniUniquePtr<jobject> java_server);
+  AndroidRemoteEditorScriptApiBridgeWrapper(
+      JNIEnv* env, JniUniquePtr<jobject> java_script_api_bridge,
+      AndroidRemoteEditorWrapper::Callback* callback);
 
-  // Sends a message to the script via the Java WebSocket server.
+  // Sends a message to the script via the Java ScriptApiBridge server.
   void PostMessageToScript(const std::string& message);
+
+  AndroidRemoteEditorWrapper::Callback* GetCallback() const {
+    return callback_;
+  }
 
  private:
   JniHandle post_message_to_script_method_;
+  AndroidRemoteEditorWrapper::Callback* callback_ = nullptr;
 };
 
-}  // namespace android
 }  // namespace imp
 
 #endif  // IMP_PLATFORM(ANDROID)

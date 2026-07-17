@@ -17,45 +17,46 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_XR_ANDROID_OPENXR_INCLUDES_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_XR_ANDROID_OPENXR_INCLUDES_H_
 
-#define XR_USE_PLATFORM_ANDROID 1
-
-// IWYU pragma: begin_exports
-
 // <jni.h> is required since openxr_platform.h uses jobject.
 #include <jni.h>
 
-#include "core/config.h"
+#include "core/config.h"  // IWYU pragma: keep
+
+// IWYU pragma: begin_exports
 
 #if IMP_PLATFORM(ANDROID)
-// The order of these includes is critical and clang format wants to reorder.
-// clang-format off
-// XR_USE_ variables need to be defined before including openxr_platform. These
-// specify which functions and variable types are to be included.
+#define XR_USE_PLATFORM_ANDROID 1
+#endif
+
 #if IMP_MATERIAL_API(VULKAN)
 #define XR_USE_GRAPHICS_API_VULKAN 1
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan_core.h>  // NOLINT
+
 #include "filament/filament/backend/include/backend/platforms/VulkanPlatform.h"
 #elif IMP_MATERIAL_API(OPENGL)
 #define XR_USE_GRAPHICS_API_OPENGL_ES 1
-#include <GLES3/gl31.h>
-#include <GLES2/gl2ext.h>
+#if IMP_PLATFORM(ANDROID)
+#include <GLES2/gl2.h>     // NOLINT
+#include <GLES2/gl2ext.h>  // NOLINT
+#include <GLES3/gl31.h>    // NOLINT
+
 #include "filament/filament/backend/include/backend/platforms/PlatformEGLAndroid.h"
 #else
-#error "Material API not specified"
-#endif
-// clang-format on
-
-#else
-#define XR_USE_GRAPHICS_API_OPENGL_ES 1
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
+#include <EGL/egl.h>     // NOLINT
+#include <EGL/eglext.h>  // NOLINT
 
 #include "filament/filament/backend/include/backend/platforms/OpenGLPlatform.h"
 #endif
+#elif IMP_MATERIAL_API(METAL)
+// Metal is not supported in this package, but we handle the case to avoid
+// falling through to the #error or legacy blocks.
+#else
+#error "Material API not specified"
+#endif
 
 // Now it is safe to include OpenXR headers.
-#include <openxr/openxr.h>
-#include <openxr/openxr_platform.h>
+#include <openxr/openxr.h>           // NOLINT
+#include <openxr/openxr_platform.h>  // NOLINT
 #if IMP_PLATFORM(ANDROID)
 #include <openxr/public/xr_android_global_passthrough_dimming.h>
 #include <openxr/public/xr_androidx_spatial_interaction.h>

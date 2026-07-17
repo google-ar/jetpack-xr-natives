@@ -22,6 +22,7 @@
 #include "core/ncsb/node_handle.h"
 #include "core/scripting/proto/api.proto.imp.h"
 #include "core/view/framework/assets/asset_manager.h"
+#include "core/view/framework/model_factory.h"
 #include "core/view/framework/scene/scene_system.h"
 
 #if IMP_PLATFORM(ANDROID)
@@ -46,7 +47,7 @@ static constexpr absl::string_view kExtensionTextproto = ".textproto";
 
 Future<NodeHandle> LoadModelHandler::HandleMessage(
     const LoadModelRequest& message) {
-  return view_.GetAssetManager()
+  return view_.GetModelFactory()
       .LoadModel(message.remote_uri)
       .Then([message](const NodeHandle& node) {
         node->SetEnabled(message.enabled);

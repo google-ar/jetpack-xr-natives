@@ -26,13 +26,22 @@
 #include <cstdint>
 
 #include "filament/filament/backend/include/backend/Platform.h"
-#include "filament/filament/backend/include/backend/platforms/VulkanPlatformAndroid.h"
-#include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 #include "core/config.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
+#if IMP_PLATFORM(ANDROID)
+#include "filament/filament/backend/include/backend/platforms/VulkanPlatformAndroid.h"
+#else
+#include "filament/filament/backend/include/backend/platforms/VulkanPlatform.h"
+#endif
+#include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 
 namespace imp {
+class XrSessionHost;
+#if IMP_PLATFORM(ANDROID)
 using XrPlatformBase = filament::backend::VulkanPlatformAndroid;
+#else
+using XrPlatformBase = filament::backend::VulkanPlatform;
+#endif
 
 // Custom filament platform for rendering in OpenXR using Vulkan.
 //
@@ -102,6 +111,16 @@ class XrVulkanPlatform : public XrPlatformBase {
   // which helps prevent frame drops when creating graphics pipelines at draw
   // time (on the main thread).
   void registerAndroidExternalFormatsForCachePrewarm();
+
+#if !IMP_PLATFORM(ANDROID)
+
+ private:
+  // Filament's VulkanPlatform (host) pure virtuals
+  ExtensionSet getSwapchainInstanceExtensions() const override;
+  SurfaceBundle createVkSurfaceKHR(void* nativeWindow, VkInstance instance,
+                                   uint64_t flags) const noexcept override;
+
+#endif
 };
 
 }  // namespace imp

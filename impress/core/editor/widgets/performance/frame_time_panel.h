@@ -21,8 +21,10 @@
 #include <thread>  // NOLINT: Need to sort things by thread id.
 #include <vector>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "core/editor/widgets/performance/callstack_panel.h"
 #include "core/editor/widgets/performance/circular_buffer.h"
@@ -33,6 +35,7 @@
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
+#include "core/performance/profiler_state.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -138,14 +141,15 @@ class FrameTimePanel : public MonitorPanel {
   void DrawSelectedFrameLabels(int frame_number, ImDrawList* draw_list);
 
   // Returns all samples with a specific name for a given frame and thread.
-  const std::vector<SampleNode*>* GetSamples(absl::string_view sample_name,
-                                             int frame_index,
-                                             std::thread::id thread_id);
+  absl::StatusOr<absl::Span<SampleNode* const>> GetSamples(
+      absl::string_view sample_name, int frame_index,
+      std::thread::id thread_id);
 
   PerformanceWindow& performance_window_;
   BaseView& view_;
   CircularBuffer<FrameTimeInfo> buffer_;
-  std::array<SelectedSampleInfo, Profiler::kMaxFrames> selected_sample_buffer_;
+  std::array<SelectedSampleInfo, MainThreadProfilerState::kMaxFrames>
+      selected_sample_buffer_;
 
   // This is incremented on every frame that is updated on this panel. This is
   // different from the actual frame number Impress is at.

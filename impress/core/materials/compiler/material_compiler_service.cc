@@ -25,8 +25,10 @@
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "filament/filament/backend/include/backend/Platform.h"
 #include "filament/libs/filamat/include/filamat/MaterialBuilder.h"
 #include "filament/libs/filamat/include/filamat/Package.h"
@@ -38,10 +40,10 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/verifier.h"
 #include "core/common/filament_status_helpers.h"
+#include "core/common/invocable.h"
 #include "core/ipc/message_pipe.h"
 #include "core/materials/compiler/runtime_material_compiler_config.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
-#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
 namespace {
@@ -83,19 +85,6 @@ inline filamat::MaterialBuilder::Platform UnpackPlatform(
   }
 }
 
-// Unpack the IPC Config table into the RuntimeMaterialCompilerConfig.
-inline void UnpackConfig(const schemas::Config* config,
-                         RuntimeMaterialCompilerConfig& runtime_config) {
-  if (config == nullptr) {
-    // Default to Desktop and ALL APIs.
-    runtime_config.SetPlatform(filamat::MaterialBuilder::Platform::DESKTOP);
-    runtime_config.SetTargetApi(filamat::MaterialBuilder::TargetApi::ALL);
-    return;
-  }
-  runtime_config.SetPlatform(UnpackPlatform(config->platform()));
-  runtime_config.SetTargetApi(UnpackTargetApi(config->target_api()));
-}
-
 // Convert the absl::StatusCode to the IPC schema ErrorStatusCode.
 inline schemas::ErrorStatusCode PackStatusCode(absl::StatusCode status_code) {
   switch (status_code) {
@@ -111,8 +100,11 @@ inline schemas::ErrorStatusCode PackStatusCode(absl::StatusCode status_code) {
 }
 }  // namespace
 
-MaterialCompilerService::MaterialCompilerService(int fd)
-    : pipe_(
+MaterialCompilerService::MaterialCompilerService(
+    int fd, imp::Invocable<void()> on_close)
+    : job_system_(std::make_unique<utils::JobSystem>()),
+      on_close_(std::move(on_close)),
+      pipe_(
           fd,
           [](std::unique_ptr<uint8_t[]> data, size_t size,
              void* user) -> ipc::MessagePipe::OnMessageResult {
@@ -120,9 +112,19 @@ MaterialCompilerService::MaterialCompilerService(int fd)
                 static_cast<MaterialCompilerService*>(user);
             return service->OnMessage(std::move(data), size);
           },
-          [](void* user) {}, this, "MaterialCompilerServicePipe") {}
+          [](void* user) {
+            MaterialCompilerService* service =
+                static_cast<MaterialCompilerService*>(user);
+            if (service->on_close_) {
+              service->on_close_();
+            }
+          },
+          this, "MaterialCompilerServicePipe") {}
 
-MaterialCompilerService::~MaterialCompilerService() { Close(); }
+MaterialCompilerService::~MaterialCompilerService() {
+  Close();
+  job_system_.reset();
+}
 
 ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
     std::unique_ptr<uint8_t[]> message, size_t size) {
@@ -144,14 +146,12 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
   }
 
   // Check the request type.
-  absl::Status status;
   ipc::MessagePipe::OnMessageResult result =
       ipc::MessagePipe::OnMessageResult::kKeepAlive;
   switch (request->request_type()) {
     case schemas::RequestType::CompileRequest:
-      status =
-          HandleCompileRequest(request->operation_id(),
-                               request->request_as<schemas::CompileRequest>());
+      HandleCompileRequest(request->operation_id(),
+                           request->request_as<schemas::CompileRequest>());
       break;
     case schemas::RequestType::CloseRequest:
       // This will close the pipe on the correct thread, thus there no need to
@@ -160,53 +160,104 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
       result = ipc::MessagePipe::OnMessageResult::kInitiateClose;
       break;
     default:
-      status = absl::InvalidArgumentError("Unexpected request type");
+      SendErrorResponse(request->operation_id(),
+                        absl::InvalidArgumentError("Unexpected request type"));
       break;
-  }
-
-  if (!status.ok()) {
-    SendErrorResponse(request->operation_id(), status);
   }
 
   return result;
 }
 
-absl::Status MaterialCompilerService::HandleCompileRequest(
+void MaterialCompilerService::HandleCompileRequest(
     uint64_t operation_id, const schemas::CompileRequest* request) {
   if (operation_id == 0) {
-    return absl::InvalidArgumentError("Operation id must be greater than 0");
+    SendErrorResponse(
+        0, absl::InvalidArgumentError("Operation id must be greater than 0"));
+    return;
   }
   if (request == nullptr) {
-    return absl::InvalidArgumentError("CompileRequest is null");
+    SendErrorResponse(operation_id,
+                      absl::InvalidArgumentError("CompileRequest is null"));
+    return;
   }
-  MP_ASSIGN_OR_RETURN(std::string compiled_shader,
-                   CompileMaterial(request->source_material()->string_view(),
-                                   request->config()));
+  if (request->source_material() == nullptr) {
+    SendErrorResponse(operation_id,
+                      absl::InvalidArgumentError("Source material is null"));
+    return;
+  }
 
-  flatbuffers::FlatBufferBuilder builder;
+  std::string source_material =
+      std::string(request->source_material()->string_view());
 
-  flatbuffers::Offset<schemas::CompileResponse> compile_response =
-      schemas::CreateCompileResponse(
-          builder, builder.CreateVector(
-                       reinterpret_cast<const uint8_t*>(compiled_shader.data()),
-                       compiled_shader.size()));
-  flatbuffers::Offset<schemas::Response> response_offset =
-      schemas::CreateResponse(builder, schemas::ResponseType::CompileResponse,
-                              compile_response.Union(), operation_id);
-  builder.Finish(response_offset);
+  // Default to platform DESKTOP and target api ALL.
+  filamat::MaterialBuilder::Platform platform =
+      filamat::MaterialBuilder::Platform::DESKTOP;
+  filamat::MaterialBuilder::TargetApi target_api =
+      filamat::MaterialBuilder::TargetApi::ALL;
 
-  return SendResponse(builder);
+  // Unpack if the config is given.
+  if (request->config()) {
+    platform = UnpackPlatform(request->config()->platform());
+    target_api = UnpackTargetApi(request->config()->target_api());
+  }
+
+  auto compile_lambda = [this, operation_id, source_material, platform,
+                         target_api] {
+    absl::StatusOr<std::string> compile_result =
+        CompileMaterial(source_material, platform, target_api);
+
+    if (!compile_result.ok()) {
+      SendErrorResponse(operation_id, compile_result.status());
+      return;
+    }
+
+    flatbuffers::FlatBufferBuilder builder;
+    flatbuffers::Offset<schemas::CompileResponse> compile_response =
+        schemas::CreateCompileResponse(
+            builder, builder.CreateVector(reinterpret_cast<const uint8_t*>(
+                                              compile_result->data()),
+                                          compile_result->size()));
+    flatbuffers::Offset<schemas::Response> response_offset =
+        schemas::CreateResponse(builder, schemas::ResponseType::CompileResponse,
+                                compile_response.Union(), operation_id);
+    builder.Finish(response_offset);
+
+    if (absl::Status send_response_status = SendResponse(builder);
+        !send_response_status.ok()) {
+      IMP_LOG(imp::ERROR) << "Failed to send compile response for operation "
+                 << operation_id << ": " << send_response_status;
+    }
+  };
+
+  utils::JobSystem::Job* compile_job = utils::jobs::createJob(
+      *job_system_, /* parent= */ nullptr, compile_lambda);
+  if (compile_job == nullptr) {
+    SendErrorResponse(
+        operation_id,
+        absl::ResourceExhaustedError(
+            "Failed to creatae a job as the Job system is at capacity."));
+    return;
+  }
+
+  // Note: adopt will be called multiple times, but it will be ignored if the
+  // thread is already adopted. Also this should be called in
+  // HandleCompilerRequest as we want to adopt the worker thread, not the main
+  // thread.
+  job_system_->adopt();
+  job_system_->run(compile_job);
 }
 
 absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
     absl::string_view source_material_string,
-    const schemas::Config* ipc_config) {
+    filamat::MaterialBuilder::Platform platform,
+    filamat::MaterialBuilder::TargetApi target_api) {
   matp::MaterialParser parser;
   filamat::MaterialBuilder builder;
-  std::ostringstream compiler_output;
 
+  std::ostringstream compiler_output;
   RuntimeMaterialCompilerConfig config(source_material_string, compiler_output);
-  UnpackConfig(ipc_config, config);
+  config.SetPlatform(platform);
+  config.SetTargetApi(target_api);
 
   // TODO: This is only relevant to XR or stereo variant. This
   // should be updated or removed once we implement handling variant filters
@@ -230,20 +281,13 @@ absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
     return template_sub_status;
   }
 
-  builder.init();
   if (absl::Status parse_status = FilamentStatusToAbslStatus(
           parser.parse(builder, config, size, buffer));
       !parse_status.ok()) {
     return parse_status;
   }
 
-  utils::JobSystem js;
-  js.adopt();
-
-  filamat::Package package = builder.build(js);
-
-  js.emancipate();
-  filamat::MaterialBuilder::shutdown();
+  filamat::Package package = builder.build(*job_system_);
 
   if (!package.isValid()) {
     return absl::InvalidArgumentError(
@@ -261,6 +305,11 @@ absl::Status MaterialCompilerService::SendResponse(
     const flatbuffers::FlatBufferBuilder& builder) {
   if (builder.GetSize() > std::numeric_limits<uint32_t>::max()) {
     return absl::InternalError("Response too large");
+  }
+  absl::MutexLock lock(lock_);
+  if (pipe_.IsClosed()) {
+    return absl::FailedPreconditionError(
+        "Pipe is already closed, can't send a response.");
   }
   bool sent = pipe_.Send(builder.GetBufferPointer(),
                          static_cast<uint32_t>(builder.GetSize()));
@@ -289,6 +338,7 @@ void MaterialCompilerService::SendErrorResponse(uint64_t operation_id,
 }
 
 void MaterialCompilerService::Close() {
+  absl::MutexLock lock(lock_);
   if (!pipe_.IsClosed()) {
     pipe_.Close();
   }

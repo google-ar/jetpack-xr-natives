@@ -260,12 +260,27 @@ cc_library(
 )
 
 cc_library(
+    name = "material_registry",
+    srcs = ["material_registry.cc"],
+    hdrs = ["material_registry.h"],
+    copts = imp_copts(),
+    deps = [
+        "//core/materials",
+        "//core/view/framework:framework_proto_cc",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "mesh_renderer",
     srcs = ["mesh_renderer.cc"],
     hdrs = ["mesh_renderer.h"],
     deps = [
         ":base_renderable_manager",
         ":render_order_constants",
+        "//core:config",
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:small_source_location",
         "//core/geometry/shapes",
@@ -282,6 +297,9 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
-    ],
+    ] + if_dev_runtime([
+        "@dear_imgui",
+        "//core/common:string_numbers",
+    ]),
     alwayslink = 1,
 )

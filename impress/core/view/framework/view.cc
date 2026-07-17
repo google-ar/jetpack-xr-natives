@@ -37,6 +37,7 @@
 #include "core/async/future_common.h"
 #include "core/common/invocable.h"
 #include "core/common/trace.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/monitor/duration_measurement.h"
 #include "core/monitor/frame_loop_watcher.h"
@@ -60,6 +61,10 @@
 #include "core/view/view_events.h"
 #include "core/window/filament_host.h"
 #include "core/window/window_rotation.h"
+
+#if IMP_RUNTIME(DEV)
+#include <optional>
+#endif  // IMP_RUNTIME(DEV)
 
 // Because Custom materials are currently an experimental feature, local mode
 // now only works if IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS=1 is also defined.
@@ -107,6 +112,7 @@ View::View(ViewConfig config)
       path_manager_(this),
       mesh_factory_(*this),
       material_factory_(this),
+      model_factory_(this),
       environment_light_factory_(this),
       frame_time_(absl::Now()),
       device_(),
@@ -288,6 +294,8 @@ MaterialFactory& View::GetMaterialFactory() noexcept {
   return material_factory_;
 }
 
+ModelFactory& View::GetModelFactory() noexcept { return model_factory_; }
+
 EnvironmentLightFactory& View::GetEnvironmentLightFactory() noexcept {
   return environment_light_factory_;
 }
@@ -299,7 +307,20 @@ Device& View::GetDevice() noexcept { return device_; }
 Registry& View::GetRegistry() noexcept { return registry_; }
 const Registry& View::GetRegistry() const noexcept { return registry_; }
 
+#if IMP_RUNTIME(DEV)
+uint2 View::GetSize() const { return size_override_.value_or(size_); }
+
+void View::SetSizeOverride(std::optional<uint2> size_override) {
+  if (size_override_ == size_override) return;
+  size_override_ = size_override;
+  ViewSizeChangedEvent event;
+  event.size = GetSize();
+  event.margins = margins_;
+  GetDispatcher().Send(event);
+}
+#else
 uint2 View::GetSize() const { return size_; }
+#endif
 
 uint4 View::GetMargins() const { return margins_; }
 
@@ -553,7 +574,7 @@ void View::OnHostResize(uint2 dimensions, uint4 margins,
   margins_ = margins;
   device_.SetPhysicalPixelRatio(subpixel_ratio);
   ViewSizeChangedEvent event;
-  event.size = dimensions;
+  event.size = GetSize();
   event.margins = margins;
   GetDispatcher().Send(event);
   OnResized(dimensions, margins);

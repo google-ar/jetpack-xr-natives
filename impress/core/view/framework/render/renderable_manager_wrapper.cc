@@ -83,6 +83,11 @@ void RenderableManagerWrapper::SetMaterialInstanceAt(
   GetRenderableManager().setMaterialInstanceAt(instance, primitiveIndex,
                                                material_instance);
 }
+void RenderableManagerWrapper::ClearMaterialInstanceAt(
+    filament::RenderableManager::Instance instance, size_t primitiveIndex) {
+  if (spy_) spy_->ClearMaterialInstanceAt(instance, primitiveIndex);
+  GetRenderableManager().clearMaterialInstanceAt(instance, primitiveIndex);
+}
 void RenderableManagerWrapper::SetGeometryAt(
     filament::RenderableManager::Instance instance, size_t primitiveIndex,
     filament::backend::PrimitiveType type, VertexBuffer* vertices,

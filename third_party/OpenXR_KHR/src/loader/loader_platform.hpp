@@ -16,6 +16,12 @@
 #include "xr_dependencies.h"
 #include "platform_utils.hpp"
 
+// Begin google3
+#if defined(OPENXR_LOADER_GOOGLE3)
+#include "third_party/OpenXR_KHR/internal/runtime_registry.h"
+#endif // OPENXR_LOADER_GOOGLE3
+// End google3
+
 #if defined(__GNUC__) && __GNUC__ >= 4
 #define LOADER_EXPORT __attribute__((visibility("default")))
 #elif defined(__SUNPRO_C) && (__SUNPRO_C >= 0x590)
@@ -44,6 +50,14 @@
 // Dynamic Loading of libraries:
 typedef void *LoaderPlatformLibraryHandle;
 static inline LoaderPlatformLibraryHandle LoaderPlatformLibraryOpen(const std::string &path) {
+    // Begin google3
+#if defined(OPENXR_LOADER_GOOGLE3)
+    if (void* handle =
+            openxr_khr::HermeticRegistry::GetRegistry().OpenLibrary(path)) {
+      return static_cast<LoaderPlatformLibraryHandle>(handle);
+    }
+#endif
+    // End google3
     // When loading the library, we use RTLD_LAZY so that not all symbols have to be
     // resolved at this time (which improves performance). Note that if not all symbols
     // can be resolved, this could cause crashes later.
@@ -57,11 +71,32 @@ static inline const char *LoaderPlatformLibraryOpenError(const std::string &path
     return dlerror();
 }
 
-static inline void LoaderPlatformLibraryClose(LoaderPlatformLibraryHandle library) { dlclose(library); }
+static inline void LoaderPlatformLibraryClose(
+    LoaderPlatformLibraryHandle library) {
+    // Begin google3
+#if defined(OPENXR_LOADER_GOOGLE3)
+    if (openxr_khr::HermeticRegistry::GetRegistry().IsHermeticLibrary(library)) {
+        openxr_khr::HermeticRegistry::GetRegistry().CloseLibrary(library);
+      return;
+    }
+#endif
+    // End google3
+    dlclose(library);
+}
 
 static inline void *LoaderPlatformLibraryGetProcAddr(LoaderPlatformLibraryHandle library, const std::string &name) {
     assert(library);
     assert(!name.empty());
+    // Begin google3
+#if defined(OPENXR_LOADER_GOOGLE3)
+    if (openxr_khr::HermeticRegistry::GetRegistry().IsHermeticLibrary(
+            library)) {
+      return const_cast<void*>(
+          openxr_khr::HermeticRegistry::GetRegistry().GetProcAddr(
+              library, name.c_str()));
+    }
+#endif
+    // End google3
     return dlsym(library, name.c_str());
 }
 

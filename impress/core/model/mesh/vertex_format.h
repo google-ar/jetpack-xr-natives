@@ -22,6 +22,7 @@
 #include <initializer_list>
 #include <vector>
 
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
 #include "filament/libs/filabridge/include/filament/MaterialEnums.h"
@@ -63,6 +64,13 @@ class VertexFormat {
     // To make nothing interleaved, give every attribute a different group.
     //
     uint8_t attribute_group_override = 0;
+
+    static constexpr int16_t kUnset = -1;
+
+    // Byte offset of the attribute from the beginning of the vertex data.
+    // If unset, the offset is calculated by placing the attribute directly
+    // after the preceding attribute.
+    int16_t byte_offset = kUnset;
   };
 
   // Matches filament::backend::MAX_VERTEX_ATTRIBUTE_COUNT.
@@ -81,7 +89,16 @@ class VertexFormat {
   // attribute is repeated or the number of attributes exceeds kMaxAttributes.
   void AppendAttribute(const AttributeInfo& attribute);
 
+  // Sets the byte stride for the attribute group.
+  //
+  // It defines the stride for that group. It must be greater than or equal to
+  // the total size of the attributes taking into account their byte offsets.
+  // If not set, the stride is the same as the auto calculated vertex size.
+  VertexFormat& SetGroupByteStride(uint8_t group_idx, size_t stride);
+
   // Returns the size of the whole vertex in bytes.
+  // If custom stride is set for the group (which must always be greater than
+  // or equal to the total size of the attributes), it is returned instead.
   size_t GetVertexSize(uint8_t group_idx = 0) const;
 
   size_t GetNumAttributes(size_t group_idx = 0) const;
@@ -122,6 +139,7 @@ class VertexFormat {
     AttributeInfo attributes[kMaxAttributes];
     size_t num_attributes = 0;
     size_t vertex_size = 0;
+    size_t custom_stride = 0;
   };
   std::vector<AttributeGroup> attribute_groups_;
 };
@@ -132,6 +150,10 @@ VertexFormat::VertexFormat(Iterator begin, Iterator end) {
     AppendAttribute(*attrib);
   }
 }
+
+// Returns a string representation of a VertexAttribute.
+absl::string_view VertexAttributeToString(
+    VertexFormat::VertexAttribute attribute) noexcept;
 
 }  // namespace imp
 

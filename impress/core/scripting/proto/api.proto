@@ -24,6 +24,7 @@ import "core/math/math.proto";
 import "core/ncsb/node_handle_message.proto";
 import "core/proto/imp.proto";
 import "core/view/framework/animation/gltf_animator_state.proto";
+import "core/view/utils/proto/view_config.proto";
 
 // option cc_api_version = 2;
 // option cc_api_version = 2;
@@ -263,4 +264,8 @@ message AddComponentRequest {
 message UpdateComponentRequest {
   imp.NodeHandleMessage target = 1;
   ComponentData component_data = 2;
+}
+
+message SetViewConfigRequest {
+  imp.ViewConfig config = 1;
 }

@@ -19,6 +19,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -55,6 +57,7 @@ class SplitEngineTextureBuilder : public BaseTextureBuilder {
     bool mips = false;
     std::vector<filament::backend::PixelBufferDescriptor> image_descriptors;
     AssetPtr<ImageAsset> image;
+    std::optional<std::string> name;
 
     bool finalized = false;
   };

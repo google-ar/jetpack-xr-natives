@@ -21,10 +21,25 @@
 #include "core/common/jni_helpers.h"
 
 namespace imp {
+namespace {
+const char* GetAssetAnimatorPath(JNIEnv* env) {
+  static const char* kPath =
+      "androidx/xr/scenecore/spatial/rendering/impress/AssetAnimator";
+  static const char* kFallbackPath =
+      "androidx/xr/scenecore/impl/impress/AssetAnimator";
+  if (env->FindClass(kPath) != nullptr) {
+    return kPath;
+  }
+  JavaExceptionPrintClear(env);
+  if (env->FindClass(kFallbackPath)) {
+    return kFallbackPath;
+  }
+  return nullptr;
+}
+}  // namespace
 
 AssetAnimator::AssetAnimator(JNIEnv* env, jobject j_asset_animator)
-    : JavaWrapper(env, j_asset_animator,
-                  "androidx/xr/scenecore/impl/impress/AssetAnimator") {
+    : JavaWrapper(env, j_asset_animator, GetAssetAnimatorPath(env)) {
   on_complete_ = GetMethodHandle("onComplete", "()V");
   on_failure_ = GetMethodHandle("onFailure", "(Ljava/lang/String;)V");
 }

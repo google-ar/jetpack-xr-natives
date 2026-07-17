@@ -19,11 +19,14 @@
 
 #include <functional>
 #include <memory>
+#include <variant>
 
 #include "core/async/future.h"
 #include "core/common/context.h"
 #include "core/image/image_contents.h"
 #include "core/loader/provider/schemas/loaded_model_generated.h"
+#include "core/render/texture_asset.h"
+#include "core/view/base_view.h"
 
 namespace imp::loader::details {
 
@@ -32,10 +35,12 @@ namespace imp::loader::details {
 // Note that image_info must be kept alive until the image has finished
 // decoding, and may possibly be required to stay alive until the ImageContents
 // is no longer needed.
-Future<std::unique_ptr<image::ImageContents>> LoadImage(
-    const imp::Context &context, const schemas::TextureInfo *texture_info,
-    schemas::ImageInfo image_info_type, const void *image_info,
-    std::function<void()> callback);
+Future<std::variant<std::unique_ptr<image::ImageContents>,
+                    std::unique_ptr<TextureAsset>>>
+LoadImage(BaseView* view, const imp::Context& context,
+          const schemas::TextureInfo* texture_info,
+          schemas::ImageInfo image_info_type, const void* image_info,
+          bool enable_use_texture_asset_api, std::function<void()> callback);
 
 }  // namespace imp::loader::details
 

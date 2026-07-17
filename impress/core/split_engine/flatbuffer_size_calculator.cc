@@ -36,6 +36,7 @@ void FlatbufferSizeCalculator::TrackMinAlign(size_t elem_size) {
 void FlatbufferSizeCalculator::PreAlign() { Pad(min_align_); }
 
 void FlatbufferSizeCalculator::Pad(size_t alignment) {
+  if (alignment == 0) return;
   offset_ = alignment * ((offset_ + alignment - 1) / alignment);
 }
 
@@ -55,6 +56,12 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddVector(
   return *this;
 }
 
+FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddString(size_t length) {
+  // Strings are simply a vector of bytes, and are always null-terminated.
+  AddVector(length + 1, sizeof(char));
+  return *this;
+}
+
 FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddVectorOfStructs(
     size_t length, size_t element_size) {
   offset_ += 4;                      // size_field
@@ -68,6 +75,7 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddTable(
     const std::vector<size_t>& field_sizes) {
   // Compute size contributions of the table contents.
   for (size_t field_size : field_sizes) {
+    if (field_size == 0) continue;
     // Table data should be aligned.
     TrackMinAlign(field_size);
     Pad(field_size);
@@ -77,7 +85,12 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddTable(
   // Compute size contributions of the vtable.
   Pad(4);
   offset_ += 4;                             // table offset
-  offset_ += (field_sizes.size() + 2) * 2;  // vtable size
+  // Vtables are truncated to the last present field.
+  size_t vtable_fields = field_sizes.size();
+  while (vtable_fields > 0 && field_sizes[vtable_fields - 1] == 0) {
+    vtable_fields--;
+  }
+  offset_ += (vtable_fields + 2) * 2;  // vtable size
   return *this;
 }
 
@@ -100,17 +113,18 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddPixelBuffer() {
   });
 }
 
-FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddTexture() {
+FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddTexture(bool has_name) {
   return AddTable({
-      8,               // id
-      4,               // width
-      4,               // height
-      2,               // format
-      1,               // levels
-      1,               // sampler
-      1,               // mips
-      kReferenceSize,  // image_params
-      kReferenceSize   // pixel_buffers
+      8,                              // id
+      4,                              // width
+      4,                              // height
+      2,                              // format
+      1,                              // levels
+      1,                              // sampler
+      1,                              // mips
+      kReferenceSize,                 // image_params
+      kReferenceSize,                 // pixel_buffers
+      has_name ? kReferenceSize : 0,  // name
   });
 }
 
@@ -251,7 +265,7 @@ FlatbufferSizeCalculator::AddCubemapLevelImageContentsAndDependentData(
 }
 
 FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddTextureAndDependentData(
-    const std::vector<size_t>& buffer_sizes) {
+    const std::vector<size_t>& buffer_sizes, size_t name_size) {
   const size_t kNumBuffers = buffer_sizes.size();
   for (size_t i = 0; i < kNumBuffers; ++i) {
     AddImageParams();
@@ -267,7 +281,11 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddTextureAndDependentData(
   // Create a vector of references to the pixel buffers.
   AddReferenceVector(kNumBuffers);
 
-  AddTexture();
+  if (name_size > 0) {
+    AddString(name_size);
+  }
+
+  AddTexture(/*has_name=*/name_size > 0);
   return *this;
 }
 

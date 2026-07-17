@@ -72,7 +72,7 @@ class PerformanceWindow : public Widget, public imp::Rememberer {
   Dispatcher::ScopedConnection post_frame_connection_;
   int selected_frame_start_ = -1;
   int selected_frame_end_ = -1;
-  MonitorState monitor_state_ = MonitorState::kRunning;
+  MonitorState monitor_state_ = MonitorState::kPaused;
 };
 
 }  // namespace imp::editor

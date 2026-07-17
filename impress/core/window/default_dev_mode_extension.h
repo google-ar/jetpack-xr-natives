@@ -31,6 +31,7 @@
 #include "core/common/typed_vector.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/video/video_writer.h"
 #include "core/view/base_view.h"
 #include "core/window/clipboard/clipboard_handler.h"
@@ -54,7 +55,7 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   static constexpr FontId kMonoFont = FontId(1);
   // Get a specific font pointer, or NULL for invalid FontId's
 
-  explicit DefaultDevModeExtension(BaseView& view) : base_view_(view) {}
+  explicit DefaultDevModeExtension(BaseView& view);
   ~DefaultDevModeExtension() override = default;
   // Loads packaged fonts into ImGui and sets up its bindings to filament.
   absl::Status Setup(FilamentHost& host) override;
@@ -93,8 +94,6 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   void OnClipboardHandlerChanged(ClipboardHandler* clipboard_handler) override;
   void SetEnabled(bool is_enabled) override;
   bool IsEnabled() override;
-
-  bool RemoteUiEnabled(FilamentHost* host) override;
 
   ImGuiRenderer* GetImGuiRenderer() override { return imgui_renderer_.get(); }
 

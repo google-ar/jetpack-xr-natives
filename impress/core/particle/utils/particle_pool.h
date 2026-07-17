@@ -56,6 +56,11 @@ class ParticlePool {
   // Returns the maximum number of particles that may be active.
   int32_t GetMaxParticles() const { return max_particles_; }
 
+  // Returns the number of particles that are available to be used.
+  int32_t GetNumAvailableParticles() const {
+    return free_particle_indices_.size();
+  }
+
  private:
   ParticleFormat particle_format_;
   StandardDataProvider data_provider_;

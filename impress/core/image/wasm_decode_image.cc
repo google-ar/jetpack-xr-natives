@@ -113,7 +113,7 @@ class WasmDecodeImageManager {
       absl::string_view name, resources::Resource resource);
   Future<WasmTextureContents> DecodeImageToTexture(
       absl::string_view name, resources::Resource resource,
-      filament::backend::TextureFormat format);
+      filament::backend::TextureFormat format, uint8_t requested_levels);
 
   void OnDecodeImage(uint future_id, intptr_t image, int width, int height);
   void OnDecodeTexture(uint future_id, GLuint texture, int width, int height);
@@ -176,7 +176,7 @@ Future<std::unique_ptr<ImageContents>> WasmDecodeImageManager::DecodeImage(
 
 Future<WasmTextureContents> WasmDecodeImageManager::DecodeImageToTexture(
     absl::string_view name, resources::Resource resource,
-    filament::backend::TextureFormat format) {
+    filament::backend::TextureFormat format, uint8_t requested_levels) {
   uint future_id = GetNextFutureID();
   Future<WasmTextureContents> texture_future;
   texture_futures_.insert(std::make_pair(future_id, texture_future));
@@ -186,10 +186,10 @@ Future<WasmTextureContents> WasmDecodeImageManager::DecodeImageToTexture(
   MAIN_THREAD_EM_ASM(
       {
         Module['wasmDecodeImageManager'].decodeImageToTexture(
-            $0, $1, $2, GL.textures[$3], $3, $4);
+            $0, $1, $2, GL.textures[$3], $3, $4, $5);
       },
       future_id, resource.GetData().Data(), resource.GetData().Size(), texture,
-      texture_format);
+      texture_format, requested_levels);
   return texture_future;
 }
 
@@ -295,12 +295,13 @@ Future<std::unique_ptr<ImageContents>> WasmDecodeImage(
 
 Future<WasmTextureContents> WasmDecodeImageToTexture(
     absl::string_view name, resources::Resource resource,
-    filament::backend::TextureFormat format) {
+    filament::backend::TextureFormat format, uint8_t requested_levels) {
   if (!Executor::IsOnForegroundExecutor()) {
     IMP_LOG(imp::FATAL)
         << "WasmDecodeImageToTexture must be called on the foreground thread.";
   }
-  return GetDecodeImageManager()->DecodeImageToTexture(name, resource, format);
+  return GetDecodeImageManager()->DecodeImageToTexture(name, resource, format,
+                                                       requested_levels);
 }
 
 }  // namespace imp::image::details

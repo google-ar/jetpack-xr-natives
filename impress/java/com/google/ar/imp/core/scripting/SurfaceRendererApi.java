@@ -45,7 +45,7 @@ public final class SurfaceRendererApi {
   public static SurfaceRendererApi create(View view) {
     // These three lines are the "enable scripting idiom". You can copy this small block into your
     // Impress-based Java activity to use the Java scripting interface.
-    ScriptBridge scriptBridge = new ScriptBridge(view.getViewHostHandle());
+    ScriptBridge scriptBridge = new ScriptBridge(view.getScriptMessageHandlerProviderHandle());
     view.setScriptEndpoint(scriptBridge);
     return new SurfaceRendererApi(scriptBridge);
   }

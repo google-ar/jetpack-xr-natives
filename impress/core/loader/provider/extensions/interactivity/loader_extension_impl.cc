@@ -107,7 +107,7 @@ using InteractivityGraphTypeDataOffsets =
                  InteractivityTypeId::ReferredType>;
 
 using InteractivityValue =
-    std::variant<absl::monostate, bool, int, float, float2, float3, float4,
+    std::variant<std::monostate, bool, int, float, float2, float3, float4,
                  mat2f, mat3f, mat4f, absl::string_view>;
 using InteractivityConfiguration =
     std::variant<int, absl::string_view, bool, float, std::vector<int>>;
@@ -244,7 +244,7 @@ InteractivityVariableOffset CreateInteractivityVariable(
                                 fbb.CreateString(value.data(), value.size()))
               .Union());
     }
-    InteractivityVariableOffset operator()(const absl::monostate value) {
+    InteractivityVariableOffset operator()(const std::monostate value) {
       extensions::interactivity::SetToDefaultValue(variable);
       return std::visit(Visitor{fbb, id, variable}, variable.value);
     }
@@ -539,7 +539,7 @@ absl::Status CreateInteractivityNodeValues(
           fbb, schemas::InteractivityNodeValueType::InteractivityVariable,
           CreateInteractivityVariable(fbb, socket_name, variable).Union());
     }
-    InteractivityNodeValueOffset operator()(const absl::monostate monostate) {
+    InteractivityNodeValueOffset operator()(const std::monostate monostate) {
       return 0;
     }
   };

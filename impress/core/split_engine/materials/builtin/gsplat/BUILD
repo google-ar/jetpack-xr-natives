@@ -63,6 +63,25 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "gsplat_material_helpers",
+    srcs = ["gsplat_material_helpers.cc"],
+    hdrs = ["gsplat_material_helpers.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":gsplat_material_assets",
+        ":magic_window_panel_material_assets",
+        "//core/resources",
+        "//core/view:base_view",
+        "//core/window:filament_host",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
 # Provides a builtin material type supporting gsplats in split engine.
 cc_library(
     name = "gsplat_material_deserializer",
@@ -72,6 +91,7 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":gsplat_material_assets",
+        ":gsplat_material_helpers",
         ":magic_window_panel_material_assets",
         ":precompute_material_assets",
         ":precompute_texture_pipeline",
@@ -89,6 +109,7 @@ cc_library(
         "//core/math",
         "//core/ncsb",
         "//core/render",
+        "//core/render_passes:texture_pipeline_renderer_helper",
         "//core/render_passes:texture_pipeline_renderer_projection_quad",
         "//core/render_passes/group_to_projection_quad_texture_renderer:group_to_projection_quad_texture_renderer_component",
         "//core/render_passes/group_to_projection_quad_texture_renderer:group_to_projection_quad_texture_renderer_state_proto_cc_imp",
@@ -102,6 +123,7 @@ cc_library(
         "//core/split_engine/materials/builtin:builtin_material",
         "//core/split_engine/materials/builtin:builtin_material_registry",
         "//core/view:base_view",
+        "//core/view:view_events",
         "//core/view/framework",
         "//core/window:filament_host",
         "@com_google_absl//absl/memory",

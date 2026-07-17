@@ -92,10 +92,12 @@ constexpr absl::string_view kFieldName = GetFieldName<field>();
 
 // Checks if a type is an expansion of a given template.
 // Note, this doesn't work for templates that use non-type parameters.
-template <typename, template <typename...> typename>
+template <typename, template <typename...> typename, typename = void>
 struct IsTemplateType : public std::false_type {};
-template <template <typename...> typename U, typename... Ts>
-struct IsTemplateType<U<Ts...>, U> : public std::true_type {};
+template <template <typename...> typename U,
+          template <typename...> typename Actual, typename... Ts>
+struct IsTemplateType<Actual<Ts...>, U, std::void_t<U<Ts...>>>
+    : public std::is_same<U<Ts...>, Actual<Ts...>> {};
 
 // Note: This function uses std::string_view rather than absl::string_view,
 // because the former has constexpr versions of e.g. find_last_of.

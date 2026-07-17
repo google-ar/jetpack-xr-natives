@@ -602,6 +602,7 @@ cc_library(
     copts = imp_copts(),
     defines = imp_defines(),
     deps = [
+        ":flatbuffer_size_calculator",
         ":split_engine_serializer",
         ":split_engine_texture_serializer",
         "//core/assets",
@@ -618,6 +619,7 @@ cc_library(
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
+        "@third_party//split_engine:split_engine_schema_version",
     ],
     alwayslink = 1,
 )

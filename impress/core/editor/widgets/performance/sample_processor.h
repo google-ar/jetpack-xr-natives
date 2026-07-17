@@ -17,13 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_SAMPLE_PROCESSOR_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_SAMPLE_PROCESSOR_H_
 
-#include <array>
+#include <memory>
 #include <thread>  // NOLINT: Need to sort things by thread id.
 #include <vector>
 
+#include "absl/base/optimization.h"
 #include "absl/container/flat_hash_map.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
-#include "core/performance/profiler.h"
 #include "core/performance/profiler_structs.h"
 
 namespace imp::editor {
@@ -53,13 +53,18 @@ class SampleProcessor {
  private:
   void ProcessSamples(int profiler_sample_count, NodePool& node_pool,
                       ProcessedSamples& processed_samples,
-                      ResultCollection& results);
+                      ResultCollection& results,
+                      std::vector<SampleNode*>& active_nodes_stack);
 
-  std::array<MainThreadNodePool, Profiler::kMaxFrames> main_thread_node_pools_;
-  WorkerNodePool worker_node_pool_;
+  SampleProcessorState& GetOrCreateState() const {
+    if (ABSL_PREDICT_FALSE(state_ == nullptr)) {
+      state_ = std::make_unique<SampleProcessorState>();
+    }
+    return *state_;
+  }
 
-  // Pool of processed samples, one per frame.
-  std::array<ProcessedSamples, Profiler::kMaxFrames> processed_samples_;
+  mutable std::unique_ptr<SampleProcessorState> state_;
+
   void ProcessWorkerSampleList(const std::vector<WorkerProfileResult>& samples,
                                ProcessedSamples& processed_worker_samples);
 };

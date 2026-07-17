@@ -58,8 +58,10 @@ SplitEnginePlatformAndroidExternalTextureSurface::Create(
   RobinMap<SurfaceViewType, TextureId> external_texture_ids;
   // Create the external textures.
   for (SurfaceViewType view_type : view_types) {
-    textures[view_type] =
+    TexturePtr texture =
         view.GetTextureFactory().CreateExternalTexture({1, 1}, security_level);
+    texture->SetSuppressSplitEngineRemoval(false);
+    textures[view_type] = std::move(texture);
     external_texture_ids[view_type] =
         SplitEngineSerializer::GetId(textures[view_type]->GetTexture());
   }

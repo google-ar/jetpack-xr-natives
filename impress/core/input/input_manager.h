@@ -39,6 +39,7 @@ namespace imp {
 // These match the javascript MouseEvent.button values (ex: right = 2).
 static constexpr uint32_t kDefaultMousePointerId = 0;
 static constexpr uint32_t kMousePointerIdLeft = kDefaultMousePointerId;
+static constexpr uint32_t kMousePointerIdMiddle = 1;
 static constexpr uint32_t kMousePointerIdRight = 2;
 
 // LINT.ThenChange(
@@ -77,10 +78,10 @@ class InputManager {
 
   // Takes/adds in a pointer action, id, position, and elapsed time and add it
   // to the PointerEvent queue.
-  absl::Status ProcessPointerInput(uint8_t action,
-                                   const std::vector<Pointer::Id>& ids,
-                                   const std::vector<float2>& points,
-                                   absl::Duration elapsed_time);
+  absl::Status ProcessPointerInput(
+      uint8_t action, const std::vector<Pointer::Id>& ids,
+      const std::vector<float2>& points, absl::Duration elapsed_time,
+      PointerEvent::DeviceType device_type = PointerEvent::DeviceType::UNKNOWN);
   // Takes/adds in a keyboard action, key, and elapsed time and add it to the
   // KeyboardEvent queue.
   absl::Status ProcessKeyboardInput(uint8_t action, Key key,

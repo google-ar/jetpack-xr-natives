@@ -86,6 +86,8 @@ class AsyncCanvasSourceWrapper : public AsyncCanvasSource {
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
   void ForceReset() override;
+  void OnPause() override;
+  void OnResume() override;
 
  private:
   std::unique_ptr<CanvasSource> source_;

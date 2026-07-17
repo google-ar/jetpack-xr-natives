@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_dev_runtime", "imp_google3_copts")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -45,5 +45,25 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "proto_asset",
+    hdrs = ["proto_asset.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core:config",
+        "//core/async:executor",
+        "//core/async:future",
+        "//core/proto:proto_reader",
+        "//core/resources",
+        "//core/view:base_view",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ] + if_dev_runtime([
+        "//core/proto:textproto_reader",
+    ]),
     alwayslink = 1,
 )

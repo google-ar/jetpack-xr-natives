@@ -235,6 +235,9 @@ struct ScopedCanvas {
 
   virtual ~ScopedCanvas() = default;
 
+  virtual void OnPause() {}
+  virtual void OnResume() {}
+
   // Provides access to the Impress texture that the canvas draws into that can
   // be assigned to an Impress material.
   //
@@ -274,9 +277,12 @@ struct ScopedCanvas {
   virtual void DrawText(absl::string_view text, float2 pos,
                         const TextOptions& text_options) = 0;
 
-  // Draws the glyph from the top-left. Alignment options are ignored.
+  // Draws the glyph from the top-left. Alignment options are ignored. If
+  // pre_cached_metrics is provided, canvases that support partial updates will
+  // avoid recomputing them while computing the bounds of the draw call.
   virtual void DrawGlyph(GlyphId glyph, float2 pos,
-                         const TextOptions& text_options) = 0;
+                         const TextOptions& text_options,
+                         const TextMetrics* pre_cached_metrics) = 0;
 
   // Clears a region of the texture as specified by rect.
   // TODO (broken link) The web implementation of this API always calls ClearRect

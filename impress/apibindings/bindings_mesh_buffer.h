@@ -25,6 +25,7 @@
 #include "apibindings/bindings_object.h"
 #include "apibindings/impress_api_view.h"
 #include "core/model/mesh/mesh.h"
+#include "core/model/mesh/vertex_format.h"
 
 namespace imp {
 
@@ -63,14 +64,29 @@ class BindingsMeshBuffer : public BindingsObject {
   struct VertexAttributeDescriptor {
     VertexAttribute attribute;
     VertexAttributeType type;
+
     // The index of the buffer this attribute belongs to. uint8_t
     // matches imp::VertexFormat::AttributeInfo it is converted to.
     uint8_t buffer_index = 0;
+
+    static constexpr int16_t kAutoOffset =
+        imp::VertexFormat::AttributeInfo::kUnset;
+
+    // Byte offset of the attribute from the beginning of the vertex data.
+    // If kAutoOffset, the offset is calculated by placing the attribute
+    // directly after the preceding attribute.
+    int16_t byte_offset = kAutoOffset;
   };
 
   // A layout for the vertex data.
   struct VertexLayout {
     std::vector<VertexAttributeDescriptor> attributes;
+
+    // Optional byte strides for each buffer. If a stride is provided for a
+    // buffer index, it overrides the default tightly-packed stride.
+    // The vector can be smaller than the number of buffers, in which case
+    // the remaining buffers use the default tightly-packed stride.
+    std::vector<int16_t> strides;
   };
 
   // Options for creating a BindingsMeshBuffer.
@@ -131,6 +147,9 @@ class BindingsMeshBuffer : public BindingsObject {
 
   int32_t max_vertices_ = 0;
   int32_t max_indices_ = 0;
+  int32_t position_buffer_index_ = -1;
+  imp::VertexFormat input_format_;
+  imp::VertexFormat output_format_;
 
   OwnedMeshPtr root_mesh_;
 

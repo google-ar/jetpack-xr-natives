@@ -74,7 +74,7 @@ class HierarchyPanel {
   // This is used to modify the tree without affecting the original data.
   // Original data is owned by the SampleProcessor and will not be modified
   // by this class.
-  std::vector<SampleNode*> GetTreeHardCopy(
+  std::vector<SampleNode*>& GetTreeHardCopy(
       const std::vector<SampleNode*>& roots, NodePool& node_pool);
   // Copies a node to the pool of sample nodes
   // Recursively copies all child nodes.

@@ -176,6 +176,24 @@ message ExperimentalFeatureFlags {
   // ACTION: Clean up by 2026-07-01
   bool enable_texture_pipeline_renderer_first_frame_fence = 15
       [default = false];
+
+  // If true, use the BitmapSurfaceProvider for the canvas source rather
+  // than the legacy SurfaceTextureSurfaceProvider. Requires Android API 26 or
+  // higher.
+  // OWNERS: amperez
+  // BUG: b/504913591
+  // PLATFORMS: ANDROID
+  // ACTION: Clean up by 2026-06-30
+  bool glyph_atlas_use_bitmap_surface_provider = 16 [default = false];
+
+  // Set to true to enable asynchronous loading of graphics resources on
+  // Android. Specifically, this flag enables asynchronous creation and
+  // allocation of the GPU buffer and populating of the buffer with pixel data.
+  // OWNERS: eugenecys, sungunpark
+  // BUG: b/500046094
+  // PLATFORMS: ANDROID
+  // ACTION: Clean up by 2026-08-06
+  bool enable_async_graphics_resource_loading = 17 [default = false];
 }
 
 message ViewConfig {

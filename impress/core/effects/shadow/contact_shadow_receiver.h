@@ -54,7 +54,7 @@ class ContactShadowReceiver : public Component {
   void SetActiveStateTexture(bool state);
 
   Texture* enabled_shadows_texture_;
-  TexturePtr disabled_shadows_texture_;
+  OwnedTexturePtr disabled_shadows_texture_;
 
   ContactShadowReceiverState state_;
 

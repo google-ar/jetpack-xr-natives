@@ -71,6 +71,7 @@ imp_cc_proto_library = rule(
             "@com_google_absl//absl/types:variant",
             "@com_google_absl//absl/strings:cord",
             "@com_google_impress//core/common:optional_with_default",
+            "@com_google_impress//core/common:one_of",
             "@com_google_impress//core/proto:proto_traits",
         ]),
         "proto": attr.label(

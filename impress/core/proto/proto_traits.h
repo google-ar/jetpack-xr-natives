@@ -29,16 +29,16 @@ namespace imp::proto_traits {
 namespace internal {
 // Uses SFINAE to detect if Visitor has Visit function that accepts the given
 // Arg.
-template <typename Visitor, typename Cursor, typename Arg,
-          typename FieldTypeIds,
-          std::enable_if_t<
-              std::is_same_v<
-                  Cursor, decltype(std::declval<Visitor>().VisitVariant(
-                              std::declval<Cursor>(), std::declval<Arg*>(),
-                              std::declval<Arg*>(), std::declval<std::string>(),
-                              std::declval<FieldTypeIds>(),
-                              std::declval<std::vector<int>>()))>,
-              int> = 0>
+template <
+    typename Visitor, typename Cursor, typename Arg, typename FieldTypeIds,
+    std::enable_if_t<std::is_convertible_v<
+                         decltype(std::declval<Visitor>().VisitVariant(
+                             std::declval<Cursor>(), std::declval<Arg*>(),
+                             std::declval<Arg*>(), std::declval<std::string>(),
+                             std::declval<FieldTypeIds>(),
+                             std::declval<std::vector<int>>())),
+                         Cursor>,
+                     int> = 0>
 static constexpr bool HasVisitVariantFunction(int) {
   return true;
 }
@@ -46,6 +46,46 @@ static constexpr bool HasVisitVariantFunction(int) {
 template <typename Visitor, typename Cursor, typename Arg,
           typename FieldTypeIds>
 static constexpr bool HasVisitVariantFunction(...) {
+  return false;
+}
+
+// Uses SFINAE to detect if Visitor has a valid VisitOneOf function, for
+// example:
+//
+// template <typename... Tags, typename FieldType, FieldType... field_types,
+// size_t... I>
+// Cursor* VisitOneOf(
+//     Cursor* cursor,
+//     imp::OneOf<Tags...>* field,
+//     imp::OneOf<Tags...>* other,
+//     absl::string_view field_name,
+//     std::integer_sequence<FieldType, field_types...> field_type_ids,
+//     const std::vector<int>& variant_field_ids,
+//     std::index_sequence<I...> index_sequence
+// );
+//
+// Where field_type_ids is an integer sequence of the field types of the
+// oneof, variant_field_ids is the field ids of the OneOf, and index_sequence
+// is a compile time sequence of the indices of the OneOf.
+template <
+    typename Visitor, typename Cursor, typename Arg, typename FieldTypeIds,
+    typename IndexSequence,
+    std::enable_if_t<
+        std::is_convertible_v<
+            decltype(std::declval<Visitor>().VisitOneOf(
+                std::declval<Cursor>(), std::declval<Arg*>(),
+                std::declval<Arg*>(), std::declval<std::string>(),
+                std::declval<FieldTypeIds>(), std::declval<std::vector<int>>(),
+                std::declval<IndexSequence>())),
+            Cursor>,
+        int> = 0>
+static constexpr bool HasVisitOneOfFunction(int) {
+  return true;
+}
+
+template <typename Visitor, typename Cursor, typename Arg,
+          typename FieldTypeIds, typename IndexSequence>
+static constexpr bool HasVisitOneOfFunction(...) {
   return false;
 }
 
@@ -105,6 +145,12 @@ template <typename Visitor, typename Cursor, typename Arg,
           typename FieldTypeIds>
 constexpr bool kHasVisitVariantFunction =
     internal::HasVisitVariantFunction<Visitor, Cursor, Arg, FieldTypeIds>(0);
+
+template <typename Visitor, typename Cursor, typename Arg,
+          typename FieldTypeIds, typename IndexSequence>
+constexpr bool kHasVisitOneOfFunction =
+    internal::HasVisitOneOfFunction<Visitor, Cursor, Arg, FieldTypeIds,
+                                    IndexSequence>(0);
 
 template <typename Message, typename Visitor, typename Cursor>
 constexpr bool kHasVisitFunction =

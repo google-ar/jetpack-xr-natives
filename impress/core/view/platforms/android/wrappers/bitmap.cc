@@ -21,6 +21,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "core/common/jni_helpers.h"
+#include "core/config.h"
 
 namespace imp::android {
 
@@ -67,6 +68,44 @@ void Bitmap::Recycle() { CallVoidMethod(recycle_); }
 
 absl::StatusOr<BitmapConfig> Bitmap::GetBitmapConfig() {
   return GetBitmapConfigFromJava(Env(), CallObjectMethod(get_config_));
+}
+
+absl::StatusOr<AndroidBitmapInfo> Bitmap::GetBitmapInfo() {
+#if IMP_PLATFORM(ANDROID)
+  AndroidBitmapInfo info;
+  if (AndroidBitmap_getInfo(Env(), WeakReference(), &info) !=
+      ANDROID_BITMAP_RESULT_SUCCESS) {
+    return absl::InternalError("Unable to get bitmap info");
+  }
+  return info;
+#else   // IMP_PLATFORM(ANDROID)
+  return absl::UnimplementedError("Not implemented on non-Android platforms");
+#endif  // IMP_PLATFORM(ANDROID)
+}
+
+absl::StatusOr<void*> Bitmap::LockPixels() {
+#if IMP_PLATFORM(ANDROID)
+  void* pixels = nullptr;
+  if (AndroidBitmap_lockPixels(Env(), WeakReference(), &pixels) !=
+      ANDROID_BITMAP_RESULT_SUCCESS) {
+    return absl::InternalError("Unable to lock pixels");
+  }
+  return pixels;
+#else   // IMP_PLATFORM(ANDROID)
+  return absl::UnimplementedError("Not implemented on non-Android platforms");
+#endif  // IMP_PLATFORM(ANDROID)
+}
+
+absl::Status Bitmap::UnlockPixels() {
+#if IMP_PLATFORM(ANDROID)
+  if (AndroidBitmap_unlockPixels(Env(), WeakReference()) !=
+      ANDROID_BITMAP_RESULT_SUCCESS) {
+    return absl::InternalError("Unable to unlock pixels");
+  }
+  return absl::OkStatus();
+#else   // IMP_PLATFORM(ANDROID)
+  return absl::UnimplementedError("Not implemented on non-Android platforms");
+#endif  // IMP_PLATFORM(ANDROID)
 }
 
 }  // namespace imp::android

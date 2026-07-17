@@ -34,7 +34,7 @@ namespace imp::editor {
 
 // Renders the Impress editor UI to a specified native window.
 //
-// This class is an internal implementation detail of RemoteEditorServer and
+// This class is an internal implementation detail of RemoteEditor and
 // should not be used directly.
 //
 // This class manages an offscreen texture that receives the editor UI

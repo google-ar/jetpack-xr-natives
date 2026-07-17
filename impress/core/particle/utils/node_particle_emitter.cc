@@ -25,9 +25,7 @@
 #include "absl/status/status.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
-#include "core/math/vec.h"
 #include "core/ncsb/component.h"
-#include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/particle/custom_particle_behavior.h"
@@ -40,10 +38,7 @@
 #include "core/particle/utils/particle_pool.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
-#include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_renderer.h"
-#include "core/view/framework/camera/camera_component.h"
-#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp::imp_particle {
@@ -66,33 +61,19 @@ Future<OwnedParticleEmitterPtr> NodeParticleEmitter::Create(
              custom_particle_behavior = std::move(custom_particle_behavior)](
                 AssetPtr<GltfAsset> gltf_asset) mutable
                 -> OwnedParticleEmitterPtr {
-        return OwnedParticleEmitterPtr(
-            new NodeParticleEmitter(emitter_node, gltf_asset, emitter_state,
-                                    std::move(custom_particle_behavior)));
+        return OwnedParticleEmitterPtr(new NodeParticleEmitter(
+            emitter_node, emitter_state, std::move(custom_particle_behavior),
+            gltf_asset));
       });
 }
 
 NodeParticleEmitter::NodeParticleEmitter(
-    NodeHandle emitter_node, AssetPtr<GltfAsset> gltf_asset,
-    const ParticleEmitterState& emitter_state,
-    std::unique_ptr<CustomParticleBehavior> custom_particle_behavior)
-    : particle_pool_(emitter_state.particle_config.Value(),
-                     emitter_state.emitter_config->max_particles.Value(),
-                     emitter_node),
-      particle_behavior_(emitter_node, emitter_state.particle_config.Value(),
-                         std::move(custom_particle_behavior)),
-      emitter_node_(emitter_node),
-      gltf_asset_(gltf_asset),
-      emitter_duration_finite_(
-          emitter_state.emitter_config->duration_in_seconds.Value() > 0.0f),
-      remaining_emitter_duration_(
-          emitter_state.emitter_config->duration_in_seconds.Value()),
-      emitter_duration_(
-          emitter_state.emitter_config->duration_in_seconds.Value()),
-      looping_(emitter_state.emitter_config->loop.Value()),
-      particles_per_second_(
-          emitter_state.emitter_config->particles_per_second.Value()),
-      particle_delay_(0.0f) {}
+    NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
+    std::unique_ptr<CustomParticleBehavior> custom_particle_behavior,
+    AssetPtr<GltfAsset> gltf_asset)
+    : ParticleEmitter(emitter_node, emitter_state,
+                      std::move(custom_particle_behavior)),
+      gltf_asset_(gltf_asset) {}
 
 NodeParticleEmitter::~NodeParticleEmitter() {
   // Destroy all active particles.
@@ -180,74 +161,20 @@ void NodeParticleEmitter::SyncNode(const ParticleInstance& particle_instance,
   }
 }
 
-void NodeParticleEmitter::UpdateEmitterBehavior(const FrameTime& frame_time) {
-  // Update the remaining duration.
-  if (emitter_duration_finite_) {
-    // Reduce the emitter lifetime.
-    if (remaining_emitter_duration_ > 0.0f) {
-      remaining_emitter_duration_ -= frame_time.GetDeltaSeconds();
-    }
-
-    // If the emitter has expired, but is looping, reset its duration.
-    if (looping_ && remaining_emitter_duration_ <= 0.0f) {
-      remaining_emitter_duration_ = emitter_duration_;
-    }
-  }
-}
-
-bool NodeParticleEmitter::CanEmitParticles() {
-  // Waiting for the next time to emit a particle?
-  if (particle_delay_ > 0.0f) return false;
-
-  // Are there too many active particles?
-  if (active_particles_.size() >= particle_pool_.GetMaxParticles())
-    return false;
-
-  // Is the emitter actively emitting particles?
-  if (emitter_duration_finite_ && remaining_emitter_duration_ <= 0.0f)
-    return false;
-
-  return true;
-}
-
 std::string NodeParticleEmitter::ValidateEmitterState(
     const ParticleEmitterState& emitter_state) {
+  // A particle config is required.
+  if (!emitter_state.particle_config) {
+    return "NodeParticleEmitter - particle_config not set!";
+  }
+
   // A gltf asset reference is required.
   if (!emitter_state.particle_config->gltf_asset) {
     return "NodeParticleEmitter - gltf_asset not set!";
   }
 
-  // Particles must be emitted.
-  if (emitter_state.emitter_config->particles_per_second.Value() <= 0.0f) {
-    return "NodeParticleEmitter - particles per second must be > 0!";
-  }
-
-  // There must be an allowance for the maximum number of particles.
-  if (emitter_state.emitter_config->max_particles.Value() <= 0) {
-    return "NodeParticleEmitter - max particles must be > 0!";
-  }
-
-  // The duration must be non-negative.
-  if (emitter_state.emitter_config->duration_in_seconds.Value() < 0.0f) {
-    return "NodeParticleEmitter - duration in seconds must be >= 0!";
-  }
-
-  return "";
-}
-
-imp::ParticleEmitterInfo NodeParticleEmitter::GetParticleEmitterInfo() const {
-  // Get the current camera position.
-  float3 camera_position = kZero3;
-  if (emitter_node_.IsValid()) {
-    ComponentHandle<CameraComponent> camera =
-        emitter_node_->GetView().GetCameraManager().GetCamera();
-    if (camera.IsValid()) {
-      camera_position = camera->GetNode()->GetWorldPosition();
-    }
-  }
-
-  // Assemble the emitter info.
-  return imp::ParticleEmitterInfo(camera_position);
+  // Check the base class state also.
+  return ParticleEmitter::ValidateEmitterState(emitter_state);
 }
 
 }  // namespace imp::imp_particle

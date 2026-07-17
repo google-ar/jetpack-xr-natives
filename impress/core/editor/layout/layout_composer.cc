@@ -849,6 +849,7 @@ void LayoutComposer::DrawLayout() {
     case LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT: {
       DrawDockableDetailsWindow();
       DrawDockableSceneWindow();
+      DrawDockableViewportWindow();
       DrawToolbar();
       DrawDockableTabbedWindow();
       break;

@@ -20,6 +20,7 @@
 #include <memory>
 #include <optional>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -46,6 +47,7 @@
 #include "core/material_library/material_package.h"
 #include "core/model/model_data.h"
 #include "core/model/skeleton_data.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 
 namespace imp::loader::details {
@@ -61,11 +63,12 @@ using BundleVector = flatbuffers::Vector<flatbuffers::Offset<E>>;
 
 }  // namespace
 
-Creator::Creator(BaseView &view, MaterialPackage *material_package,
-                 LoadedModelAccess &&access)
+Creator::Creator(BaseView& view, MaterialPackage* material_package,
+                 LoadedModelAccess&& access, LoaderOptions options)
     : view_(view),
       material_package_(material_package),
-      access_(std::move(access)) {}
+      access_(std::move(access)),
+      enable_use_texture_asset_api_(options.enable_use_texture_asset_api) {}
 
 Creator::~Creator() {
   if (model_creator_ && model_creator_->HasPendingWork()) {
@@ -169,15 +172,17 @@ Future<absl::Status> Creator::LoadImages(const imp::Context& context,
   images_.resize(model->textures()->size());
   std::vector<Future<absl::Status>> load_images_futures;
   load_images_futures.reserve(model->textures()->size());
+  bool enable_use_texture_asset_api = enable_use_texture_asset_api_;
   for (size_t i = 0; i < model->textures()->size(); ++i) {
     const schemas::TextureInfo *texture_info = model->textures()->Get(i);
     auto image_type = model->images_type()->GetEnum<schemas::ImageInfo>(i);
     auto image_info = model->images()->Get(i);
     load_images_futures.push_back(
-        LoadImage(context, texture_info, image_type, image_info, callback)
-            .Then([this, i](std::unique_ptr<image::ImageContents> image) {
-              images_[i] = std::move(image);
-            }));
+        LoadImage(&view_, context, texture_info, image_type, image_info,
+                  enable_use_texture_asset_api, callback)
+            .Then([this, i](std::variant<std::unique_ptr<image::ImageContents>,
+                                         std::unique_ptr<TextureAsset>>
+                                image) { images_[i] = std::move(image); }));
   }
   return Future<absl::Status>::CombineList(load_images_futures);
 }

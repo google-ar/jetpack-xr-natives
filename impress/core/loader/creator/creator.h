@@ -21,6 +21,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <variant>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -48,7 +49,7 @@ class Creator {
   using LoadedModelAccess = FlatBufferAccess<schemas::LoadedModel>;
 
   explicit Creator(BaseView& view, MaterialPackage* material_package,
-                   LoadedModelAccess&& access);
+                   LoadedModelAccess&& access, LoaderOptions options = {});
 
   ~Creator();
 
@@ -77,8 +78,11 @@ class Creator {
   BaseView& view_;
   MaterialPackage* material_package_;
   LoadedModelAccess access_;
-  std::vector<std::unique_ptr<image::ImageContents>> images_;
+  std::vector<std::variant<std::unique_ptr<image::ImageContents>,
+                           std::unique_ptr<TextureAsset>>>
+      images_;
   std::unique_ptr<ModelCreator> model_creator_;
+  bool enable_use_texture_asset_api_ = false;
 };
 
 }  // namespace imp::loader::details

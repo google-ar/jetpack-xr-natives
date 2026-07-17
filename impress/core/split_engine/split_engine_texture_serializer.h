@@ -18,7 +18,6 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_TEXTURE_SERIALIZER_H_
 
 #include <cstddef>
-#include <vector>
 
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -38,11 +37,9 @@ class SplitEngineTextureSerializer {
   virtual flatbuffers::Offset<android_xr::schemas::Texture> SerializeTexture(
       flatbuffers::FlatBufferBuilder& builder) const noexcept = 0;
 
-  // Returns a vector of sizes for each of the
-  // filament::backend::PixelBufferDescriptor underlying the texture to be
-  // serialized. This information is sufficient to calculate the buffer space
-  // needed to serialize the texture.
-  virtual std::vector<size_t> GetTextureBufferSizes() const noexcept = 0;
+  // Returns the size of the texture and all of its dependent data, including
+  // image data, name, etc.
+  virtual size_t GetSerializedSize() const noexcept = 0;
 };
 
 }  // namespace imp::split_engine

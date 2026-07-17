@@ -57,6 +57,7 @@ cc_library(
         "//core/math",
         "//core/ncsb",
         "//core/render_passes:texture_pipeline_renderer",
+        "//core/render_passes:texture_pipeline_renderer_helper",
         "//core/render_passes:texture_pipeline_renderer_projection_quad",
         "//core/render_passes:texture_pipeline_renderer_proto_cc_imp",
         "//core/view/utils:frame_time",

@@ -30,6 +30,7 @@ class RuntimeMaterialCompilerCreator {
   // Creates a RuntimeMaterialCompiler based on the target platform.
   // Note that the native library override param is only relevant to Android. If
   // nothing is provided, it will use the default Impress so library.
+  // Note that WASM and Windows are not supported.
   static Future<std::unique_ptr<RuntimeMaterialCompiler>> Create(
       BaseView& view, absl::string_view native_library_override = "");
 };

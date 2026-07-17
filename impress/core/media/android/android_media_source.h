@@ -125,7 +125,7 @@ class AndroidMediaSource : public T, public AndroidMediaListener {
   std::unique_ptr<AndroidMediaDataSource> media_data_src_ptr_ = nullptr;
 
   Future<absl::Status> LoadImpl(
-      absl::variant<const MediaAsset*, std::string> asset, bool async = true);
+      std::variant<const MediaAsset*, std::string> asset, bool async = true);
   void PrepareAsync();
   void Prepare();
 };
@@ -379,7 +379,7 @@ void AndroidMediaSource<T>::SetUpMediaPlayer() {
 
 template <typename T>
 Future<absl::Status> AndroidMediaSource<T>::LoadImpl(
-    absl::variant<const MediaAsset*, std::string> asset, bool async) {
+    std::variant<const MediaAsset*, std::string> asset, bool async) {
   // Resets result status.
   result_status_ = absl::OkStatus();
 

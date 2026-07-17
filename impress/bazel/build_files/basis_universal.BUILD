@@ -29,7 +29,7 @@ filegroup(
 # C++ library for ":basisu_headers" filegroup.
 cc_library(
     name = "basisu_headers_lib",
-    hdrs = glob(["**/*.h"]),
+    hdrs = glob(["**/*.h", "**/*.inl"]),
     includes = [".", "encoder", "transcoder"],
     include_prefix = "basis_universal",
 )
@@ -108,6 +108,13 @@ cc_library(
         "encoder/basisu_uastc_enc.cpp",
         "encoder/jpgd.cpp",
         "encoder/pvpngreader.cpp",
+        "encoder/basisu_uastc_hdr_4x4_enc.cpp",
+        "encoder/basisu_astc_hdr_6x6_enc.cpp",
+        "encoder/basisu_astc_hdr_common.cpp",
+        "encoder/basisu_astc_ldr_common.cpp",
+        "encoder/basisu_astc_ldr_encode.cpp",
+        "encoder/3rdparty/android_astc_decomp.cpp",
+        "encoder/3rdparty/tinyexr.cpp",
         "transcoder/basisu_transcoder.cpp",
     ],
     copts = basis_copts,

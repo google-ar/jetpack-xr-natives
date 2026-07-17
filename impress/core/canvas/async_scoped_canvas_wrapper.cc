@@ -56,9 +56,11 @@ void AsyncScopedCanvasWrapper::DrawText(absl::string_view text, float2 pos,
   return scoped_canvas_->DrawText(text, pos, text_options);
 }
 
-void AsyncScopedCanvasWrapper::DrawGlyph(GlyphId glyph, float2 pos,
-                                         const TextOptions& text_options) {
-  return scoped_canvas_->DrawGlyph(glyph, pos, text_options);
+void AsyncScopedCanvasWrapper::DrawGlyph(
+    GlyphId glyph, float2 pos, const TextOptions& text_options,
+    const TextMetrics* pre_cached_metrics) {
+  return scoped_canvas_->DrawGlyph(glyph, pos, text_options,
+                                   pre_cached_metrics);
 };
 
 void AsyncScopedCanvasWrapper::ClearRect(const Rect& rect) {

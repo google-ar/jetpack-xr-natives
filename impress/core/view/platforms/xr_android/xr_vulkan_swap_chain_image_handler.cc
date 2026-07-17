@@ -21,6 +21,7 @@
 #include <utility>
 
 #include "absl/log/check.h"
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 #include "core/math/vec.h"
@@ -132,7 +133,16 @@ VkResult XrVulkanSwapChainImageHandler::present(uint32_t index,
       host_->EndFrame(layers_->active_color->handle, layers_->depth.handle);
 
   if (!status.ok()) {
-    return VK_INCOMPLETE;
+    // In the case of an error in `xrEndFrame`, just print the error and
+    // continue as there were no problem since all the work has already been
+    // submitted to the GPU.
+    //
+    // The error will manifest as a reprojected frame or a black frame if no
+    // valid frame was submitted previously.
+    //
+    // An error at this point in time is only related to OpenXR and has no
+    // relation to Vulkan, so it's safe to return VK_SUCCESS.
+    IMP_LOG(imp::ERROR) << "Error calling xrEndFrame: " << status;
   }
   return VK_SUCCESS;
 }
@@ -194,8 +204,11 @@ XrVulkanSwapChainImageHandler::CreateDepthSwapchain(uint2 display_size,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
   };
 
-  bluevk::vkCreateImage(platform_->getDevice(), &create_info, nullptr, &image);
-  VkMemoryRequirements memRequirements;
+  VkResult result = bluevk::vkCreateImage(platform_->getDevice(), &create_info,
+                                          nullptr, &image);
+  
+
+  VkMemoryRequirements memRequirements = {};
   bluevk::vkGetImageMemoryRequirements(platform_->getDevice(), image,
                                        &memRequirements);
 
@@ -219,12 +232,16 @@ XrVulkanSwapChainImageHandler::CreateDepthSwapchain(uint2 display_size,
   // VK_MEMORY_PROPERTY_PROTECTED_BIT` is not a supported combination in vulkan.
   allocInfo.memoryTypeIndex = selectMemoryType(
       memoryProperties, memRequirements.memoryTypeBits, memory_properties);
+  
 
   VkDeviceMemory vulkan_memory;
-  bluevk::vkAllocateMemory(platform_->getDevice(), &allocInfo, nullptr,
-                           &vulkan_memory);
-  bluevk::vkBindImageMemory(platform_->getDevice(), image, vulkan_memory,
-                            /*memoryOffset=*/0);
+  result = bluevk::vkAllocateMemory(platform_->getDevice(), &allocInfo, nullptr,
+                                    &vulkan_memory);
+  
+
+  result = bluevk::vkBindImageMemory(platform_->getDevice(), image,
+                                     vulkan_memory, /*memoryOffset=*/0);
+  
 
   XrSwapchainImageVulkan2KHR depth_image_vulkan2khr{
       .type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR,

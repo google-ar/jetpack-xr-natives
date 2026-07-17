@@ -14,6 +14,7 @@
 
 #include "core/view/platforms/xr_android/xr_session_host.h"
 
+#include "core/camera/camera_component.h"
 #include "core/common/optional_error.h"
 #include "core/monitor/default_monitor_summary.h"
 #include "core/monitor/monitor_summary.h"
@@ -86,7 +87,7 @@
 #include "core/view/platforms/xr_android/xr_helpers.h"
 #include "java/com/google/ar/imp/view/xr/xr_setup_params.proto.imp.h"
 
-#if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
+#if IMP_MATERIAL_API(VULKAN)
 #include "core/view/platforms/xr_android/xr_vulkan_platform.h"
 #define XR_KHR_GRAPHICS_ENABLE_EXTENSION_NAME \
   XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME
@@ -103,6 +104,7 @@
 #if IMP_RUNTIME(DEV)
 #include "core/view/platforms/xr_android/xr_editor_plugin.h"
 #endif
+#include "mediapipe/framework/deps/clock.h"
 #include "core/monitor/profiling_clock.h"
 #include "core/view/platforms/xr_android/generic_stereo_materials.h"
 #include "core/view/platforms/xr_android/xr_events.proto.imp.h"
@@ -110,7 +112,6 @@
 #include "core/window/filament_host.h"
 #include "core/xr/openxr_events.h"
 #include "mediapipe/framework/port/status_macros.h"
-#include "mediapipe/framework/deps/clock.h"
 
 #define XR_ANDROID_unbounded_reference_space 1
 #define XR_ANDROID_unbounded_reference_space_SPEC_VERSION 1
@@ -121,27 +122,30 @@ namespace imp {
 
 namespace {
 
-std::array<const char*, 20> kOpenXRExtensionsCore = {
+const char* const kOpenXRExtensionsCore[] = {
+    XR_KHR_GRAPHICS_ENABLE_EXTENSION_NAME,              //
+    XR_EXT_HAND_TRACKING_EXTENSION_NAME,                //
+    XR_EXT_UUID_EXTENSION_NAME,                         //
+    XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,      //
+    XR_FB_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME,  //
+    XR_EXT_HAND_INTERACTION_EXTENSION_NAME,             //
+    XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,              //
+    XR_FB_SWAPCHAIN_UPDATE_STATE_EXTENSION_NAME,        //
+    XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME,             //
+    XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,                  //
+    XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME,            //
+#if IMP_PLATFORM(ANDROID)
     XR_KHR_ANDROID_THREAD_SETTINGS_EXTENSION_NAME,        //
-    XR_KHR_GRAPHICS_ENABLE_EXTENSION_NAME,                //
-    XR_EXT_HAND_TRACKING_EXTENSION_NAME,                  //
     XR_ANDROID_DEVICE_ANCHOR_PERSISTENCE_EXTENSION_NAME,  //
     XR_ANDROID_TRACKABLES_EXTENSION_NAME,                 //
     XR_ANDROID_TRACKABLES_OBJECT_EXTENSION_NAME,          //
-    XR_EXT_UUID_EXTENSION_NAME,                           //
-    XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,        //
-    XR_FB_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME,    //
-    XR_FB_SWAPCHAIN_UPDATE_STATE_EXTENSION_NAME,          //
     XR_ANDROID_HAND_MESH_EXTENSION_NAME,                  //
-    XR_EXT_HAND_INTERACTION_EXTENSION_NAME,               //
-    XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME,               //
     XR_ANDROID_MOUSE_INTERACTION_EXTENSION_NAME,          //
     XR_ANDROID_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,  //
-    XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,                    //
-    XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME,              //
-    XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,                //
     XR_ANDROID_SCENE_MESHING_EXTENSION_NAME,              //
     XR_ANDROID_RAYCAST_EXTENSION_NAME,                    //
+    XR_ANDROID_ANCHOR_SHARING_EXPORT_EXTENSION_NAME,      //
+#endif
 };
 
 std::array<const char*, 2> kOpenXRExtensionsFbFoveation = {
@@ -157,24 +161,33 @@ std::array<const char*, 1> kOpenXRExtensionsVarjoFoveatedRendering = {
     XR_VARJO_FOVEATED_RENDERING_EXTENSION_NAME,
 };
 
-std::array<const char*, 1> kOpenXRExtensionAndroidXOccupancyGrid = {
-    XR_ANDROIDX_OCCUPANCY_GRID_EXTENSION_NAME,
-};
-
-std::array<const char*, 1> kOpenXRExtensionCreateInstanceExtension = {
-    XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
-};
-
 std::array<const char*, 1> kOpenXRExtensionsEyeGazeInteraction = {
     XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME,
 };
 
-std::array<const char*, 1> kOpenXRExtensionsAndroidDepthTexture = {
-    XR_ANDROID_DEPTH_TEXTURE_EXTENSION_NAME,
-};
-
 std::array<const char*, 1> kOpenXRExtensionsFbColorSpace = {
     XR_FB_COLOR_SPACE_EXTENSION_NAME,
+};
+
+#if IMP_PLATFORM(ANDROID)
+std::array<const char*, 1> kOpenXRExtensionsCreateInstance = {
+    XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
+};
+
+std::array<const char*, 1> kOpenXRExtensionsAndroidXOccupancyGrid = {
+    XR_ANDROIDX_OCCUPANCY_GRID_EXTENSION_NAME,
+};
+
+std::array<const char*, 1> kOpenXRExtensionsAndroidXSpatialInteraction = {
+    XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME,
+};
+
+std::array<const char*, 1> kOpenXRExtensionAndroidXTrackpadGesture = {
+    "XR_ANDROIDX1_trackpad_gestures",
+};
+
+std::array<const char*, 1> kOpenXRExtensionsAndroidDepthTexture = {
+    XR_ANDROID_DEPTH_TEXTURE_EXTENSION_NAME,
 };
 
 std::array<const char*, 2> kOpenXRExtensionsAndroidSys = {
@@ -182,26 +195,21 @@ std::array<const char*, 2> kOpenXRExtensionsAndroidSys = {
     XR_ANDROIDSYS_INPUT_TRACING_EXTENSION_NAME,
 };
 
-#if IMP_PLATFORM(ANDROID)
-std::array<const char*, 1> kOpenXRExtensionAndroidXSpatialInteraction = {
-    XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME,
-};
-#endif  // IMP_PLATFORM(ANDROID)
-
 std::array<const char*, 2> kOpenXRExtensionsAndroidSysEyeTrackingCalibration = {
     XR_ANDROID_EYE_TRACKING_EXTENSION_NAME,
     XR_ANDROIDSYS_EYE_TRACKING_CALIBRATION_EXTENSION_NAME,
 };
 
-std::array<const char*, 1> kOpenXRExtensionAndroidXGlobalPassthroughDimming = {
-    // TODO: Add official extension once api is finalized.
-    "XR_ANDROID_global_passthrough_dimming",
-};
-
-std::array<const char*, 1> kOpenXRExtensionAndroidXHandOcclusion = {
+std::array<const char*, 1> kOpenXRExtensionsAndroidXHandOcclusion = {
     // TODO: Add official extension once api is finalized.
     "XR_ANDROIDX1_hand_occlusion",
 };
+
+std::array<const char*, 1> kOpenXRExtensionsAndroidXGlobalPassthroughDimming = {
+    // TODO: Add official extension once api is finalized.
+    "XR_ANDROIDX1_global_passthrough_dimming",
+};
+#endif
 
 absl::Time GetFilamentTimeNow() {
   // A monotonic/profiling clock for internal use only when on filament thread.
@@ -307,6 +315,8 @@ XrSessionHost::XrSessionHost(
   }
 }
 
+XrSessionHost::~XrSessionHost() = default;
+
 absl::Status XrSessionHost::PreBeginRender() {
   // Set current swap chain according to the ContentSecurityLevel setting.
   switch (content_security_level_) {
@@ -316,7 +326,7 @@ absl::Status XrSessionHost::PreBeginRender() {
         // does not support protected buffers.
         MP_ASSIGN_OR_RETURN(
             swap_chain_protected_,
-            AddSwapChain(this,
+            AddSwapChain(static_cast<XrSessionHost*>(this),
                          filament::SwapChain::CONFIG_TRANSPARENT |
                              filament::SwapChain::CONFIG_PROTECTED_CONTENT));
       }
@@ -376,14 +386,14 @@ absl::Status XrSessionHost::Setup(JNIEnv* env, JavaVM* vm, jobject context) {
   imp::output::Xr("Creating XrPlatform.");
   platform_ = std::make_unique<PlatformType>();
 
-#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(VULKAN)
+#if IMP_MATERIAL_API(VULKAN)
   // Pass the XrInstance and SystemId to the platform if we are using a vulkan
   // backend.
   platform_->setXrInstance(instance_);
   if (system_id_ != XR_NULL_SYSTEM_ID) {
     platform_->setXrSystemId(system_id_);
   }
-#endif  // IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(VULKAN)
+#endif  // IMP_MATERIAL_API(VULKAN)
 
   imp::output::Xr("Calling Impress Setup.");
   MP_RETURN_IF_ERROR(ViewHost::Setup(platform_.get(), nullptr));
@@ -488,7 +498,33 @@ absl::Status XrSessionHost::InitializeSessionInternal() {
   
 
   imp::output::Xr("Creating XrSession.");
-  MP_ASSIGN_OR_RETURN(session_, CreateSession());
+  // TODO - Refactor to move the CreateSession() call to the render
+  // thread for all platforms.
+  if (create_session_on_render_thread_) {
+    struct RenderThreadSync {
+      absl::StatusOr<XrSession> session =
+          absl::InternalError("Session not yet created.");
+      absl::Notification notification;
+    };
+    std::shared_ptr<RenderThreadSync> sync =
+        std::make_shared<RenderThreadSync>();
+    // The following queueCommand call is not recommended for general use by the
+    // Filament team. However, in this case it is being allowed as the simplest
+    // option to sync CreateSession() with the render thread.
+    downcast(engine_)->getDriverApi().queueCommand([this, sync]() {
+      sync->session = CreateSession();
+      sync->notification.Notify();
+    });
+    downcast(engine_)->flush();
+    if (!sync->notification.WaitForNotificationWithTimeout(
+            kXrCreateSessionTimeoutDuration)) {
+      return absl::InternalError(
+          "Timeout waiting for render thread to create XrSession.");
+    }
+    MP_ASSIGN_OR_RETURN(session_, sync->session);
+  } else {
+    MP_ASSIGN_OR_RETURN(session_, CreateSession());
+  }
 
   imp::output::Xr("Obtaining Xr reference space.");
   MP_ASSIGN_OR_RETURN(reference_space_, ObtainXrSpace(reference_space_type_));
@@ -519,7 +555,8 @@ absl::Status XrSessionHost::InitializeSessionInternal() {
   // This will ultimately trigger XrPlatform::createSwapChain to be called.
   imp::output::Xr("Creating SwapChain.");
   MP_ASSIGN_OR_RETURN(swap_chain_standard_,
-                   AddSwapChain(this, filament::SwapChain::CONFIG_TRANSPARENT));
+                   AddSwapChain(static_cast<XrSessionHost*>(this),
+                                filament::SwapChain::CONFIG_TRANSPARENT));
 
   MP_RETURN_IF_ERROR(SetActiveSwapChain(swap_chain_standard_));
 
@@ -529,7 +566,9 @@ absl::Status XrSessionHost::InitializeSessionInternal() {
 
   // Ensure that the main app thread is prioritized to avoid jank. The render
   // thread is already set to XR_ANDROID_THREAD_TYPE_RENDER_KHR.
+#if IMP_PLATFORM(ANDROID)
   MP_RETURN_IF_ERROR(SetThreadType(XR_ANDROID_THREAD_TYPE_APPLICATION_MAIN_KHR));
+#endif
 
   init_state_ = XrInitState::kSessionCreated;
   return absl::OkStatus();
@@ -569,7 +608,7 @@ absl::Status XrSessionHost::AdvanceFrame() {
 
   MP_RETURN_IF_ERROR(PollEvents());
 
-  if (state_ != RunningState::kRunning) {
+  if (xr_running_state_ != RunningState::kRunning) {
     return absl::OkStatus();
   }
 
@@ -694,11 +733,10 @@ absl::Status XrSessionHost::AdvanceFrame() {
   // immediately.
   latest_views_ = locate_views_result.views;
 
-  // Update camera to match the eye center so that any UX logic that is done by
-  // the app during the frame that uses the camera position is correct. For
-  // example, the app might have a component that billboards a panel so that it
-  // faces the camera.
-  UpdateCameraFromXrPose(view_location_result.location.pose);
+  // Use the latest views to update the camera projection matrices.
+  SetCameraModelAndProjection(GetView()->GetCameraManager().GetCamera(),
+                              view_location_result.location.pose,
+                              latest_views_);
 
   // Ensure that the result of filament::Renderer::beginFrame is ignored in
   // OpenXR because the OpenXR library is used to control frame pacing instead.
@@ -749,59 +787,59 @@ bool XrSessionHost::IsXrFbColorSpaceEnabled() const {
   return is_fb_color_space_enabled_;
 }
 
-bool XrSessionHost::ShouldRenderVarjoFoveationThisFrame() {
-  {
-    absl::MutexLock lock(frame_queue_mutex_);
-    if (frame_queue_.empty()) {
-      return false;
-    }
-    return frame_queue_.front().should_render_varjo_foveation;
-  }
-}
-
-bool XrSessionHost::IsXrAndroidXOccupancyGridEnabled() const {
-  std::vector<const char*> extensions;
-  extensions.insert(extensions.end(),
-                    kOpenXRExtensionAndroidXOccupancyGrid.begin(),
-                    kOpenXRExtensionAndroidXOccupancyGrid.end());
-  absl::Status is_supported = EnsureSupportedExtensions(extensions);
-  return is_supported.ok();
+bool XrSessionHost::IsXrEyeGazeInteractionEnabled() const {
+  return eye_tracking_enabled_;
 }
 
 #if IMP_PLATFORM(ANDROID)
-bool XrSessionHost::IsXrAndroidXSpatialInteractionEnabled() const {
+bool XrSessionHost::IsXrAndroidXOccupancyGridEnabled() const {
   std::vector<const char*> extensions;
   extensions.insert(extensions.end(),
-                    kOpenXRExtensionAndroidXSpatialInteraction.begin(),
-                    kOpenXRExtensionAndroidXSpatialInteraction.end());
+                    kOpenXRExtensionsAndroidXOccupancyGrid.begin(),
+                    kOpenXRExtensionsAndroidXOccupancyGrid.end());
   absl::Status is_supported = EnsureSupportedExtensions(extensions);
   return is_supported.ok();
 }
-#endif  // IMP_PLATFORM(ANDROID)
+
+bool XrSessionHost::IsXrAndroidXSpatialInteractionEnabled() const {
+  std::vector<const char*> extensions;
+  extensions.insert(extensions.end(),
+                    kOpenXRExtensionsAndroidXSpatialInteraction.begin(),
+                    kOpenXRExtensionsAndroidXSpatialInteraction.end());
+  absl::Status is_supported = EnsureSupportedExtensions(extensions);
+  return is_supported.ok();
+}
+
+bool XrSessionHost::IsXrAndroidXTrackpadGestureEnabled() const {
+  std::vector<const char*> extensions;
+  extensions.insert(extensions.end(),
+                    kOpenXRExtensionAndroidXTrackpadGesture.begin(),
+                    kOpenXRExtensionAndroidXTrackpadGesture.end());
+  absl::Status is_supported = EnsureSupportedExtensions(extensions);
+  return is_supported.ok();
+}
 
 bool XrSessionHost::IsXrAndroidDepthTextureEnabled() const {
   return is_android_depth_texture_enabled_;
-}
-
-bool XrSessionHost::IsXrEyeGazeInteractionEnabled() const {
-  return eye_tracking_enabled_;
 }
 
 bool XrSessionHost::IsXrAndroidSystemExtensionsEnabled() const {
   return is_android_system_extensions_enabled_;
 }
 
-bool XrSessionHost::IsXrGlobalPassthroughDimmingExtensionsEnabled() const {
-  return is_global_passthrough_dimming_extensions_enabled_;
+bool XrSessionHost::IsXrAndroidEyeTrackingCalibrationEnabled() const {
+  return eye_tracking_calibration_enabled_;
 }
 
-bool XrSessionHost::IsXrHandOcclusionExtensionsEnabled() const {
+bool XrSessionHost::IsXrAndroidHandOcclusionExtensionsEnabled() const {
   return is_hand_occlusion_extensions_enabled_;
 }
 
-bool XrSessionHost::IsXrEyeTrackingCalibrationEnabled() const {
-  return eye_tracking_calibration_enabled_;
+bool XrSessionHost::IsXrAndroidGlobalPassthroughDimmingExtensionsEnabled()
+    const {
+  return is_global_passthrough_dimming_extensions_enabled_;
 }
+#endif  // IMP_PLATFORM(ANDROID)
 
 absl::Status XrSessionHost::EnsureSupportedExtensions(
     const std::vector<const char*>& required_extensions) const {
@@ -885,6 +923,10 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
   extensions.insert(extensions.end(), extensions_to_load.begin(),
                     extensions_to_load.end());
 
+  // If the context is an activity, then we must pass the create_info_android
+  // structure as the next field. Otherwise, it should be nullptr.
+  const void* next = nullptr;
+#if IMP_PLATFORM(ANDROID)
   // This is only used if the context is an activity.
   // It's created outside of the is_context_an_activity if-statement below so
   // that it doesn't fall out of scope when it gets used.
@@ -898,17 +940,14 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
   jclass activity_class = env->FindClass("android/app/Activity");
   jboolean is_context_an_activity = env->IsInstanceOf(context, activity_class);
 
-  // If the context is an activity, then we must pass the create_info_android
-  // structure as the next field. Otherwise, it should be nullptr.
-  const void* next = nullptr;
   if (is_context_an_activity) {
     next = &create_info_android;
-    // The kOpenXRExtensionCreateInstanceExtension is required for passing the
+    // The OpenXR CreateInstanceExtension is required for passing the
     // XrInstanceCreateInfoAndroidKHR structure to xrCreateInstance.
-    extensions.insert(extensions.end(),
-                      kOpenXRExtensionCreateInstanceExtension.begin(),
-                      kOpenXRExtensionCreateInstanceExtension.end());
+    extensions.insert(extensions.end(), kOpenXRExtensionsCreateInstance.begin(),
+                      kOpenXRExtensionsCreateInstance.end());
   }
+#endif  // IMP_PLATFORM(ANDROID)
   if (IsXrFbFoveationEnabled()) {
     extensions.insert(extensions.end(), kOpenXRExtensionsFbFoveation.begin(),
                       kOpenXRExtensionsFbFoveation.end());
@@ -923,56 +962,66 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
     }
   } else {
     if (is_varjo_foveated_rendering_enabled_) {
-      output::Warning(
-          "IMP: varjo foveated rendering requires the OpenXR VarjoQuadViews "
-          "extension to also be enabled.");
+      IMP_LOG(imp::WARNING)
+          << "Varjo foveated rendering requires the OpenXR VarjoQuadViews "
+             "extension to also be enabled.";
     }
   }
-  if (IsXrAndroidXOccupancyGridEnabled()) {
-    extensions.insert(extensions.end(),
-                      kOpenXRExtensionAndroidXOccupancyGrid.begin(),
-                      kOpenXRExtensionAndroidXOccupancyGrid.end());
-  }
-#if IMP_PLATFORM(ANDROID)
-  if (IsXrAndroidXSpatialInteractionEnabled()) {
-    extensions.insert(extensions.end(),
-                      kOpenXRExtensionAndroidXSpatialInteraction.begin(),
-                      kOpenXRExtensionAndroidXSpatialInteraction.end());
-  }
-#endif  // IMP_PLATFORM(ANDROID)
   if (IsXrEyeGazeInteractionEnabled()) {
     extensions.insert(extensions.end(),
                       kOpenXRExtensionsEyeGazeInteraction.begin(),
                       kOpenXRExtensionsEyeGazeInteraction.end());
+  }
+  if (IsXrFbColorSpaceEnabled()) {
+    extensions.insert(extensions.end(), kOpenXRExtensionsFbColorSpace.begin(),
+                      kOpenXRExtensionsFbColorSpace.end());
+  }
+
+#if IMP_PLATFORM(ANDROID)
+  if (IsXrAndroidXOccupancyGridEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionsAndroidXOccupancyGrid.begin(),
+                      kOpenXRExtensionsAndroidXOccupancyGrid.end());
+  }
+
+  if (IsXrAndroidXTrackpadGestureEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionAndroidXTrackpadGesture.begin(),
+                      kOpenXRExtensionAndroidXTrackpadGesture.end());
+  }
+
+  if (IsXrAndroidXSpatialInteractionEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionsAndroidXSpatialInteraction.begin(),
+                      kOpenXRExtensionsAndroidXSpatialInteraction.end());
   }
   if (IsXrAndroidDepthTextureEnabled()) {
     extensions.insert(extensions.end(),
                       kOpenXRExtensionsAndroidDepthTexture.begin(),
                       kOpenXRExtensionsAndroidDepthTexture.end());
   }
-  if (IsXrFbColorSpaceEnabled()) {
-    extensions.insert(extensions.end(), kOpenXRExtensionsFbColorSpace.begin(),
-                      kOpenXRExtensionsFbColorSpace.end());
-  }
   if (IsXrAndroidSystemExtensionsEnabled()) {
     extensions.insert(extensions.end(), kOpenXRExtensionsAndroidSys.begin(),
                       kOpenXRExtensionsAndroidSys.end());
   }
-  if (IsXrGlobalPassthroughDimmingExtensionsEnabled()) {
-    extensions.insert(extensions.end(),
-                      kOpenXRExtensionAndroidXGlobalPassthroughDimming.begin(),
-                      kOpenXRExtensionAndroidXGlobalPassthroughDimming.end());
-  }
-  if (IsXrHandOcclusionExtensionsEnabled()) {
-    extensions.insert(extensions.end(),
-                      kOpenXRExtensionAndroidXHandOcclusion.begin(),
-                      kOpenXRExtensionAndroidXHandOcclusion.end());
-  }
-  if (IsXrEyeTrackingCalibrationEnabled()) {
+  if (IsXrAndroidEyeTrackingCalibrationEnabled()) {
     extensions.insert(extensions.end(),
                       kOpenXRExtensionsAndroidSysEyeTrackingCalibration.begin(),
                       kOpenXRExtensionsAndroidSysEyeTrackingCalibration.end());
   }
+
+  if (IsXrAndroidHandOcclusionExtensionsEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionsAndroidXHandOcclusion.begin(),
+                      kOpenXRExtensionsAndroidXHandOcclusion.end());
+  }
+
+  if (IsXrAndroidGlobalPassthroughDimmingExtensionsEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionsAndroidXGlobalPassthroughDimming.begin(),
+                      kOpenXRExtensionsAndroidXGlobalPassthroughDimming.end());
+  }
+#endif  // IMP_PLATFORM(ANDROID)
 
   if (absl::Status all_supported = EnsureSupportedExtensions(extensions);
       !all_supported.ok()) {
@@ -1061,12 +1110,8 @@ absl::Status XrSessionHost::CheckGraphicsRequirements() const {
                                                        &graphics_requirements));
 }
 
+#if IMP_PLATFORM(ANDROID)
 absl::Status XrSessionHost::SetThreadType(XrAndroidThreadTypeKHR threadType) {
-// TODO: remove once this code is not built for linux in presubmit.
-#if IMP_PLATFORM(LINUX)
-#define gettid() syscall(SYS_gettid)
-#endif  // IMP_PLATFORM(LINUX)
-
   if (instance_ == XR_NULL_HANDLE) {
     return absl::InternalError("instance_ is NULL.");
   }
@@ -1079,10 +1124,13 @@ absl::Status XrSessionHost::SetThreadType(XrAndroidThreadTypeKHR threadType) {
   return ToStatus(
       xrSetAndroidApplicationThreadKHR(GetXrSession(), threadType, gettid()));
 }
+#endif
 
 absl::StatusOr<XrSession> XrSessionHost::CreateSession() const {
   IMP_TRACE();
-  
+  if (!create_session_on_render_thread_) {
+    
+  }
 
   if (instance_ == XR_NULL_HANDLE) {
     return absl::InternalError("instance_ is NULL.");
@@ -1090,41 +1138,23 @@ absl::StatusOr<XrSession> XrSessionHost::CreateSession() const {
 
   XrSession session = XR_NULL_HANDLE;
 
+#if IMP_MATERIAL_API(VULKAN) || IMP_PLATFORM(ANDROID)
   XrGraphicsBinding graphics_binding = platform_->GetGraphicsBinding();
+  const void* next_chain =
+      reinterpret_cast<const XrBaseInStructure*>(&graphics_binding);
+#else
+  const void* next_chain = nullptr;
+#endif
 
   XrSessionCreateInfo session_create_info = {
       .type = XR_TYPE_SESSION_CREATE_INFO,
-      .next = reinterpret_cast<const XrBaseInStructure*>(&graphics_binding),
+      .next = next_chain,
       .systemId = system_id_,
   };
-
-  XrResult result;
-  auto create_session = [&]() {
-    imp::output::Xr("Calling xrCreateSession in thread: %s",
-                    imp::GetThreadName());
-    result = xrCreateSession(instance_, &session_create_info, &session);
-  };
-  if (create_session_on_render_thread_) {
-    absl::Notification notification;
-    // The following queueCommand call is not recommended for typical use by the
-    // Filament team. However, in this case it is being allowed as the simplest
-    // option to sync xrCreateSession with the render thread.
-    downcast(engine_)->getDriverApi().queueCommand(
-        [&create_session, &notification]() {
-          create_session();
-          notification.Notify();
-        });
-    downcast(engine_)->flush();
-    if (!notification.WaitForNotificationWithTimeout(
-            kXrCreateSessionTimeoutDuration)) {
-      return absl::InternalError(
-          "Timeout waiting for render thread to create XrSession.");
-    }
-  } else {
-    create_session();
-  }
-
-  MP_RETURN_IF_ERROR(ToStatus(result));
+  imp::output::Xr("Calling xrCreateSession in thread: %s",
+                  imp::GetThreadName());
+  MP_RETURN_IF_ERROR(
+      ToStatus(xrCreateSession(instance_, &session_create_info, &session)));
 
   return session;
 }
@@ -1226,6 +1256,16 @@ absl::StatusOr<XrSpace> XrSessionHost::ObtainXrSpace(
       ToStatus(xrCreateReferenceSpace(session_, &create_info, &result)));
 
   return result;
+}
+
+bool XrSessionHost::ShouldRenderVarjoFoveationThisFrame() {
+  {
+    absl::MutexLock lock(frame_queue_mutex_);
+    if (frame_queue_.empty()) {
+      return false;
+    }
+    return frame_queue_.front().should_render_varjo_foveation;
+  }
 }
 
 absl::StatusOr<std::vector<XrViewConfigurationView>>
@@ -1470,7 +1510,7 @@ absl::Status XrSessionHost::BeginSession() {
   imp::output::Xr("Beginning Xr Session.");
   MP_RETURN_IF_ERROR(ToStatus(xrBeginSession(session_, &session_begin_info)));
 
-  state_ = RunningState::kRunning;
+  xr_running_state_ = RunningState::kRunning;
 
   // TODO: Consider changing/renaming/moving as part of
   // designing system for Xr input.
@@ -1481,7 +1521,7 @@ absl::Status XrSessionHost::BeginSession() {
 
 absl::Status XrSessionHost::EndSession() {
   MP_RETURN_IF_ERROR(ToStatus(xrEndSession(session_)));
-  state_ = RunningState::kNotRunning;
+  xr_running_state_ = RunningState::kNotRunning;
   return absl::OkStatus();
 }
 
@@ -1969,7 +2009,7 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
   const void* next_chain = next;
 #if IMP_PLATFORM(ANDROID)
   bool use_dimming = dimming_level_.has_value() &&
-                     IsXrGlobalPassthroughDimmingExtensionsEnabled();
+                     IsXrAndroidGlobalPassthroughDimmingExtensionsEnabled();
 
   XrGlobalDimmingFrameEndInfoANDROID dimming_info = {
       .type = XR_TYPE_GLOBAL_DIMMING_FRAME_END_INFO_ANDROID,
@@ -2113,7 +2153,7 @@ absl::Status XrSessionHost::BeginAndDiscardFrame(XrTime predictedDisplayTime) {
     const void* next_chain = nullptr;
 #if IMP_PLATFORM(ANDROID)
     bool use_dimming = dimming_level_.has_value() &&
-                       IsXrGlobalPassthroughDimmingExtensionsEnabled();
+                       IsXrAndroidGlobalPassthroughDimmingExtensionsEnabled();
 
     XrGlobalDimmingFrameEndInfoANDROID dimming_info = {
         .type = XR_TYPE_GLOBAL_DIMMING_FRAME_END_INFO_ANDROID,
@@ -2166,7 +2206,7 @@ void XrSessionHost::PerformNaiveStereoscopicRender(filament::View* view) {
   // directly using the view_configs.
   int viewport_offset_x = 0;
   for (int i = 0; i < latest_views_.size(); ++i) {
-    UpdateCameraFromXrView(latest_views_[i]);
+    UpdateCameraProjectionFromXrView(latest_views_[i]);
     uint32_t view_width = GetViewWidth(GetActiveViewConfigs()->at(i));
     view->setViewport(
         filament::Viewport{viewport_offset_x, 0, view_width,
@@ -2186,6 +2226,7 @@ void XrSessionHost::PerformEnhancedStereoscopicRender(
   filament::Camera* main_camera =
       GetView()->GetCameraManager().GetCamera()->GetCamera();
 
+  // TODO: (broken link) - Remove projection quad support.
   if (options.projection_quad.has_value()) {
     if (pass_camera != main_camera) {
       IMP_LOG(imp::WARNING)
@@ -2200,16 +2241,9 @@ void XrSessionHost::PerformEnhancedStereoscopicRender(
                                    options.projection_quad.value(),
                                    latest_views_);
   } else {
-    // Initialize CameraComponent to be consistent with filament::Camera. This
-    // will be overwritten by the following Set* calls, but
-    // UpdateCameraFromXrView() makes sure the CameraComponent will also have a
-    // similar projection matrix (currently the left eye), and is in "custom"
-    // projection mode. See (broken link).
-    // TODO: Consider initializing the CameraComponent from the
-    // combined projection matrix instead of just the first view. Should also
-    // consider updating CameraComponent to infer the combined projection matrix
-    // from the eyes.
-    UpdateCameraFromXrView(latest_views_[0]);
+    // TODO:  (broken link) - Delete. SetCameraModelAndProjection handles this.
+
+    UpdateCameraProjectionFromXrView(latest_views_[0]);
 
     SetCustomEyeProjectionOnCamera(pass_camera, latest_views_);
     SetEyeModelMatrixOnCamera(GetEngine(), main_camera, pass_camera,
@@ -2236,7 +2270,8 @@ void XrSessionHost::PerformMonoRender(filament::View* view) {
   
 
   // Only render the left eye under the mono view configuration.
-  UpdateCameraFromXrView(latest_views_[0]);
+  // TODO:  (broken link) - Delete. SetCameraModelAndProjection handles this.
+  UpdateCameraProjectionFromXrView(latest_views_[0]);
 
   uint32_t view_width = GetViewWidth(GetActiveViewConfigs()->at(0));
   uint32_t view_height = GetViewHeight(GetActiveViewConfigs()->at(0));
@@ -2273,7 +2308,7 @@ uint32_t XrSessionHost::GetLogicalEyeCount() const {
   }
 }
 
-void XrSessionHost::UpdateCameraFromXrView(const XrView& view) {
+void XrSessionHost::UpdateCameraProjectionFromXrView(const XrView& view) {
   // Get the camera.
   ComponentHandle<CameraComponent> camera =
       GetView()->GetCameraManager().GetCamera();
@@ -2282,20 +2317,57 @@ void XrSessionHost::UpdateCameraFromXrView(const XrView& view) {
   mat4 projection_matrix = GetProjectionMatrix(view.fov, camera->GetNearClip(),
                                                camera->GetFarClip());
   camera->SetProjectionMatrix(projection_matrix);
-
-  // Create and assign the transform.
-  imp::Transform<float> transform = ToTransform(view.pose);
-  camera->GetNode()->SetLocalTrs(transform.AsMat4());
 }
 
-void XrSessionHost::UpdateCameraFromXrPose(const XrPosef& pose) {
-  // Get the camera.
-  ComponentHandle<CameraComponent> camera =
-      GetView()->GetCameraManager().GetCamera();
-
+void XrSessionHost::UpdateCameraFromXrPose(
+    ComponentHandle<CameraComponent> camera, const XrPosef& pose) {
   // Create and assign the transform.
   imp::Transform<float> transform = ToTransform(pose);
   camera->GetNode()->SetLocalTrs(transform.AsMat4());
+}
+
+void XrSessionHost::SetCameraModelAndProjection(
+    ComponentHandle<CameraComponent> camera, const XrPosef& pose,
+    const std::vector<XrView>& views) {
+  if (!camera) {
+    return;
+  }
+
+  // Update camera to match the eye center so that any UX logic that is done by
+  // the app during the frame that uses the camera position is correct. For
+  // example, the app might have a component that billboards a panel so that it
+  // faces the camera.
+  UpdateCameraFromXrPose(camera, pose);
+
+  if (!is_enhanced_stereoscopic_rendering_enabled_) {
+    // Naive stereo rendering requires changing the viewport and projection
+    // matrices of the camera in the render loop.  The projection matrices are
+    // not static.
+    // TODO: Set projection matrix from combined projection matrix.
+    return;
+  }
+
+  if (views.empty()) {
+    // Projection matrices can not be set without views.
+    return;
+  }
+
+  // Initialize CameraComponent to be consistent with filament::Camera. This
+  // will be overwritten by the following Set* calls, but
+  // UpdateCameraProjectionFromXrView() makes sure the CameraComponent will
+  // also have a similar projection matrix (currently the left eye), and is in
+  // "custom" projection mode. See (broken link).
+  // TODO: Consider initializing the CameraComponent from the
+  // combined projection matrix instead of just the first view. Should also
+  // consider updating CameraComponent to infer the combined projection matrix
+  // from the eyes.
+  UpdateCameraProjectionFromXrView(views[0]);
+
+  std::vector<XrView> mutable_views = views;
+  filament::Camera* filament_camera = camera->GetCamera();
+  SetCustomEyeProjectionOnCamera(filament_camera, mutable_views);
+  SetEyeModelMatrixOnCamera(GetEngine(), filament_camera, filament_camera,
+                            mutable_views);
 }
 
 const std::vector<XrViewConfigurationView>*

@@ -176,6 +176,11 @@ jobject CreateVpsAvailabilityResult(
     JNIEnv* env, jobject class_loader,
     const XrVPSAvailabilityCheckCompletionANDROID& completion);
 
+// Returns a JVM object of type `androidx.xr.openxr.QrCodeState` from an
+// `XrTrackableQrCodeANDROID`.
+jobject CreateJavaQrCodeState(JNIEnv* env,
+                              const XrTrackableQrCodeANDROID& xr_qr_code);
+
 }  // namespace androidx::xr::openxr
 
 #endif  // JETPACK_XR_NATIVES_OPENXR_JOBJECT_CREATOR_H_

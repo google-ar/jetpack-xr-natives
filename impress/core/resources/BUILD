@@ -44,7 +44,6 @@ cc_library(
         ":download_progress_info",
         "//core/async:future",
         "//core/async:future_interrupter",
-        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:cord",

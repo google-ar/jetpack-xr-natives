@@ -25,8 +25,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "core/config.h"
 #include "core/performance/memory_stats.h"
+#include "core/performance/profiler_state.h"
 #include "core/performance/profiler_structs.h"
 
 namespace imp {
@@ -43,92 +43,111 @@ namespace imp {
 // main thread only.
 class Profiler {
  public:
+  // If the profiler should be recording samples by default.
+  static constexpr bool kIsProfilingEnabledByDefault = false;
+
   // Id used for samples that should not be recorded.
   static constexpr int64_t kInvalidProfileResultId = -1;
+
   // Name of the main thread.
   static constexpr absl::string_view kMainThreadName = "Main Thread";
-  // Maximum number of frames that can be stored.
-  // Increasing this value will increase the memory footprint of the profiler.
-  static constexpr int kMaxFrames = 300;
-  static constexpr int kMaxWorkerSamples = 64;
-  // Maximum number of samples that can be stored for a single frame.
-  // Increasing this value will increase the memory footprint of the profiler.
-#if IMP_PLATFORM(WASM)
-  // Memory is tighter in WASM. This limit may be too small for large apps.
-  static constexpr int kMaxSamples = 1024;
-#else
-  static constexpr int kMaxSamples = 4096;
-#endif
+
   Profiler() = delete;
+
   // Returns how many frames have been recorded so far.
-  static int GetCurrentFrameIndex() { return frame_index_; }
+  static int GetCurrentFrameIndex();
+
   // Adds a profiling sample to the current frame.
   // Returns the index of the array the sample belongs to and its index within
   // that array.
   // Returns {-1,-1} if there was no room to add the sample or the profiler is
   // not recording.
   static int64_t AddSample(absl::string_view name);
+
   // Set whether the profiler is paused or recording samples.
-  static void SetPaused(bool paused) { paused_ = paused; }
+  static void SetPaused(bool paused);
+
   // Tells the profiler a new frame has started.
   static void AdvanceFrame();
+
   // Returns the profile samples for the frame at the given index.
-  static absl::StatusOr<const std::array<MainThreadProfileResult, kMaxSamples>*>
+  static absl::StatusOr<const std::array<MainThreadProfileResult,
+                                         MainThreadProfilerState::kMaxSamples>*>
   GetSamples(int frame_index);
+
   // Returns the number of samples for the frame at the given index.
   static absl::StatusOr<int> GetSampleCount(int frame_index);
+
   // Returns the duration of time FilamentHost::RenderNextFrame() took for the
   // given frame in nanoseconds.
   static absl::StatusOr<uint32_t> GetRenderNextFrameDurationNanos(
       int frame_index);
+
   // Returns the total duration of the given frame in nanoseconds.
   static absl::StatusOr<uint32_t> GetTotalFrameDurationNanos(int frame_index);
+
   // Sets the end time of the given sample index to the current time.
   static void RecordSampleEndTime(int64_t id);
+
   // Returns the main thread id.
   static std::thread::id GetMainThreadId() { return main_thread_id_.load(); }
+
   // Returns the id of the thread executing this function.
   // Value is cached using thread_local to avoid a lot of system calls.
   static std::thread::id GetCachedThreadId();
+
   // Is the profiler currently recording samples?
   static bool IsRecording() { return is_recording_; }
+
   // Returns the total memory allocated by the app so far.
   static size_t GetMemoryUsageBytes() {
     return MemoryStats::Get().GetMemoryUsageBytes();
   }
+
   // Returns the total number of allocations made by the app so far.
   static size_t GetAllocationsCountTotal() {
     return MemoryStats::Get().GetAllocationsCountTotal();
   }
+
   // Returns true if memory tracking is enabled for the current platform.
   static constexpr bool IsMemoryTrackingSupported() {
     return MemoryStats::IsMemoryTrackingSupported();
   }
+
   // Returns true if the memory graph is enabled for the current platform.
   static constexpr bool IsMemoryGraphSupported() {
     return MemoryStats::IsMemoryGraphSupported();
   }
+
   // Returns the current time in nanoseconds.
   static int64_t GetCurrentTimeNanos();
+
   // Returns true if the data for the given frame is available.
   static bool HasFrameRecorded(int frame_index);
+
   // Records a name for the thread executing this function.
   // Used to identify the thread in the profiler UI.
   static void SetThreadName(absl::string_view name);
+
   // Returns the name of the thread with the given id.
   // Returns a string representation of the thread id if no name has been set,
   // in this case an allocation will occur the first time the name is requested.
   static absl::string_view GetThreadName(std::thread::id thread_id);
+
   // Returns the frame metadata for the frame at the given index.
   static absl::StatusOr<FrameMetaData> GetFrameMetaData(int frame_index);
+
   // Returns the samples for a given thread that overlap the given time range.
   static std::vector<WorkerProfileResult> GetWorkerThreadSamples(
       uint64_t start_time, uint64_t end_time, std::thread::id thread_id);
+
   // Returns all worker samples that were running between the given times.
   static absl::flat_hash_map<std::thread::id, std::vector<WorkerProfileResult>>
   GetAllWorkerThreadsSamples(uint64_t start_time, uint64_t end_time);
-  // Returns thread ids for all worker threads that have ever recorded samples.
-  static std::vector<std::thread::id> GetWorkerThreadIds();
+
+  // Returns thread ids for all threads that have ever recorded samples.
+  static std::vector<std::thread::id> GetThreadIds();
+
   // Returns true if memory call stacks are currently being recorded.
   static bool IsRecordingCallstacks() {
     if (!MemoryStats::IsCallstackTrackingSupported()) {
@@ -136,6 +155,7 @@ class Profiler {
     }
     return is_recording_callstacks_.load(std::memory_order_relaxed);
   }
+
   // Sets whether memory call stacks are being recorded.
   static void SetRecordingCallstacks(bool is_recording) {
     if (!MemoryStats::IsCallstackTrackingSupported()) {
@@ -153,15 +173,10 @@ class Profiler {
   // uint32 so max it can return is 4s per frame.
   inline static std::atomic<std::thread::id> main_thread_id_;
   inline static std::atomic<bool> is_recording_callstacks_{false};
-  inline static std::array<FrameMetaData, kMaxFrames> frame_metadata_;
-  inline static int frame_index_ = 0;
-  inline static int sample_index_ = 0;
-  inline static bool paused_ = false;
+  inline static bool paused_ = !kIsProfilingEnabledByDefault;
   // Duplicate of is_recording_ but without thread safety for the main thread.
   // Prevents the need for an atomic load for each main thread AddSample call.
-  inline static bool is_recording_main_thread_ = true;
-  inline static uint16_t id_counter_ = 0;  // Int16 as kMaxSamples is < 16k.
-  inline static uint16_t end_id_counter_ = 0;
+  inline static bool is_recording_main_thread_ = kIsProfilingEnabledByDefault;
   inline static int64_t last_frame_start_time_ns_ = 0;
   static void RecordMainThreadSampleEndTime(int64_t id);
   static int64_t AddMainThreadSample(absl::string_view name);
@@ -169,7 +184,7 @@ class Profiler {
   // Thread-safe members:
 
   // Whether the profiler is recording samples.
-  inline static std::atomic<bool> is_recording_{true};
+  inline static std::atomic<bool> is_recording_{kIsProfilingEnabledByDefault};
 
   static void RecordWorkerThreadSampleEndTime(int64_t id);
   static int64_t AddWorkerThreadSample(absl::string_view name);

@@ -434,15 +434,14 @@ void FlameGraph::DrawWorkerThreadGraphs(SampleProcessor& sample_processor,
   const ProcessedWorkerSamplesMap worker_samples_map =
       sample_processor.ProcessAllWorkerThreadsSamples(raw_worker_samples_map);
 
-  const std::vector<std::thread::id> worker_thread_ids =
-      Profiler::GetWorkerThreadIds();
+  const std::vector<std::thread::id> thread_ids = Profiler::GetThreadIds();
 
-  const size_t worker_thread_count = worker_thread_ids.size();
+  const size_t thread_count = thread_ids.size();
   std::thread::id thread_id;
   const std::thread::id main_thread_id = Profiler::GetMainThreadId();
 
-  for (size_t i = 0; i < worker_thread_count; ++i) {
-    thread_id = worker_thread_ids[i];
+  for (size_t i = 0; i < thread_count; ++i) {
+    thread_id = thread_ids[i];
 
     if (thread_id == main_thread_id) continue;
     const auto it = worker_samples_map.find(thread_id);

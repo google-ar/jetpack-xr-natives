@@ -35,6 +35,8 @@ class EditorInputHandler : public PointerInputHandler {
  public:
   explicit EditorInputHandler(BaseView* view, Dispatcher& dispatcher);
 
+  void Update(InputManager* input_manager) override;
+
  protected:
   // Casts a ray from a Pointer's screen location out into the view and
   // returns all GenericRayHits. GenericRayhits are sorted first by presence in
@@ -44,6 +46,8 @@ class EditorInputHandler : public PointerInputHandler {
 
  private:
   filament::Scene* GetEditorOverlayScene() const;
+
+  Dispatcher& dispatcher_;
 };
 }  // namespace imp::editor
 

@@ -57,6 +57,7 @@ class Paint : public JavaWrapper {
   void SetColor(float4 color);
   void SetTypeface(jobject typeface);
   void SetAntiAlias(bool anti_alias);
+  void SetXfermodeClear(bool clear);
 
   std::unique_ptr<Rect> GetTextBounds(absl::string_view text);
   float MeasureText(absl::string_view text);
@@ -79,6 +80,7 @@ class Paint : public JavaWrapper {
   JniHandle set_color_;
   JniHandle set_typeface_;
   JniHandle set_anti_alias_;
+  JniHandle set_xfermode_;
   JniHandle get_text_bounds_;
   JniHandle measure_text_;
   JniHandle get_font_spacing_;
@@ -96,6 +98,9 @@ class Paint : public JavaWrapper {
   std::optional<float4> last_color_;
   std::optional<jobject> last_typeface_;
   std::optional<bool> last_anti_alias_;
+  std::optional<bool> last_xfermode_clear_;
+
+  JniUniquePtr<jobject> clear_xfermode_;
 };
 
 }  // namespace imp::android

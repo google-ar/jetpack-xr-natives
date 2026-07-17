@@ -33,11 +33,6 @@ FutureInterrupter UrlLoader::GetGlobalInterrupter() {
   return global_interrupter_;
 }
 
-Future<absl::Cord> UrlLoader::LoadUrl(const Request& request) {
-  return absl::UnimplementedError(
-      "UrlLoader::LoadUrl with Request is not supported on this platform");
-}
-
 float UrlLoader::GetDownloadProgress(size_t download_baseline) {
   size_t total_size = 0;
   size_t downloaded_size = 0;

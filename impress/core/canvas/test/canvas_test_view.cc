@@ -105,7 +105,7 @@ class CanvasTestView : public imp::View {
 
     float2 glyph_pos = {100, 700};
     for (const auto& advance : glyphs) {
-      canvas->DrawGlyph(advance.glyph, glyph_pos, glyph_options);
+      canvas->DrawGlyph(advance.glyph, glyph_pos, glyph_options, nullptr);
       glyph_pos.x += advance.width + 20;
     }
 

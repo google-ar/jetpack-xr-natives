@@ -607,6 +607,16 @@ std::string ShaderGenerator::createSurfaceFragmentProgram(ShaderModel const shad
             +PerMaterialBindingPoints::MATERIAL_PARAMS,
             material.uib);
 
+    if (!filament::Variant::isValidDepthVariant(variant)) {
+        if (!mOutputs.empty()) {
+            CodeGenerator::generateDefine(fs, "HAS_CUSTOM_OUTPUT", 1u);
+            for (const auto& output: mOutputs) {
+                cg.generateOutput(fs, ShaderStage::FRAGMENT, output.name, output.location,
+                        output.qualifier, output.precision, output.type);
+            }
+        }
+    }
+
     CodeGenerator::generateSeparator(fs);
 
     if (featureLevel >= FeatureLevel::FEATURE_LEVEL_1) {
@@ -688,6 +698,8 @@ std::string ShaderGenerator::createSurfaceComputeProgram(ShaderModel const shade
     cg.generateCommonProlog(s, ShaderStage::COMPUTE, material, {}, apiLevel);
 
     generateUserSpecConstants(cg, s, mConstants);
+
+    CodeGenerator::generateDefine(s, "MATERIAL_FEATURE_LEVEL", uint32_t(featureLevel));
 
     CodeGenerator::generateSurfaceTypes(s, ShaderStage::COMPUTE);
 
@@ -806,13 +818,16 @@ std::string ShaderGenerator::createPostProcessFragmentProgram(ShaderModel const 
     CodeGenerator::generatePostProcessGetters(fs, ShaderStage::FRAGMENT);
 
     // Generate post-process outputs.
-    for (const auto& output : mOutputs) {
-        if (output.target == MaterialBuilder::OutputTarget::COLOR) {
-            cg.generateOutput(fs, ShaderStage::FRAGMENT, output.name, output.location,
-                    output.qualifier, output.precision, output.type);
-        }
-        if (output.target == MaterialBuilder::OutputTarget::DEPTH) {
-            CodeGenerator::generateDefine(fs, "FRAG_OUTPUT_DEPTH", 1u);
+    if (!mOutputs.empty()) {
+        CodeGenerator::generateDefine(fs, "HAS_CUSTOM_OUTPUT", 1u);
+        for (const auto& output: mOutputs) {
+            if (output.target == MaterialBuilder::OutputTarget::COLOR) {
+                cg.generateOutput(fs, ShaderStage::FRAGMENT, output.name, output.location,
+                        output.qualifier, output.precision, output.type);
+            }
+            if (output.target == MaterialBuilder::OutputTarget::DEPTH) {
+                CodeGenerator::generateDefine(fs, "FRAG_OUTPUT_DEPTH", 1u);
+            }
         }
     }
 

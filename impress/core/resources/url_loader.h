@@ -22,9 +22,7 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 
-#include "absl/base/attributes.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
@@ -51,24 +49,10 @@ constexpr size_t kUnknownContentLength = SIZE_MAX;
 class UrlLoader {
  public:
   using RequestHeaderMap = absl::flat_hash_map<std::string, std::string>;
-  enum class Method { kGet, kPost };
 
   // Global configuration options for the UrlLoader.
   struct Config {
     RequestHeaderMap request_headers;
-  };
-
-  struct Request {
-    // The URL to load.
-    std::string url ABSL_REQUIRE_EXPLICIT_INIT;
-    // The HTTP method to use for the request.
-    Method method = Method::kGet;
-    // The body to be sent with the request. Can be empty for HTTP methods that
-    // don't need a body (e.g. GET).
-    std::string body;
-    // Additional headers to be sent with the request. These are merged with the
-    // global request headers in the config.
-    RequestHeaderMap additional_headers;
   };
 
   UrlLoader()
@@ -77,12 +61,6 @@ class UrlLoader {
 
   // TODO Use absl::string_view instead of std::string.
   virtual Future<absl::Cord> LoadUrl(const std::string& url) = 0;
-
-  // Loads a URL using the specified method and post body.
-  //
-  // NOTE: This is an experimental API and is not implemented on all
-  // platforms.
-  virtual Future<absl::Cord> LoadUrl(const Request& request);
 
   // Obtains the current cumulative progress of all downloads. Returns 0 if
   // there are no downloads at all.  download_baseline establishes 0%.

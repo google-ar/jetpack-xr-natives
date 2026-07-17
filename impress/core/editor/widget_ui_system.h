@@ -77,7 +77,13 @@ class WidgetUiSystem : public System {
   // Enables or disables all UI in the system.
   void SetEnabled(bool enabled);
 
+  // Sets the layout composer to the provided unique_ptr.
+  // The previously active composer (if any) will be destroyed.
   void SetLayoutComposer(std::unique_ptr<LayoutComposer> layout_composer);
+
+  // Releases ownership of the currently active layout composer and returns it.
+  // The active composer will become null.
+  std::unique_ptr<LayoutComposer> ReleaseLayoutComposer();
 
   bool Is2DLargeScreenLayout() const;
 

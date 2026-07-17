@@ -44,7 +44,7 @@ struct PointerUp {
 struct Wheel {
   int2 travel;
 };
-using MouseInput = absl::variant<PointerDown, PointerMove, PointerUp, Wheel>;
+using MouseInput = std::variant<PointerDown, PointerMove, PointerUp, Wheel>;
 
 }  // namespace imp::window::detail
 

@@ -124,7 +124,8 @@ GlyphAtlas::GlyphAtlas(BaseView& view, Config config)
               config.force_individual_glyph_source_instances,
               view.GetConfig()
                   .experimental_feature_flags->enable_label_prep_profile_logging
-                  .Value()),
+                  .Value(),
+              config.use_bitmap_surface_provider),
           config) {}
 
 GlyphAtlas::GlyphAtlas(BaseView& view,
@@ -141,19 +142,28 @@ GlyphAtlas::GlyphAtlas(BaseView& view,
       },
       this);
 
-  // Prevents an issue where the texture can get cleared and needs to be redrawn
-  // when the view is resumed.
-  if (config.force_reset_on_view_resumed) {
+  if (config.use_bitmap_surface_provider) {
     view.GetDispatcher().Connect(
-        [this](const ViewResumedEvent& event) {
-          absl::MutexLock lock(canvas_mutex_);
-          // Cannot force reset if there is already an active canvas.
-          if (canvas_ == nullptr) {
-            canvas_source_->ForceReset();
-          }
-          texture_status_ = TextureStatus::kHasNewGlyphs;
-        },
+        [this](const ViewPausedEvent& event) { canvas_source_->OnPause(); },
         this);
+    view.GetDispatcher().Connect(
+        [this](const ViewResumedEvent& event) { canvas_source_->OnResume(); },
+        this);
+  } else {
+    // Prevents an issue where the texture can get cleared and needs to be
+    // redrawn when the view is resumed.
+    if (config.force_reset_on_view_resumed) {
+      view.GetDispatcher().Connect(
+          [this](const ViewResumedEvent& event) {
+            absl::MutexLock lock(canvas_mutex_);
+            // Cannot force reset if there is already an active canvas.
+            if (canvas_ == nullptr) {
+              canvas_source_->ForceReset();
+            }
+            texture_status_ = TextureStatus::kHasNewGlyphs;
+          },
+          this);
+    }
   }
 
   if (view.GetDevice().IsPhysicalPixelRatioAvailable()) {
@@ -793,7 +803,7 @@ void GlyphAtlas::DrawGlyphToCanvas(ScopedCanvas& canvas,
   float2 glyph_top_left =
       glyph_info.atlas_entry.GetTopLeft() + float2{kHalfPadding};
   GlyphEmulator::DrawGlyph(canvas, glyph.glyph, glyph_top_left,
-                           glyph.canvas_options);
+                           glyph.canvas_options, &glyph_info.measurements);
 }
 
 std::string GlyphAtlas::ToString(

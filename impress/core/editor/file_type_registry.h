@@ -65,6 +65,7 @@ extern const FileType kFileTypeIsf;
 extern const FileType kFileTypeIsfTextProto;
 extern const FileType kFileTypeHdrImage;
 extern const FileType kFileTypeTexture;
+extern const FileType kFileTypeMat;
 
 }  // namespace imp::editor
 

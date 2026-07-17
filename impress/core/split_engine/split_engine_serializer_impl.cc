@@ -311,6 +311,13 @@ void SplitEngineSerializerImpl::SetMaterialInstanceAt(
   batch.data[entity].primitives[primitiveIndex].material_instance_id =
       material_instance_id;
 }
+
+void SplitEngineSerializerImpl::ClearMaterialInstanceAt(
+    filament::RenderableManager::Instance instance, size_t primitiveIndex) {
+  // TODO: Implement this function.
+  IMP_LOG(imp::FATAL)
+      << "ClearMaterialInstanceAt is not supported in Split Engine mode.";
+}
 void SplitEngineSerializerImpl::SetGeometryAt(
     filament::RenderableManager::Instance instance, size_t primitiveIndex,
     filament::backend::PrimitiveType type, VertexBuffer* vertices,
@@ -519,17 +526,8 @@ void SplitEngineSerializerImpl::SerializeTexture(
     std::unique_ptr<const SplitEngineTextureSerializer>
         split_engine_texture_serializer,
     imp::Invocable<void()> on_done) {
-  const size_t kNumTextures = 1;
-  std::vector<size_t> image_buffer_sizes =
-      split_engine_texture_serializer->GetTextureBufferSizes();
-  const size_t kBufferSize = FlatbufferSizeCalculator()
-                                 .AddTextureAndDependentData(image_buffer_sizes)
-                                 .AddReferenceVector(kNumTextures)
-                                 .AddAddTextureRequest(kNumTextures)
-                                 .AddRequest()
-                                 .Finish()
-                                 .AddScratchSpace()
-                                 .ComputeSize();
+  const size_t kBufferSize =
+      split_engine_texture_serializer->GetSerializedSize();
   const absl::StatusOr<MessageGroupId> group_id =
       transport_->BeginOneShot(kBufferSize);
   

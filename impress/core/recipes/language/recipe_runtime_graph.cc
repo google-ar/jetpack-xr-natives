@@ -324,7 +324,7 @@ absl::StatusOr<recipe::ReturnValue> RecipeRuntimeGraph::EvaluateCallExpression(
     // type in the registered functions.
     evaluated_args.push_back(evaluated_arg);
 #else
-    if (absl::holds_alternative<absl::monostate>(evaluated_arg)) {
+    if (absl::holds_alternative<std::monostate>(evaluated_arg)) {
       return absl::InternalError("Token for function arg must return a value.");
 
     } else {
@@ -607,7 +607,7 @@ ExecutionResult RecipeRuntimeGraph::ExecuteEventTriggerStatement(
 #if IMP_ENABLE_RECIPE_EXPERIMENTAL
     event_args[arg_name] = evaluated_arg;
 #else
-    if (absl::holds_alternative<absl::monostate>(evaluated_arg)) {
+    if (absl::holds_alternative<std::monostate>(evaluated_arg)) {
       return absl::InternalError("Token for function arg must return a value.");
     } else {
       event_args[arg_name] = evaluated_arg;

@@ -48,7 +48,11 @@ class NoopVideoSource : public VideoSource {
 
   absl::StatusOr<Texture*> CreateVideoTexture() override {
     texture_ = view_->GetTextureFactory().CreateTexture(
-        2, 3, filament::Texture::InternalFormat::SRGB8);
+        TextureFactory::TextureCreationSettings{
+            .width = 2,
+            .height = 3,
+            .format = filament::Texture::InternalFormat::SRGB8,
+        });
     return &(*texture_);
   }
 
@@ -56,7 +60,11 @@ class NoopVideoSource : public VideoSource {
       SmallSourceLocation loc) override {
     if (!texture_) {
       texture_ = view_->GetTextureFactory().CreateTexture(
-          2, 3, filament::Texture::InternalFormat::SRGB8);
+          TextureFactory::TextureCreationSettings{
+              .width = 2,
+              .height = 3,
+              .format = filament::Texture::InternalFormat::SRGB8,
+          });
     }
     return texture_.Borrow(loc);
   }

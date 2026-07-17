@@ -51,7 +51,6 @@
 #include "core/resources/resource_manager.h"
 #include "core/resources/url_loader.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/utils/asset.h"
 #include "core/view/utils/proto/cache_config.proto.imp.h"
 
@@ -150,50 +149,6 @@ void AssetManager::SetDefaultLoadOptions(GltfAsset::LoadOptions load_options) {
 
 const GltfAsset::LoadOptions& AssetManager::GetDefaultLoadOptions() {
   return default_load_options_;
-}
-
-Future<NodeHandle> AssetManager::LoadModel(
-    const AssetDefinition& asset_definition,
-    absl::optional<GltfAsset::LoadOptions> options) {
-  return LoadModel(asset_definition.GetUrl(), std::move(options));
-}
-
-Future<NodeHandle> AssetManager::LoadModel(
-    absl::string_view asset_url,
-    absl::optional<GltfAsset::LoadOptions> options) {
-  IMP_TRACE();
-  NodeHandle node = view_->CreateNode();
-  return node->AddComponent<GltfRenderer>(asset_url, std::move(options))
-      .Then([node, this](
-                const absl::StatusOr<ComponentHandle<GltfRenderer>>& statusor)
-                -> absl::StatusOr<NodeHandle> {
-        IMP_TRACE_BLOCK("Then");
-        if (!statusor.ok()) {
-          view_->DestroyNode(node);
-          return statusor.status();
-        }
-        return node;
-      });
-}
-
-Future<NodeHandle> AssetManager::LoadModel(
-    absl::Cord contents, absl::string_view asset_url,
-    absl::optional<GltfAsset::LoadOptions> options) {
-  IMP_TRACE();
-  NodeHandle node = view_->CreateNode();
-  return node
-      ->AddComponent<GltfRenderer>(std::move(contents), asset_url,
-                                   std::move(options))
-      .Then([node, this](
-                const absl::StatusOr<ComponentHandle<GltfRenderer>>& statusor)
-                -> absl::StatusOr<NodeHandle> {
-        IMP_TRACE_BLOCK("Then");
-        if (!statusor.ok()) {
-          view_->DestroyNode(node);
-          return statusor.status();
-        }
-        return node;
-      });
 }
 
 Future<AssetPtr<GltfAsset>> AssetManager::LoadGltfAsset(
@@ -421,6 +376,14 @@ size_t AssetManager::GetDownloadedSize() {
 }
 
 void AssetManager::Cleanup() {
+  // Call `ClearUnused` now to prevent dependency-related crashes.
+  //
+  // `ClearUnused` is not called on every frame, and code below iterates over
+  // caches in no particular order, and if there are unused assets, it can
+  // cause dependency-related crashes (e.g. MaterialAsset is removed before
+  // GltfAsset).
+  ClearUnused();
+
   for (auto& pair : caches_) {
     pair.second->Clear();
   }
@@ -430,9 +393,6 @@ void AssetManager::Cleanup() {
 
 void AssetManager::ClearUnused() {
   IMP_TRACE();
-  // Each frame, clears loaded assets if nothing is using them. We do this once
-  // per-frame so that if something is dropped and then re-used within the same
-  // frame we don't reload it.
   for (auto& pair : caches_) {
     pair.second->ClearUnused();
   }

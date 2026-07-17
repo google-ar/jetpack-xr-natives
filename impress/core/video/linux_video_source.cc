@@ -347,8 +347,11 @@ bool LinuxVideoSource::ShouldUpdateFrame() {
 
 absl::StatusOr<Texture*> LinuxVideoSource::CreateVideoTexture() {
   texture_ = view_->GetTextureFactory().CreateTexture(
-      video_metadata_.width, video_metadata_.height,
-      filament::Texture::InternalFormat::RGBA8);
+      TextureFactory::TextureCreationSettings{
+          .width = video_metadata_.width,
+          .height = video_metadata_.height,
+          .format = filament::Texture::InternalFormat::RGBA8,
+      });
   return &(*texture_);
 }
 
@@ -356,8 +359,11 @@ absl::StatusOr<BorrowedTexturePtr> LinuxVideoSource::BorrowVideoTextureImpl(
     SmallSourceLocation loc) {
   if (!texture_) {
     texture_ = view_->GetTextureFactory().CreateTexture(
-        video_metadata_.width, video_metadata_.height,
-        filament::Texture::InternalFormat::RGBA8);
+        TextureFactory::TextureCreationSettings{
+            .width = video_metadata_.width,
+            .height = video_metadata_.height,
+            .format = filament::Texture::InternalFormat::RGBA8,
+        });
   }
   return texture_.Borrow(loc);
 }

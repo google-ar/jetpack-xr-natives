@@ -173,17 +173,24 @@ fragment {
 #include "stereo.glsl"
 #include "super_sample.glsl"
 
+// Ensure all uvs are high precision to avoid pixel artifacting
+// on high resolution textures.
+// TODO: (broken link) - Remove this "global" high precision qualifier once we
+//                     can detect image quality regressions automatically.
+//                     Ideally we should be able to allow the compiler to choose
+//                     lower precisions and spare performance where possible.
+precision highp float;
+
   void material(inout MaterialInputs material) {
     prepareMaterial(material);
     bool isLeftEye = (variable_stereoData.y < 1.0);
     highp float4 eyeRect = isLeftEye ? materialParams.leftEyeViewRect : materialParams.rightEyeViewRect;
-    // Making this a highp slightly sharpens the resulting image.
     highp vec2 uv = CalculateStereoUvs(getUV0(), eyeRect);
 
     if (!gl_FrontFacing) {
       uv.x = 1.0 - uv.x;
     }
-    vec2 media_uv = uv;
+    highp vec2 media_uv = uv;
     media_uv.y = 1.0 - media_uv.y;
 
     vec4 alphaMaskColor = vec4(0.0, 0.0, 0.0, 1.0);

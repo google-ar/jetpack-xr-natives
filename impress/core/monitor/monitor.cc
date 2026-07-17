@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "mediapipe/framework/deps/clock.h"
 #include "absl/time/time.h"
 #include "core/common/typed_container_helpers.h"
 #include "core/common/typed_id.h"
@@ -29,7 +30,6 @@
 #include "core/monitor/profiling_clock.h"
 #include "core/view/utils/string_map.h"
 #include "robin_map/include/tsl/robin_hash.h"
-#include "mediapipe/framework/deps/clock.h"
 
 namespace imp {
 

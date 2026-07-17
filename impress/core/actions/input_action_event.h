@@ -60,9 +60,9 @@ struct InputActionState<Transform<float>> {
 };
 
 using InputActionStateVariant =
-    absl::variant<InputActionState<bool>, InputActionState<float>,
-                  InputActionState<int>, InputActionState<float2>,
-                  InputActionState<Transform<float>>>;
+    std::variant<InputActionState<bool>, InputActionState<float>,
+                 InputActionState<int>, InputActionState<float2>,
+                 InputActionState<Transform<float>>>;
 
 // An InputActionEvent holds a batch of InputActionStates. All InputActionStates
 // in the same batch share the same action set and subaction path. Generally,

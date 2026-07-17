@@ -62,6 +62,8 @@ struct LoaderOptions {
   // Specifies if the glTF being loaded should have its baked shadow planes
   // removed, if it has any.
   bool remove_shadow_planes = false;
+  // Specifies if the texture asset API should be used.
+  bool enable_use_texture_asset_api = false;
 };
 
 }  // namespace imp::loader

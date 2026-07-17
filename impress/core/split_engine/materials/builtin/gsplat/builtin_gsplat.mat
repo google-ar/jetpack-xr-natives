@@ -34,7 +34,7 @@ material {
            // In mono, the texture is sampled using a sampler2d. In stereo, this
            // is a texture array and is sampled using a sampler2dArray.
            type      : {PRECOMPUTE_SAMPLER},
-           format    : float,
+           format    : uint,
            precision : high,
            name      : splatDataPrecomputed
         },

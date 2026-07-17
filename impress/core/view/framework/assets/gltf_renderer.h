@@ -565,15 +565,15 @@ void GltfRenderer::System::RegisterExtension() {
   static_assert(std::is_base_of_v<GltfExtension, T>,
                 "Extension must be derived from GltfExtension.");
 
-  ComponentId extension_hash = kComponentId<T>;
+  ComponentId extension_id = GetComponentTypeId<T>();
 
-  if (extension_info_map_.find(extension_hash) != extension_info_map_.end()) {
+  if (extension_info_map_.find(extension_id) != extension_info_map_.end()) {
     // Extension is already registered, do nothing.
     return;
   }
 
   extension_info_map_.insert(
-      {extension_hash,
+      {extension_id,
        ExtensionInfo{
            .creation_function = [](ComponentHandle<GltfRenderer> renderer)
                -> Future<absl::Status> {
@@ -599,7 +599,7 @@ void GltfRenderer::System::RegisterExtension() {
              return true;
            }}});
 
-  extension_dependency_graph_.AddNode(extension_hash);
+  extension_dependency_graph_.AddNode(extension_id);
 }
 
 template <typename T, typename K>
@@ -608,31 +608,31 @@ void GltfRenderer::System::RegisterExtensionWithDependency() {
                 "Extension must be derived from GltfExtension.");
   static_assert(std::is_base_of_v<GltfExtension, K>,
                 "Dependency extension must be derived from GltfExtension.");
-  ComponentId extension_hash = kComponentId<T>;
-  ComponentId dependent_extension_hash = kComponentId<K>;
+  ComponentId extension_id = GetComponentTypeId<T>();
+  ComponentId dependent_extension_id = GetComponentTypeId<K>();
 
   RegisterExtension<T>();
-  if (extension_info_map_.find(dependent_extension_hash) ==
+  if (extension_info_map_.find(dependent_extension_id) ==
       extension_info_map_.end()) {
     RegisterExtension<K>();
   }
 
-  if (extension_hash == dependent_extension_hash) {
+  if (extension_id == dependent_extension_id) {
     IMP_LOG(imp::WARNING) << "Dependent extension is the same as the registered "
                     "extension. Ignoring the dependency.";
     return;
   }
 
-  extension_dependency_graph_.AddDependency(extension_hash,
-                                            dependent_extension_hash);
+  extension_dependency_graph_.AddDependency(extension_id,
+                                            dependent_extension_id);
 }
 
 template <typename T>
 void GltfRenderer::System::UnregisterExtension() {
   static_assert(std::is_base_of_v<GltfExtension, T>,
                 "Extension must be derived from GltfExtension.");
-  ComponentId extension_hash = kComponentId<T>;
-  extension_info_map_.erase(extension_hash);
+  ComponentId extension_id = GetComponentTypeId<T>();
+  extension_info_map_.erase(extension_id);
 }
 
 }  // namespace imp

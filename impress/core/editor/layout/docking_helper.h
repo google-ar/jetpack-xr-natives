@@ -60,6 +60,7 @@ class DockingHelper {
   ImGuiID dock_id_left_;
   ImGuiID dock_id_right_;
   ImGuiID dock_id_bottom_;
+  ImGuiID dock_id_center_;
   bool initialized_with_saved_layout_ = false;
   std::vector<std::string> initial_visible_window_labels_;
 };

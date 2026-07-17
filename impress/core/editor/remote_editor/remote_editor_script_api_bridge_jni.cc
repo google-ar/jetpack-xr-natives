@@ -31,6 +31,7 @@
 #include "core/proto/proto_reader.h"
 #include "core/scripting/message_helpers.h"
 #include "core/scripting/proto/bridge.proto.imp.h"
+#include "core/scripting/scripting_system.h"
 #include "core/view/base_view.h"
 #include "core/view/scripting/script_message_handler.h"
 
@@ -46,7 +47,7 @@ template <class T>
 T* FromJava(jlong n) {
   return JniAllowlist<
       T, imp::BaseView, imp::Executor,
-      imp::android::AndroidRemoteEditorScriptApiBridgeWrapper>::FromJava(n);
+      imp::AndroidRemoteEditorScriptApiBridgeWrapper>::FromJava(n);
 }
 
 }  // namespace
@@ -54,49 +55,54 @@ T* FromJava(jlong n) {
 extern "C" {
 
 // LINT.IfChange(nativePostMessageToNative)
-JNI_SCRIPT_API_BRIDGE_METHOD(void, nativePostMessageToNative)
+JNI_SCRIPT_API_BRIDGE_METHOD(jboolean, nativePostMessageToNative)
 (JNIEnv* env, jobject thiz, jlong script_api_bridge_wrapper_ptr,
  jlong view_handle, jlong executor_handle, jbyteArray request_bytes) {
-  // Parse the incoming byte array into a MessageToNative proto.
+  // If wrapper pointer is null, it may have been destroyed during shutdown.
+  // Return true to avoid JNI exceptions during graceful shutdown.
   if (!script_api_bridge_wrapper_ptr) {
-    IMP_LOG(imp::ERROR)
-        << "script_api_bridge_wrapper_ptr is null in postMessageToNative";
-    return;
+    return true;
   }
+  // Parse the incoming byte array into a MessageToNative proto.
   if (!request_bytes) {
     IMP_LOG(imp::ERROR) << "request_bytes is null in postMessageToNative";
-    return;
+    return false;
   }
   imp::BufferAccess byte_buffer = imp::FromByteArray(env, request_bytes);
   imp::scripting::MessageToNative request;
   if (!imp::proto::ParseMessage(byte_buffer.StringView(), &request)) {
     IMP_LOG(imp::ERROR) << "Failed to parse MessageToNative in postMessageToNative";
-    return;
+    return false;
   }
 
   // Get access to the ScriptMessageHandler.
   imp::BaseView* view = FromJava<imp::BaseView>(view_handle);
   if (!view) {
     IMP_LOG(imp::ERROR) << "View is null in postMessageToNative";
-    return;
+    return false;
   }
 
   imp::scripting::ScriptMessageHandler* script_message_handler =
       view->GetScriptMessageHandler();
   if (!script_message_handler) {
-    IMP_LOG(imp::FATAL) << "Unable to post script message with no bridge!";
+    IMP_LOG(imp::ERROR) << "Unable to post script message with no bridge!";
+    return false;
   }
 
-  imp::android::AndroidRemoteEditorScriptApiBridgeWrapper* wrapper =
-      FromJava<imp::android::AndroidRemoteEditorScriptApiBridgeWrapper>(
+  imp::AndroidRemoteEditorScriptApiBridgeWrapper* wrapper =
+      FromJava<imp::AndroidRemoteEditorScriptApiBridgeWrapper>(
           script_api_bridge_wrapper_ptr);
+  if (!wrapper) {
+    IMP_LOG(imp::ERROR) << "Wrapper is null in postMessageToNative";
+    return false;
+  }
 
   // This call is coming from a websocket server thread, so we need to schedule
   // the message handling to be executed on the foreground thread.
   imp::Executor* executor = FromJava<imp::Executor>(executor_handle);
   if (!executor) {
     IMP_LOG(imp::ERROR) << "Executor is null in postMessageToNative";
-    return;
+    return false;
   }
 
   // Note: it is critical to move the byte_buffer into the lambda. The message
@@ -119,8 +125,55 @@ JNI_SCRIPT_API_BRIDGE_METHOD(void, nativePostMessageToNative)
           wrapper->PostMessageToScript(serialized);
         });
   });
+  return true;
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/core/editor/RemoteEditorScriptApiBridge.java:nativePostMessageToNative)
+
+// LINT.IfChange(nativeOnClientConnected)
+JNI_SCRIPT_API_BRIDGE_METHOD(jboolean, nativeOnClientConnected)
+(JNIEnv* env, jobject obj, jlong native_wrapper) {
+  // If wrapper pointer is null, it may have been destroyed during shutdown.
+  // Return true to avoid JNI exceptions during graceful shutdown.
+  if (!native_wrapper) {
+    return true;
+  }
+  imp::AndroidRemoteEditorScriptApiBridgeWrapper* wrapper =
+      FromJava<imp::AndroidRemoteEditorScriptApiBridgeWrapper>(native_wrapper);
+  if (!wrapper) {
+    return false;
+  }
+  if (!wrapper->GetCallback()) {
+    IMP_LOG(imp::ERROR) << "AndroidRemoteEditorScriptApiBridgeWrapper callback is null "
+                  "in nativeOnClientConnected.";
+    return false;
+  }
+  wrapper->GetCallback()->NotifyClientConnected();
+  return true;
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/core/editor/RemoteEditorScriptApiBridge.java:nativeOnClientConnected)
+
+// LINT.IfChange(nativeOnClientDisconnected)
+JNI_SCRIPT_API_BRIDGE_METHOD(jboolean, nativeOnClientDisconnected)
+(JNIEnv* env, jobject obj, jlong native_wrapper) {
+  // If wrapper pointer is null, it may have been destroyed during shutdown.
+  // Return true to avoid JNI exceptions during graceful shutdown.
+  if (!native_wrapper) {
+    return true;
+  }
+  imp::AndroidRemoteEditorScriptApiBridgeWrapper* wrapper =
+      FromJava<imp::AndroidRemoteEditorScriptApiBridgeWrapper>(native_wrapper);
+  if (!wrapper) {
+    return false;
+  }
+  if (!wrapper->GetCallback()) {
+    IMP_LOG(imp::ERROR) << "AndroidRemoteEditorScriptApiBridgeWrapper callback is null "
+                  "in nativeOnClientDisconnected.";
+    return false;
+  }
+  wrapper->GetCallback()->NotifyClientDisconnected();
+  return true;
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/core/editor/RemoteEditorScriptApiBridge.java:nativeOnClientDisconnected)
 
 }  // extern "C"
 

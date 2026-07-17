@@ -231,6 +231,7 @@ cc_library(
         "utils/src/Panic.cpp",
         "utils/src/Path.cpp",
         "utils/src/Profiler.cpp",
+        "utils/src/SingleInstanceComponentManager.cpp",
         "utils/src/Status.cpp",
         "utils/src/ThreadUtils.cpp",
         "utils/src/api_level.cpp",
@@ -840,19 +841,21 @@ cc_library(
     alwayslink = 1,
 )
 
+_BLUEVK_PLATFORM_SRCS = if_linux_or_android([
+    "bluevk/src/BlueVKLinuxAndroid.cpp",
+]) + if_windows([
+    "bluevk/src/BlueVKWindows.cpp",
+]) + if_macos([
+    "bluevk/src/BlueVKDarwin.cpp",
+])
+
 # BlueVK library, Filament Vulkan wrangling library.
 [
     cc_library(
         name = lib_name,
         srcs = [
             "bluevk/src/BlueVK.cpp",
-        ] + if_linux_or_android([
-            "bluevk/src/BlueVKLinuxAndroid.cpp",
-        ]) + if_windows([
-            "bluevk/src/BlueVKWindows.cpp",
-        ]) + if_macos([
-            "bluevk/src/BlueVKDarwin.cpp",
-        ]),
+        ] + platform_srcs,
         hdrs = [
             "bluevk/include/bluevk/BlueVK.h",
         ],
@@ -877,23 +880,50 @@ cc_library(
         ],
         alwayslink = 1,
     )
-    for lib_name, extra_defines, linkopts in [
+    for lib_name, platform_srcs, extra_defines, linkopts in [
         (
+            # Uses the standard Vulkan library: libvulkan.so.1 (linux), libvulkan.so (android),
+            # libvulkan.dylib (macOS), vulkan-1.dll (windows).
             "bluevk",
+            _BLUEVK_PLATFORM_SRCS,
             if_linux(["FILAMENT_SUPPORTS_XLIB"]),
             [],
         ),
         (
+            # Uses the SwiftShader (software rasterizer) named libvk_swiftshader.so. Only useful
+            # for linux and macos.
             "bluevk_swiftshader",
+            _BLUEVK_PLATFORM_SRCS,
             ["FILAMENT_VKLIBRARY_PATH=\\\"libvk_swiftshader.so\\\""],
             [],
         ),
         (
+            # Assumes that a Vulkan library is statically linked in the binary. Only useful for
+            # linux and macos.
             "bluevk_static",
-            ["FILAMENT_VKLIBRARY_PATH=nullptr"],
+            _BLUEVK_PLATFORM_SRCS,
+            [
+                "FILAMENT_VKLIBRARY_PATH=nullptr",
+            ],
             ["-Wl,--export-dynamic-symbol=vkGetInstanceProcAddr"],
         ),
-        ("bluevk_headless", [], []),
+        (
+            # Similar to :bluevk, but does not define FILAMENT_SUPPORTS_XLIB (i.e. assumes no
+            # x11 support).
+            "bluevk_headless",
+            _BLUEVK_PLATFORM_SRCS,
+            [],
+            [],
+        ),
+        (
+            # Allows users to implement their own Vulkan library loading mechanism. Users are
+            # required to define implementations for `bool bluevk::loadLibrary()` and
+            # `void* bluevk::getInstanceProcAddr()`.
+            "bluevk_linux_user",
+            [],
+            ["FILAMENT_SUPPORTS_XLIB"],
+            [],
+        ),
     ]
 ]
 
@@ -1220,7 +1250,6 @@ cc_library(
         "fgviewer/src/DebugServer.cpp",
         "fgviewer/src/FrameGraphInfo.cpp",
         "fgviewer/src/JsonWriter.cpp",
-        "fgviewer/src/WebSocketHandler.cpp",
     ],
     hdrs = [
         "fgviewer/include/fgviewer/DebugServer.h",
@@ -1235,12 +1264,12 @@ cc_library(
     linkstatic = 1,
     textual_hdrs = [
         "fgviewer/src/ApiHandler.h",
-        "fgviewer/src/WebSocketHandler.h",
         "generated/resources/fgviewer_resources.h",
     ],
     deps = [
         ":generated_fgviewer_resources",
         ":utils_hdrs",
+        "//third_party/stblib",
         "@civetweb//:civetserver",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",

@@ -25,6 +25,7 @@
 
 #include "filament/filament/backend/include/backend/platforms/VulkanPlatform.h"
 #include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
@@ -40,8 +41,18 @@ class XrVulkanSwapChainImageHandler {
  public:
   static constexpr VkFormat kVkImageFormat = VK_FORMAT_R8G8B8A8_SRGB;
   static constexpr int64_t kImageFormat = kVkImageFormat;
-  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_X8_D24_UNORM_PACK32;
+  // Use D32_SFLOAT for test builds, potentially for compatibility with
+  // emulators or SwiftShader, where D24 formats might not be fully supported.
+  // For production, D24_UNORM_S8_UINT is generally more performant on mobile
+  // GPUs.
+#if IMP_PLATFORM(ANDROID)
+  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
   static constexpr VkFormat kVkDepthStencilFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+#else
+  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_D32_SFLOAT;
+  static constexpr VkFormat kVkDepthStencilFormat = VK_FORMAT_D32_SFLOAT;
+#endif
+
   static constexpr int32_t kDepthFormat = kVkDepthFormat;
   static constexpr int32_t kDepthStencilFormat = kVkDepthStencilFormat;
   static constexpr XrStructureType kImageType =

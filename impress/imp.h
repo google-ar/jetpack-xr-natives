@@ -35,6 +35,7 @@
 #include "core/assets/gltf/gltf_asset.h"
 #include "core/assets/gltf/gltf_asset_loader.h"
 #include "core/assets/material/material_asset.h"
+#include "core/assets/proto_asset.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_status_utils.h"
@@ -98,7 +99,6 @@
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
 #include "core/view/framework/assets/material_factory.h"
-#include "core/view/framework/assets/proto_asset.h"
 #include "core/view/framework/client_api.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/collision_manager.h"
@@ -114,6 +114,7 @@
 #include "core/view/framework/gestures/pinch_gesture.h"
 #include "core/view/framework/gestures/tap_gesture.h"
 #include "core/view/framework/gestures/twist_gesture.h"
+#include "core/view/framework/model_factory.h"
 #if IMP_PLATFORM(DESKTOP)
 #include "core/view/framework/input/desktop_input_handler.h"
 #endif

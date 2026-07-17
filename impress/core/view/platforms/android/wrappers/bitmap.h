@@ -17,6 +17,12 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_ANDROID_WRAPPERS_BITMAP_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_ANDROID_WRAPPERS_BITMAP_H_
 
+#include "core/config.h"
+
+#if IMP_PLATFORM(ANDROID)
+#include <android/bitmap.h>
+#endif  // IMP_PLATFORM(ANDROID)
+
 #include "absl/status/statusor.h"
 #include "core/common/jni_helpers.h"
 
@@ -31,6 +37,11 @@ enum class BitmapConfig {
   RGB_565,
 };
 
+#if !IMP_PLATFORM(ANDROID)
+// Stub out the structure to allow compilation on non-Android platforms.
+struct AndroidBitmapInfo {};
+#endif  // IMP_PLATFORM(ANDROID)
+
 class Bitmap : public JavaWrapper {
  public:
   Bitmap(JNIEnv* env, jobject jbitmap);
@@ -38,6 +49,10 @@ class Bitmap : public JavaWrapper {
   void Recycle();
 
   absl::StatusOr<BitmapConfig> GetBitmapConfig();
+
+  absl::StatusOr<AndroidBitmapInfo> GetBitmapInfo();
+  absl::StatusOr<void*> LockPixels();
+  absl::Status UnlockPixels();
 
  private:
   JniHandle recycle_;

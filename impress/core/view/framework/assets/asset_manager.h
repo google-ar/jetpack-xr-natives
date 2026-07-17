@@ -33,6 +33,7 @@
 #include "core/assets/gltf/gltf_asset_loader.h"
 #include "core/assets/material/material_asset.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
+#include "core/assets/proto_asset.h"
 #include "core/async/future.h"
 #include "core/common/hash.h"
 #include "core/config.h"
@@ -45,7 +46,6 @@
 #include "core/resources/resource_manager.h"
 #include "core/resources/url_loader.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/assets/proto_asset.h"
 #include "core/view/utils/asset.h"
 #include "core/view/utils/proto/cache_config.proto.imp.h"
 #include "robin_map/include/tsl/robin_map.h"
@@ -124,27 +124,6 @@ class AssetManager {
   // options if none are provided.
   void SetDefaultLoadOptions(GltfAsset::LoadOptions load_options);
   const GltfAsset::LoadOptions& GetDefaultLoadOptions();
-
-  // Loads a gLTF model into a Node asynchronously from an asset definition.
-  //
-  // The returned Node will have children that map to the gLTF hierarchy.
-  // The node will also have a GltfRenderer attached to it that can be used
-  // to access information about the model.
-  //
-  // The model may be cached on subsequent calls, in which case the callback
-  // will be invoked immediately.
-  //
-  // If the model is unable to be loaded, then the resulting NodeHandle is
-  // invalid.
-  Future<NodeHandle> LoadModel(
-      const AssetDefinition& asset_definition,
-      absl::optional<GltfAsset::LoadOptions> options = absl::nullopt);
-  Future<NodeHandle> LoadModel(
-      absl::string_view asset_url,
-      absl::optional<GltfAsset::LoadOptions> options = absl::nullopt);
-  Future<NodeHandle> LoadModel(
-      absl::Cord contents, absl::string_view asset_url,
-      absl::optional<GltfAsset::LoadOptions> options = absl::nullopt);
 
   Future<AssetPtr<GltfAsset>> LoadGltfAsset(
       const AssetDefinition& asset_definition,

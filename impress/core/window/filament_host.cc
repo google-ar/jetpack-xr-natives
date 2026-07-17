@@ -503,21 +503,43 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
         dev_mode_extension_->OffscreenRender();
       }
 
+#if IMP_RUNTIME(DEV)
       filament::Camera* camera = &GetView()->getCamera();
+      filament::RenderTarget* render_target = GetView()->getRenderTarget();
+      filament::Viewport viewport = GetView()->getViewport();
 
       if (editor_camera_override_) {
         GetView()->setCamera(editor_camera_override_);
       }
 
+      if (dev_mode_extension_ && !dev_mode_extension_->HasRenderTarget()) {
+        if (editor_render_target_override_) {
+          GetView()->setRenderTarget(editor_render_target_override_);
+        }
+
+        if (editor_viewport_override_) {
+          GetView()->setViewport(*editor_viewport_override_);
+        }
+      }
+#endif  // IMP_RUNTIME(DEV)
+
       if (should_perform_main_render_) {
         PerformRender(render_view_.Get());
       }
 
-      GetView()->setCamera(camera);
-
       MP_RETURN_IF_ERROR(state_->MultiPassRender());
 
-      if (dev_mode_extension_ && !dev_mode_extension_->RemoteUiEnabled(this)) {
+#if IMP_RUNTIME(DEV)
+      // Restore the view's camera, render target, and viewport.
+      GetView()->setCamera(camera);
+      GetView()->setRenderTarget(render_target);
+      GetView()->setViewport(viewport);
+#endif  // IMP_RUNTIME(DEV)
+
+      bool should_render_dev_mode = false;
+      if (dev_mode_extension_) {
+      }
+      if (should_render_dev_mode) {
         dev_mode_extension_->Render();
       }
 
@@ -889,7 +911,9 @@ FilamentHost::DevModeExtension* FilamentHost::TryGetExtension() {
 
 void FilamentHost::SetEditorCameraOverride(PassKey<editor::EditorImpl> key,
                                            filament::Camera* camera) {
+  if (editor_camera_override_ == camera) return;
   editor_camera_override_ = camera;
+  EnsureNextRenderCompletes();
 }
 
 void FilamentHost::SetEditorRenderTargetOverride(

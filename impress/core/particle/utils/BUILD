@@ -89,7 +89,10 @@ cc_library(
 # Particle Emitter, definition and implementation of different types of particle emitters.
 cc_library(
     name = "particle_emitter",
-    srcs = ["node_particle_emitter.cc"],
+    srcs = [
+        "node_particle_emitter.cc",
+        "particle_emitter.cc",
+    ],
     hdrs = [
         "node_particle_emitter.h",
         "particle_emitter.h",
@@ -98,7 +101,9 @@ cc_library(
         ":particle_behavior_impl",
         ":particle_pool",
         "//core/assets",
+        "//core/assets/gltf:gltf_asset",
         "//core/async:future",
+        "//core/camera",
         "//core/common:owned_ptr",
         "//core/math",
         "//core/ncsb",
@@ -109,6 +114,7 @@ cc_library(
         "//core/view/framework",
         "//core/view/utils:frame_time",
         "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

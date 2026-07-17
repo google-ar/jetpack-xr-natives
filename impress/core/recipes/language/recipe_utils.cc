@@ -174,7 +174,7 @@ struct RecipeTypeToStringVisitor {
     return ss.str();
   }
 
-  std::string operator()(const absl::monostate& value) const {
+  std::string operator()(const std::monostate& value) const {
     return "[Unknown Type]";
   }
 };
@@ -314,7 +314,7 @@ void SetToDefault(const VariableDeclaration::Type& type, Variable& var) {
       var.emplace<imp::RecipeRayHit>();
       break;
     default:
-      var.emplace<absl::monostate>();
+      var.emplace<std::monostate>();
       break;
   }
 }

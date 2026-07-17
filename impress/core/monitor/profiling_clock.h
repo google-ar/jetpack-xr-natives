@@ -17,8 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MONITOR_PROFILING_CLOCK_H_
 #define THIRD_PARTY_IMPRESS_CORE_MONITOR_PROFILING_CLOCK_H_
 #include "absl/synchronization/mutex.h"
-#include "absl/time/time.h"
 #include "mediapipe/framework/deps/clock.h"
+#include "absl/time/time.h"
 
 namespace imp {
 
@@ -34,7 +34,7 @@ class ProfilingClock : public mediapipe::Clock {
   // real clock.
   static absl::Time GetMonotonicClockTime();
 
-  // The Clock interface (see util/time/clock.h).
+  // The Clock interface (see third_party/absl/time/clock_interface.h).
   //
 
   // Returns a time based on clock_gettime(CLOCK_MONOTONIC) if it is available.

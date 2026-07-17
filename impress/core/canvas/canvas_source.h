@@ -60,7 +60,8 @@ class CanvasSource {
       bool force_auto_method_rendering = false,
       int glyph_cache_size_bytes =
           PlatformCanvasSource::kDefaultGlyphCacheSizeBytes,
-      bool force_individual_glyph_source_instances = false);
+      bool force_individual_glyph_source_instances = false,
+      bool use_bitmap_surface_provider = false);
 
   // Note: This is exposed for testing. Real clients should use
   // CanvasSource::Create to create a CanvasSource.
@@ -207,6 +208,8 @@ class CanvasSource {
   // Samsung Galaxy S24) where an Android Surface can become corrupted after
   // backgrounding and resuming. See (broken link) for more details.
   void ForceReset();
+  void OnPause();
+  void OnResume();
 
  private:
   absl::Mutex platform_source_mutex_;

@@ -50,7 +50,8 @@ struct AsyncScopedCanvasWrapper : public AsyncScopedCanvas {
   void DrawRoundedRect(float4 color, float2 corner_radius, const Rect& rect);
   void DrawText(absl::string_view text, float2 pos,
                 const TextOptions& text_options);
-  void DrawGlyph(GlyphId glyph, float2 pos, const TextOptions& text_options);
+  void DrawGlyph(GlyphId glyph, float2 pos, const TextOptions& text_options,
+                 const TextMetrics* pre_cached_metrics) override;
   void ClearRect(const Rect& rect);
   Future<absl::Status> PrepareToUpdateTexture();
   bool SupportsSynchronousTextureUpdate() const;

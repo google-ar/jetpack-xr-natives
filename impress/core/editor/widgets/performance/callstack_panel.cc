@@ -27,6 +27,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 #include "core/common/trace.h"
@@ -62,7 +63,7 @@ constexpr float kLowerPanelMinHeight = 100.0f;
 
 namespace imp::editor {
 
-absl::StatusOr<const std::vector<SampleNode*>*> CallstackPanel::GetSamples(
+absl::StatusOr<absl::Span<SampleNode* const>> CallstackPanel::GetSamples(
     int frame_index, SampleProcessor& sample_processor,
     std::thread::id thread_id, absl::string_view selected_sample_name) {
   if (selected_sample_name.empty()) {
@@ -74,14 +75,14 @@ absl::StatusOr<const std::vector<SampleNode*>*> CallstackPanel::GetSamples(
     const ProcessedSamples& processed_frame =
         sample_processor.GetProcessedFrame(frame_index);
 
-    const auto& sample_it =
-        processed_frame.samples_by_name.find(selected_sample_name);
+    absl::Span<SampleNode* const> samples =
+        processed_frame.GetSamplesByName(selected_sample_name);
 
-    if (sample_it == processed_frame.samples_by_name.end()) {
+    if (samples.empty()) {
       return absl::NotFoundError("Sample not found on this thread.");
     }
 
-    return &sample_it->second;
+    return samples;
   }
 
   // TODO (broken link)(robinsonjordan): Callstack UI for worker threads.
@@ -116,12 +117,12 @@ void CallstackPanel::DrawPanel(const float width, const int start_frame,
   ImGui::BeginChild("##callstackpanel", ImVec2(width, child_height),
                     ImGuiChildFlags_Borders);
 
-  absl::StatusOr<const std::vector<SampleNode*>*> samples =
+  absl::StatusOr<absl::Span<SampleNode* const>> samples =
       GetSamples(end_frame, sample_processor, thread_id, selected_sample_name);
 
   if (samples.ok()) {
     // If there are samples for this frame, draw the callstack table.
-    DrawCallstackPanel(**samples);
+    DrawCallstackPanel(*samples);
   } else {
     // Otherwise, instruct the user on what to do to see callstack data.
     ImGui::Text("%s", samples.status().message().data());
@@ -131,8 +132,7 @@ void CallstackPanel::DrawPanel(const float width, const int start_frame,
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
-void CallstackPanel::DrawCallstackPanel(
-    const std::vector<SampleNode*>& samples) {
+void CallstackPanel::DrawCallstackPanel(absl::Span<SampleNode* const> samples) {
   if (upper_panel_height_ <= 0.0f) {
     upper_panel_height_ =
         ImGui::GetContentRegionAvail().y - kLowerPanelStartingHeight - 20.0f;
@@ -148,8 +148,7 @@ void CallstackPanel::DrawCallstackPanel(
   DrawFullCallstackReadout();
 }
 
-void CallstackPanel::DrawCallstackTable(
-    const std::vector<SampleNode*>& samples) {
+void CallstackPanel::DrawCallstackTable(absl::Span<SampleNode* const> samples) {
   IMP_TRACE();
   ImGui::BeginChild("##callstacktable", ImVec2(-1, upper_panel_height_));
 
@@ -300,8 +299,11 @@ void CallstackPanel::DrawFullCallstackReadout() {
 
   ImGui::PushStyleColor(ImGuiCol_FrameBg,
                         ImGui::GetStyleColorVec4(ImGuiCol_ChildBg));
+  // +1 for the null terminator or this fails an assert and crashes if you try
+  // to highlight and copy the text.
+  const size_t text_size = full_callstack_text.size() + 1;
   ImGui::InputTextMultiline("##fullcallstack", &full_callstack_text[0],
-                            full_callstack_text.size(), ImVec2(-1, -1),
+                            text_size, ImVec2(-1, -1),
                             ImGuiInputTextFlags_ReadOnly);
   ImGui::PopStyleColor();
 

@@ -116,6 +116,9 @@ class GlyphAtlas : public Rememberer {
     // If true, this will force each canvas source to use its own individual
     // glyph source instance, rather than sharing a single instance.
     bool force_individual_glyph_source_instances = false;
+    // If true, this will use the BitmapSurfaceProvider for the canvas
+    // source rather than the legacy SurfaceTextureSurfaceProvider.
+    bool use_bitmap_surface_provider = false;
   };
 
   constexpr static Config kDefaultConfig = {
@@ -123,7 +126,8 @@ class GlyphAtlas : public Rememberer {
       .use_hardware_rendering = true,
       .force_reset_on_view_resumed = true,
       .force_auto_method_rendering = false,
-      .force_individual_glyph_source_instances = false};
+      .force_individual_glyph_source_instances = false,
+      .use_bitmap_surface_provider = false};
 
   // Information about a glyph needed to render it and lay it out relative to
   // other glyphs in a string.

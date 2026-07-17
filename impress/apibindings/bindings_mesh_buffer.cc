@@ -94,30 +94,17 @@ VertexBuffer::AttributeType ToFilamentType(
   }
 }
 
-size_t GetTypeSize(BindingsMeshBuffer::VertexAttributeType type) {
-  switch (type) {
-    case BindingsMeshBuffer::VertexAttributeType::kFloat:
-      return 4;
-    case BindingsMeshBuffer::VertexAttributeType::kFloat2:
-      return 8;
-    case BindingsMeshBuffer::VertexAttributeType::kFloat3:
-      return 12;
-    case BindingsMeshBuffer::VertexAttributeType::kFloat4:
-      return 16;
-    case BindingsMeshBuffer::VertexAttributeType::kUByte4Norm:
-      return 4;
-    case BindingsMeshBuffer::VertexAttributeType::kUByte4:
-      return 4;
-  }
-}
-
 imp::VertexFormat::AttributeInfo ToImpressAttributeInfo(
     const BindingsMeshBuffer::VertexAttributeDescriptor& attr) {
   bool normalized =
       (attr.type == BindingsMeshBuffer::VertexAttributeType::kUByte4Norm);
-  return imp::VertexFormat::AttributeInfo{ToFilamentAttribute(attr.attribute),
-                                          ToFilamentType(attr.type), normalized,
-                                          attr.buffer_index};
+  return imp::VertexFormat::AttributeInfo{
+      .attribute = ToFilamentAttribute(attr.attribute),
+      .type = ToFilamentType(attr.type),
+      .normalized = normalized,
+      .attribute_group_override = attr.buffer_index,
+      .byte_offset = attr.byte_offset,
+  };
 }
 
 // Copies vertex data from a source buffer to a destination buffer, converting
@@ -126,51 +113,56 @@ imp::VertexFormat::AttributeInfo ToImpressAttributeInfo(
 // float3 normals.
 void ConvertAndCopyVertexData(const void* src_data, void* dst_buffer,
                               int vertex_count, int src_stride, int dst_stride,
-                              const BindingsMeshBuffer::VertexLayout& layout,
+                              const imp::VertexFormat& input_format,
+                              const imp::VertexFormat& output_format,
                               int buffer_index) {
   const uint8_t* src = static_cast<const uint8_t*>(src_data);
   uint8_t* dst = static_cast<uint8_t*>(dst_buffer);
 
-  int pre_normal_size = 0;
-  bool normal_found = false;
-
-  // Calculate pre normal size for the specific buffer
-  for (const auto& attr : layout.attributes) {
-    if (attr.buffer_index != buffer_index) continue;
-
-    if (attr.attribute == BindingsMeshBuffer::VertexAttribute::kNormal) {
-      
-      normal_found = true;
-      break;
-    }
-    pre_normal_size += GetTypeSize(attr.type);
-  }
+  auto input_normal_key =
+      input_format.GetKeyForAttribute(filament::VertexAttribute::TANGENTS);
+  auto output_normal_key =
+      output_format.GetKeyForAttribute(filament::VertexAttribute::TANGENTS);
 
   
+  
 
-  const int post_normal_size =
-      src_stride - pre_normal_size - sizeof(imp::float3);
+  int input_normal_offset = input_normal_key->attribute_offset;
+  int output_normal_offset = output_normal_key->attribute_offset;
+
+  struct AttrCopy {
+    size_t in_offset;
+    size_t out_offset;
+    size_t size;
+  };
+  std::vector<AttrCopy> attrs_to_copy;
+  size_t num_attrs = input_format.GetNumAttributes(buffer_index);
+  for (size_t j = 0; j < num_attrs; ++j) {
+    const imp::VertexFormat::AttributeInfo& in_attr =
+        input_format.GetAttributeAt(j, buffer_index);
+    if (in_attr.attribute == filament::VertexAttribute::TANGENTS) {
+      continue;
+    }
+    attrs_to_copy.push_back({
+        input_format.GetAttributeOffsetAt(j, buffer_index),
+        output_format.GetAttributeOffsetAt(j, buffer_index),
+        imp::VertexFormat::GetAttributeSize(in_attr),
+    });
+  }
 
   for (int i = 0; i < vertex_count; ++i) {
     const uint8_t* v_src = src + i * src_stride;
     uint8_t* v_dst = dst + i * dst_stride;
 
-    // Copy data before normal
-    if (pre_normal_size > 0) {
-      std::memcpy(v_dst, v_src, pre_normal_size);
-    }
-
     // Convert normal
     imp::float3 normal;
-    std::memcpy(&normal, v_src + pre_normal_size, sizeof(imp::float3));
+    std::memcpy(&normal, v_src + input_normal_offset, sizeof(imp::float3));
     imp::quatf tangent = imp::NormalToTangent(normal);
-    std::memcpy(v_dst + pre_normal_size, &tangent, sizeof(tangent));
+    std::memcpy(v_dst + output_normal_offset, &tangent, sizeof(tangent));
 
-    // Copy data after normal
-    if (post_normal_size > 0) {
-      std::memcpy(v_dst + pre_normal_size + sizeof(tangent),
-                  v_src + pre_normal_size + sizeof(imp::float3),
-                  post_normal_size);
+    // Copy other attributes
+    for (const AttrCopy& attr : attrs_to_copy) {
+      std::memcpy(v_dst + attr.out_offset, v_src + attr.in_offset, attr.size);
     }
   }
 }
@@ -199,19 +191,52 @@ BindingsMeshBuffer::BindingsMeshBuffer(
   }
   buffer_info_.resize(num_buffers);
 
-  // Calculate strides
+  // Determine if each buffer needs normal conversion, and find position buffer.
   for (const BindingsMeshBuffer::VertexAttributeDescriptor& attr :
        layout_.attributes) {
-    BufferInfo& info = buffer_info_[attr.buffer_index];
-    info.stride_in_bytes += GetTypeSize(attr.type);
     if (attr.attribute == VertexAttribute::kNormal &&
         attr.type == VertexAttributeType::kFloat3) {
-      info.needs_normal_conversion = true;
-      // Convert float3 normal to float4 tangent
-      info.output_stride_in_bytes += 16;
-    } else {
-      info.output_stride_in_bytes += GetTypeSize(attr.type);
+      buffer_info_[attr.buffer_index].needs_normal_conversion = true;
     }
+    if (attr.attribute == VertexAttribute::kPosition) {
+      position_buffer_index_ = attr.buffer_index;
+    }
+  }
+  
+
+  // Calculate strides and formats
+  for (const BindingsMeshBuffer::VertexAttributeDescriptor& attr :
+       layout_.attributes) {
+    const BufferInfo& info = buffer_info_[attr.buffer_index];
+
+    input_format_.AppendAttribute(ToImpressAttributeInfo(attr));
+
+    imp::VertexFormat::AttributeInfo out_info = ToImpressAttributeInfo(attr);
+    if (info.needs_normal_conversion) {
+      // When repacking normals, we tightly pack the output format to avoid
+      // padding and simplify the repacking process. Custom byte offsets
+      // specified in the input layout are ignored for the GPU buffer.
+      out_info.byte_offset = imp::VertexFormat::AttributeInfo::kUnset;
+      if (attr.attribute == VertexAttribute::kNormal) {
+        out_info.type = VertexBuffer::AttributeType::FLOAT4;
+      }
+    }
+    output_format_.AppendAttribute(out_info);
+  }
+
+  for (int i = 0; i < num_buffers; ++i) {
+    if (i < layout_.strides.size() && layout_.strides[i] > 0) {
+      input_format_.SetGroupByteStride(i, layout_.strides[i]);
+      // Only set the output stride if normal conversion is not necessary.
+      // If normal conversion is necessary, we tightly pack the output buffer to
+      // avoid padding and simplify the repacking process, so we don't set a
+      // custom stride and let VertexFormat compute it.
+      if (!buffer_info_[i].needs_normal_conversion) {
+        output_format_.SetGroupByteStride(i, layout_.strides[i]);
+      }
+    }
+    buffer_info_[i].stride_in_bytes = input_format_.GetVertexSize(i);
+    buffer_info_[i].output_stride_in_bytes = output_format_.GetVertexSize(i);
   }
 
   // If max_vertices_ is not set, calculate it from the initial vertex data.
@@ -272,22 +297,8 @@ absl::Status BindingsMeshBuffer::UpdateIndexData(
 void BindingsMeshBuffer::CreateRootMesh(
     const std::vector<absl::Span<const uint8_t>>& initial_vertex_data,
     absl::Span<const uint8_t> initial_index_data) {
-  imp::VertexFormat format;
-  int position_buffer_index = -1;
-  for (const auto& attr : layout_.attributes) {
-    auto info = ToImpressAttributeInfo(attr);
-    if (buffer_info_[attr.buffer_index].needs_normal_conversion &&
-        attr.attribute == VertexAttribute::kNormal) {
-      info.type = VertexBuffer::AttributeType::FLOAT4;
-    }
-    if (attr.attribute == BindingsMeshBuffer::VertexAttribute::kPosition) {
-      position_buffer_index = attr.buffer_index;
-    }
-    format.AppendAttribute(info);
-  }
-
   imp::MeshDescription description;
-  description.vertex_format = format;
+  description.vertex_format = output_format_;
   description.vertex_count = max_vertices_;
   description.index_count = max_indices_;
   description.index_type = IndexBuffer::IndexType::UINT;
@@ -313,7 +324,7 @@ void BindingsMeshBuffer::CreateRootMesh(
     int32_t output_stride = info.output_stride_in_bytes;
     int vertex_count = initial_vertex_data[i].size() / stride;
     vertex_count = std::min(vertex_count, static_cast<int>(max_vertices_));
-    if (i == position_buffer_index) {
+    if (i == position_buffer_index_) {
       num_position_vertices = vertex_count;
     }
 
@@ -325,7 +336,8 @@ void BindingsMeshBuffer::CreateRootMesh(
 
     if (info.needs_normal_conversion) {
       ConvertAndCopyVertexData(initial_vertex_data[i].data(), dst_buffer,
-                               vertex_count, stride, output_stride, layout_, i);
+                               vertex_count, stride, output_stride,
+                               input_format_, output_format_, i);
     } else {
       std::memcpy(dst_buffer, initial_vertex_data[i].data(),
                   vertex_count * stride);
@@ -347,17 +359,13 @@ void BindingsMeshBuffer::CreateRootMesh(
   // Meshes using this mesh buffer may override this AABB.
   if (num_position_vertices > 0) {
     AabbCalculator aabb_calculator;
-    int position_offset = 0;
-    for (const auto& attr : layout_.attributes) {
-      if (attr.buffer_index == position_buffer_index) {
-        if (attr.attribute == BindingsMeshBuffer::VertexAttribute::kPosition) {
-          break;
-        }
-        position_offset += GetTypeSize(attr.type);
-      }
-    }
-    const uint8_t* src_data = initial_vertex_data[position_buffer_index].data();
-    int32_t stride = buffer_info_[position_buffer_index].stride_in_bytes;
+    auto pos_key =
+        input_format_.GetKeyForAttribute(filament::VertexAttribute::POSITION);
+    
+    int position_offset = pos_key->attribute_offset;
+    const uint8_t* src_data =
+        initial_vertex_data[position_buffer_index_].data();
+    int32_t stride = buffer_info_[position_buffer_index_].stride_in_bytes;
     for (int i = 0; i < num_position_vertices; ++i) {
       imp::float3 position;
       std::memcpy(&position, src_data + i * stride + position_offset,
@@ -406,7 +414,7 @@ absl::Status BindingsMeshBuffer::UploadVertexData(int32_t buffer_index,
 
   if (info.needs_normal_conversion) {
     ConvertAndCopyVertexData(data, buffer, vertex_count, stride, output_stride,
-                             layout_, buffer_index);
+                             input_format_, output_format_, buffer_index);
 
     // Adjust offset for GPU buffer
     offset = (offset / stride) * output_stride;

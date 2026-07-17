@@ -40,6 +40,7 @@ android_library(
         "//core/scripting/proto:bridge_java_proto_lite",
         "//core/scripting/proto:events_java_proto_lite",
         "//core/view/framework:framework_java_proto_lite",
+        "//core/view/utils:view_config_java_proto_lite",
         "//java/com/google/ar/imp/view",
         "@com_google_protobuf//java/lite",
         "@maven//:androidx_annotation_annotation",

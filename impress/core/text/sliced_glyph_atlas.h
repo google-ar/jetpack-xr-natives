@@ -106,6 +106,9 @@ class SlicedGlyphAtlas : public Rememberer {
     // If true, this will force each canvas source to use its own individual
     // glyph source instance, rather than sharing a single instance.
     bool force_individual_glyph_source_instances = false;
+    // If true, this will use the BitmapSurfaceProvider for the canvas
+    // source rather than the legacy SurfaceTextureSurfaceProvider.
+    bool use_bitmap_surface_provider = false;
   };
 
   using SliceId = sliced_glyph_atlas::SliceId;
@@ -115,7 +118,8 @@ class SlicedGlyphAtlas : public Rememberer {
       .use_hardware_rendering = true,
       .force_reset_on_view_resumed = true,
       .force_auto_method_rendering = false,
-      .force_individual_glyph_source_instances = false};
+      .force_individual_glyph_source_instances = false,
+      .use_bitmap_surface_provider = false};
 
   using Glyph = sliced_glyph_atlas::Glyph;
 
@@ -313,7 +317,7 @@ class SlicedGlyphAtlas : public Rememberer {
   uint2 atlas_texture_size_ = {2048, 2048};
   uint2 atlas_grid_size_ = {1, 1};
 
-  std::unique_ptr<Texture> composite_texture_;
+  OwnedTexturePtr composite_texture_;
   // The manager of the composite texture when there is >1 slice.
   std::unique_ptr<TextureManager> texture_manager_;
   // The slices that need to be blitted by the texture manager. Separate so they
@@ -339,6 +343,8 @@ class SlicedGlyphAtlas : public Rememberer {
       ABSL_GUARDED_BY(canvas_options_map_mutex_);
   // The cursor for the next slice to add a glyph to.
   SliceId addition_cursor_;
+
+  bool use_bitmap_surface_provider_ = false;
 
   const SlicedGlyphAtlas::GlyphInfo kEmptyGlyphInfo{
       .atlas_entry = AtlasPacker::ScopedAtlasEntry::Empty(),

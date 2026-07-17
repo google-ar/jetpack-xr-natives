@@ -17,15 +17,19 @@
 #define THIRD_PARTY_SPLIT_ENGINE_MATERIALS_GSPLAT_MATERIAL_SERIALIZER_H_
 #include <sys/types.h>
 
-#include <memory>
 #include <optional>
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
+#include "filament/filament/include/filament/Color.h"
+#include "filament/filament/include/filament/TextureSampler.h"
+#include "filament/libs/math/include/math/mathfwd.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/gsplat/gsplat_asset.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
@@ -45,13 +49,18 @@ namespace android_xr {
 // A material wrapper for the built-in GsplatMaterialSerializer to support Split
 // Engine.
 //
+// Callers must ensure all textures borrowed by the GsplatMaterialSerializer
+// outlive the class.  Additionally, if a texture is ever changed the caller
+// must ensure the old texture is not destroyed before the new texture is
+// asynchronously uploaded.
+//
 // Note: This is the split-engine app side of GsplatMaterialDeserializer.
 class GsplatMaterialSerializer
     : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
   // Creates a Gsplat material with a specified Rendering mode that uses a given
   // precomputed data texture to render the Gsplat scene.
-  static imp::Future<std::unique_ptr<GsplatMaterialSerializer>> Create(
+  static imp::Future<imp::OwnedPtr<GsplatMaterialSerializer>> Create(
       imp::NodeHandle gsplat_node, imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
       android_xr::schemas::GsplatMode material_mode,
       bool use_triangles_for_splats,
@@ -100,12 +109,6 @@ class GsplatMaterialSerializer
     MarkParametersDirty();
   }
 
-  void SetSortedIndicesTexture(imp::OwnedOrBorrowedTexturePtr texture) {
-    condemned_texture_ = std::move(sorted_indices_texture_);
-    sorted_indices_texture_ = std::move(texture);
-    MarkParametersDirty();
-  }
-
   void SetSplatScale(float splat_scale) {
     splat_scale_ = imp::split_engine::Pack(splat_scale);
     MarkParametersDirty();
@@ -136,6 +139,106 @@ class GsplatMaterialSerializer
     MarkParametersDirty();
   }
 
+  /**
+   * Material parameter setters inherited from Material.h
+   *
+   * Parameter name and type must be valid for serialization.
+   *
+   * Unsupported parameters will terminate the program with an error. There is
+   * an explicit check for parameter name/type mismatches to prevent triggering
+   * undefined behavior.
+   */
+  void SetParameter(absl::string_view parameter_name, bool value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::bool2 value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::bool3 value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::bool4 value) override;
+  void SetParameter(absl::string_view parameter_name, float value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::float2 value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::float3 value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::float4 value) override;
+  void SetParameter(absl::string_view parameter_name, int value) override;
+  void SetParameter(absl::string_view parameter_name, imp::int2 value) override;
+  void SetParameter(absl::string_view parameter_name, imp::int3 value) override;
+  void SetParameter(absl::string_view parameter_name, imp::int4 value) override;
+  void SetParameter(absl::string_view parameter_name, uint value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::uint2 value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::uint3 value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::uint4 value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::mat3f value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    imp::mat4f value) override;
+
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const bool> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::bool2> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::bool3> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::bool4> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const float> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::float2> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::float3> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::float4> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const int> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::int2> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::int3> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::int4> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const uint> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::uint2> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::uint3> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::uint4> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::mat3f> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const imp::mat4f> value) override;
+
+  void SetParameter(absl::string_view parameter_name, filament::RgbaType type,
+                    filament::math::float4 color) override;
+
+  void SetParameter(absl::string_view parameter_name, filament::RgbType type,
+                    filament::math::float3 color) override;
+
+  void SetParameter(
+      absl::string_view parameter_name, const imp::Texture* texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
+
+  void SetParameter(
+      absl::string_view parameter_name, imp::TexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
+
+  void SetParameter(
+      absl::string_view parameter_name, imp::OwnedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
+
+  void SetParameter(
+      absl::string_view parameter_name, imp::BorrowedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
+
+  bool HasParameter(absl::string_view parameter_name) override;
+
  private:
   friend class GsplatMaterialSerializerTest;
 
@@ -145,6 +248,11 @@ class GsplatMaterialSerializer
                            imp::BorrowedTexturePtr precomputed_data_texture,
                            std::optional<android_xr::schemas::Uint2>
                                magic_window_offscreen_resolution);
+
+  void SetSortedIndicesTexture(imp::BorrowedTexturePtr texture) {
+    sorted_indices_texture_ = texture;
+    MarkParametersDirty();
+  }
 
   imp::AssetPtr<imp::GSplatAsset> gsplat_asset_;
 
@@ -158,11 +266,7 @@ class GsplatMaterialSerializer
   imp::OwnedOrBorrowedTexturePtr position_data_texture_;
   imp::OwnedOrBorrowedTexturePtr cov3d_data_texture_;
   imp::OwnedOrBorrowedTexturePtr color_data_texture_;
-  imp::OwnedOrBorrowedTexturePtr sorted_indices_texture_;
-  // When a texture is replaced, it will first be
-  // moved here, then later deleted. It is not deleted immediately because the
-  // built-in material may still be using it.
-  imp::OwnedOrBorrowedTexturePtr condemned_texture_;
+  imp::BorrowedTexturePtr sorted_indices_texture_;
   std::optional<android_xr::schemas::Float> splat_scale_;
   std::optional<imp::TexturePipelineRendererProjectionQuad>
       magic_window_projection_quad_;

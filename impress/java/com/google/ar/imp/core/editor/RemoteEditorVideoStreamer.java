@@ -69,31 +69,64 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
   private static final byte AVCC_NUM_SPS_1 = (byte) 0xE1; // 1 SPS | 0xE0 reserved
   private static final byte AVCC_NUM_PPS_1 = 1;
 
+  // Video Encoding Parameters
+  private int videoWidth = VIDEO_WIDTH_1080P;
+  private int videoHeight = VIDEO_HEIGHT_1080P;
   private int fps = DEFAULT_FPS;
   private int bitrate = BITRATE_1080P;
   private int bitrateMode = MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR;
-  private long nativeServerWrapperPtr;
 
+  // MediaCodec State
+  private final Surface persistentInputSurface;
   @Nullable private volatile MediaCodec mediaCodec;
+
+  // WebSocket Server State
+  private volatile RemoteEditorWebSocketServer server;
+
+  // Client Configuration State
   private volatile JSONObject config = new JSONObject();
   @Nullable private String codecString;
   @Nullable private String description;
   @Nullable private String lastConfigSent;
-  private int videoWidth = VIDEO_WIDTH_1080P;
-  private int videoHeight = VIDEO_HEIGHT_1080P;
-  private volatile RemoteEditorWebSocketServer server;
-  private final Surface persistentInputSurface;
+
+  // Native Interface State
+  private long nativeRemoteEditorWrapperPtr;
   private NativeInterface nativeInterface =
       new NativeInterface() {
         @Override
         public void setEditorUiRenderSurface(
-            long nativeServerWrapperPtr, Surface surface, int width, int height) {
-          nativeSetEditorUiRenderSurface(nativeServerWrapperPtr, surface, width, height);
+            long nativeRemoteEditorWrapperPtr, Surface surface, int width, int height) {
+          if (!nativeSetEditorUiRenderSurface(
+              nativeRemoteEditorWrapperPtr, surface, width, height)) {
+            Log.e(TAG, "Failed to set editor UI render surface.");
+          }
         }
 
         @Override
-        public void releaseEditorUiRenderSurface(long nativeServerWrapperPtr) {
-          nativeReleaseEditorUiRenderSurface(nativeServerWrapperPtr);
+        public void releaseEditorUiRenderSurface(long nativeRemoteEditorWrapperPtr) {
+          if (!nativeReleaseEditorUiRenderSurface(nativeRemoteEditorWrapperPtr)) {
+            Log.e(TAG, "Failed to release editor UI render surface.");
+          }
+        }
+
+        @Override
+        public void onClientConnected(long nativeRemoteEditorWrapperPtr) {
+          if (nativeRemoteEditorWrapperPtr == 0) {
+            return;
+          }
+          if (!nativeOnClientConnected(nativeRemoteEditorWrapperPtr)) {
+            Log.e(TAG, "Failed to notify native layer of client connection.");
+          }
+        }
+
+        @Override
+        public void onClientDisconnected(long nativeRemoteEditorWrapperPtr) {
+          if (nativeRemoteEditorWrapperPtr == 0) {
+            return;
+          }
+          if (!nativeOnClientDisconnected(nativeRemoteEditorWrapperPtr)) {
+            Log.e(TAG, "Failed to notify native layer of client disconnection.");
+          }
         }
       };
 
@@ -109,14 +142,22 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
 
   @Override
   public void onConnected(WebSocket conn) {
-    if (config.length() > 0) {
+    nativeInterface.onClientConnected(nativeRemoteEditorWrapperPtr);
+    // If a client connects before onOutputFormatChanged has populated the config,
+    // config.length() will be 0. In that case, we skip sending config here;
+    // the client will receive it when buildAndSendConfig() broadcasts it.
+    // Frame sending in onOutputBufferAvailable is blocked until config is ready,
+    // ensuring clients don't receive video data before configuration.
+    if (config.length() > 0 && conn.isOpen()) {
       conn.send(config.toString());
       requestKeyFrame();
     }
   }
 
   @Override
-  public void onDisconnected(WebSocket conn) {}
+  public void onDisconnected(WebSocket conn) {
+    nativeInterface.onClientDisconnected(nativeRemoteEditorWrapperPtr);
+  }
 
   @Override
   public void onStringMessage(String message) {
@@ -151,7 +192,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
       // The server could be null if stopStreaming() was called after this message was queued
       // but before it was processed. If streaming is inactive, ignore the resolution change.
       if (server != null) {
-        startStreaming(server.getPort(), nativeServerWrapperPtr, fps);
+        startStreaming(server.getPort(), nativeRemoteEditorWrapperPtr, fps);
       }
 
       // The MediaCodec.Callback will automatically send the new config when onOutputFormatChanged
@@ -168,41 +209,41 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
    * Starts the video streamer with the default framerate.
    *
    * @param port The port to listen on.
-   * @param nativeServerWrapperPtr The pointer to the native RemoteEditorServer C++ wrapper.
+   * @param nativeRemoteEditorWrapperPtr The pointer to the native RemoteEditor C++ wrapper.
    * @throws IOException If the MediaCodec cannot be created or configured.
    * @throws IllegalStateException If {@code startStreaming()} is called on an already-started
    *     instance before {@code stopStreaming()} has been called.
    */
-  void startStreaming(int port, long nativeServerWrapperPtr) throws IOException {
-    startStreaming(port, nativeServerWrapperPtr, DEFAULT_FPS);
+  void startStreaming(int port, long nativeRemoteEditorWrapperPtr) throws IOException {
+    startStreaming(port, nativeRemoteEditorWrapperPtr, DEFAULT_FPS);
   }
 
   /**
    * Starts the video streamer with a specific framerate.
    *
    * @param port The port to listen on.
-   * @param nativeServerWrapperPtr The pointer to the native RemoteEditorServer C++ wrapper.
+   * @param nativeRemoteEditorWrapperPtr The pointer to the native RemoteEditor C++ wrapper.
    * @param fps The target frames per second.
    * @throws IOException If the MediaCodec cannot be created or configured.
    * @throws IllegalStateException If {@code startStreaming()} is called on an already-started
    *     instance before {@code stopStreaming()} has been called.
    */
-  void startStreaming(int port, long nativeServerWrapperPtr, int fps) throws IOException {
+  void startStreaming(int port, long nativeRemoteEditorWrapperPtr, int fps) throws IOException {
     if (mediaCodec != null) {
       throw new IllegalStateException(
           "RemoteEditorVideoStreamer is already started. Call stopStreaming() before starting"
               + " again.");
     }
-    if (!persistentInputSurface.isValid()) {
+    if (persistentInputSurface == null || !persistentInputSurface.isValid()) {
       throw new IllegalStateException(
           "RemoteEditorVideoStreamer has been released and cannot be restarted.");
     }
 
     startServer(port);
 
-    this.nativeServerWrapperPtr = nativeServerWrapperPtr;
+    this.nativeRemoteEditorWrapperPtr = nativeRemoteEditorWrapperPtr;
     nativeInterface.setEditorUiRenderSurface(
-        nativeServerWrapperPtr, persistentInputSurface, videoWidth, videoHeight);
+        nativeRemoteEditorWrapperPtr, persistentInputSurface, videoWidth, videoHeight);
     this.fps = fps;
     mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
     MediaCodecInfo.EncoderCapabilities caps =
@@ -262,6 +303,14 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
             ByteBuffer outputBuffer = codec.getOutputBuffer(index);
 
             if ((info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+              codec.releaseOutputBuffer(index, false);
+              return;
+            }
+
+            // If the codec config (SPS/PPS) hasn't been generated and sent yet, drop frames.
+            // Sending frames without the SPS/PPS header usually results in decoding errors on the
+            // client side.
+            if (config.length() == 0) {
               codec.releaseOutputBuffer(index, false);
               return;
             }
@@ -382,11 +431,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
           server.broadcast(config.toString());
         }
         lastConfigSent = config.toString();
-        if (mediaCodec != null) {
-          Bundle params = new Bundle();
-          params.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0);
-          mediaCodec.setParameters(params);
-        }
+        requestKeyFrame();
       }
     } catch (JSONException e) {
       Log.e(TAG, "Error building or sending config", e);
@@ -414,9 +459,11 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
   void stopStreaming() {
     stopCodec();
     stopServer();
-    if (nativeServerWrapperPtr != 0) {
-      nativeInterface.releaseEditorUiRenderSurface(nativeServerWrapperPtr);
-      nativeServerWrapperPtr = 0;
+    if (nativeRemoteEditorWrapperPtr != 0) {
+      nativeInterface.releaseEditorUiRenderSurface(nativeRemoteEditorWrapperPtr);
+      // Zero the pointer. Asynchronous WebSocket callbacks (like onDisconnected)
+      // may still be queued on the main thread even after the server is stopped.
+      nativeRemoteEditorWrapperPtr = 0;
     }
   }
 
@@ -504,18 +551,33 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
   
   interface NativeInterface {
     void setEditorUiRenderSurface(
-        long nativeServerWrapperPtr, Surface surface, int width, int height);
+        long nativeRemoteEditorWrapperPtr, Surface surface, int width, int height);
 
-    void releaseEditorUiRenderSurface(long nativeServerWrapperPtr);
+    void releaseEditorUiRenderSurface(long nativeRemoteEditorWrapperPtr);
+
+    void onClientConnected(long nativeRemoteEditorWrapperPtr);
+
+    void onClientDisconnected(long nativeRemoteEditorWrapperPtr);
   }
 
   // LINT.IfChange(nativeSetEditorUiRenderSurface)
-  private native void nativeSetEditorUiRenderSurface(
-      long nativeServerWrapperPtr, Surface surface, int width, int height);
+  private native boolean nativeSetEditorUiRenderSurface(
+      long nativeRemoteEditorWrapperPtr, Surface surface, int width, int height);
 
   // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_video_streamer_jni.cc:nativeSetEditorUiRenderSurface)
 
   // LINT.IfChange(nativeReleaseEditorUiRenderSurface)
-  private native void nativeReleaseEditorUiRenderSurface(long nativeServerWrapperPtr);
+  private native boolean nativeReleaseEditorUiRenderSurface(long nativeRemoteEditorWrapperPtr);
+
   // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_video_streamer_jni.cc:nativeReleaseEditorUiRenderSurface)
+
+  // LINT.IfChange(nativeOnClientConnected)
+  private native boolean nativeOnClientConnected(long nativeRemoteEditorWrapperPtr);
+
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_video_streamer_jni.cc:nativeOnClientConnected)
+
+  // LINT.IfChange(nativeOnClientDisconnected)
+  private native boolean nativeOnClientDisconnected(long nativeRemoteEditorWrapperPtr);
+
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_video_streamer_jni.cc:nativeOnClientDisconnected)
 }

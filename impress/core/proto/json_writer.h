@@ -19,12 +19,15 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/memory/memory.h"
@@ -35,8 +38,9 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/one_of.h"
 #include "core/common/optional_with_default.h"
-#include "core/common/platform_helpers.h"
+#include "core/common/template_helpers.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/proto_common.h"
 #include "core/proto/proto_reader.h"
@@ -56,55 +60,82 @@ class JsonWriter {
   }
 
   template <int field_type, typename M, typename T>
-  M* Visit(M* m, int field_id, T* field, T* other);
+  M* Visit(M* m, int field_id, T* field, T* other, bool optional = false);
 
   template <int field_type, typename M, typename T>
   M* Visit(M* m, int field_id, absl::optional<T>* field,
-           absl::optional<T>* other);
+           absl::optional<T>* other, bool optional = false);
 
   template <int field_type, typename M, typename T,
             const auto* DefaultValuePointer>
   M* Visit(M* m, int field_id,
            OptionalWithDefault<T, DefaultValuePointer>* field,
-           OptionalWithDefault<T, DefaultValuePointer>* other);
+           OptionalWithDefault<T, DefaultValuePointer>* other,
+           bool optional = false);
 
   template <int field_type, typename M, typename T>
-  M* Visit(M* m, int field_id, CopyablePtr<T>* field, CopyablePtr<T>* other);
+  M* Visit(M* m, int field_id, CopyablePtr<T>* field, CopyablePtr<T>* other,
+           bool optional = false);
 
   template <int field_type, RepeatedMergeStrategy merge_type, typename M,
             typename T>
-  M* Visit(M* m, int field_id, std::vector<T>* field, std::vector<T>* other);
+  M* Visit(M* m, int field_id, std::vector<T>* field, std::vector<T>* other,
+           bool optional = false);
 
   template <int key_type, int value_type, typename M, typename K, typename V>
-  M* Visit(M* m, int field_id, std::map<K, V>* field, std::map<K, V>* other);
+  M* Visit(M* m, int field_id, std::map<K, V>* field, std::map<K, V>* other,
+           bool optional = false);
 
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, bool* field, bool* other);
+  M* Visit(M* m, int field_id, bool* field, bool* other, bool optional = false);
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, int32_t* field, int32_t* other);
+  M* Visit(M* m, int field_id, int32_t* field, int32_t* other,
+           bool optional = false);
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, uint32_t* field, uint32_t* other);
+  M* Visit(M* m, int field_id, uint32_t* field, uint32_t* other,
+           bool optional = false);
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, int64_t* field, int64_t* other);
+  M* Visit(M* m, int field_id, int64_t* field, int64_t* other,
+           bool optional = false);
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, uint64_t* field, uint64_t* other);
+  M* Visit(M* m, int field_id, uint64_t* field, uint64_t* other,
+           bool optional = false);
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, float* field, float* other);
+  M* Visit(M* m, int field_id, float* field, float* other,
+           bool optional = false);
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, double* field, double* other);
+  M* Visit(M* m, int field_id, double* field, double* other,
+           bool optional = false);
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, std::string* field, std::string* other);
+  M* Visit(M* m, int field_id, std::string* field, std::string* other,
+           bool optional = false);
   template <int field_type, typename M>
   M* Visit(M* m, int field_id, absl::string_view* field,
-           absl::string_view* other);
+           absl::string_view* other, bool optional = false);
   template <int field_type, typename M>
-  M* Visit(M* m, int field_id, absl::Cord* field, absl::Cord* other);
+  M* Visit(M* m, int field_id, absl::Cord* field, absl::Cord* other,
+           bool optional = false);
   template <int field_type, typename M>
   M* Visit(M* m, int field_id, ::google::protobuf::imp_proto::Any* field,
            ::google::protobuf::imp_proto::Any* other);
 
   template <typename M, typename Proto>
   M* VisitStandardProto(M* m, int field_id, Proto* proto, Proto* other);
+
+  template <typename M, typename... Tags, typename FieldType,
+            FieldType... field_types, size_t... I>
+  M* VisitOneOf(M* m, imp::OneOf<Tags...>* field, imp::OneOf<Tags...>* other,
+                absl::string_view field_name,
+                std::integer_sequence<FieldType, field_types...>,
+                const std::vector<int>& variant_field_ids,
+                std::index_sequence<I...>);
+
+  template <typename M, typename T, typename FieldType,
+            FieldType... field_types>
+  M* VisitVariant(
+      M* m, T* field, T* other, absl::string_view field_name,
+      std::integer_sequence<int, field_types...> variant_field_types,
+      const std::vector<int>& variant_field_ids);
 
   template <typename M>
   M* Unknown(M* m) {
@@ -133,13 +164,13 @@ class JsonWriter {
   }
 
   template <int field_type, typename M, typename T>
-  M* WriteInt(M* m, int field_id, T& field);
+  M* WriteInt(M* m, int field_id, T& field, bool optional = false);
   template <int field_type, typename M, typename T>
-  M* WriteFloat(M* m, int field_id, T& field);
+  M* WriteFloat(M* m, int field_id, T& field, bool optional = false);
 };
 
 template <int field_type, typename M, typename T>
-M* JsonWriter::Visit(M* m, int field_id, T* field, T* other) {
+M* JsonWriter::Visit(M* m, int field_id, T* field, T* other, bool optional) {
   if constexpr (std::is_convertible<T, int32_t>::value) {
     // This is an enum.
     if constexpr (field_type != TYPE_ENUM) {
@@ -173,38 +204,41 @@ M* JsonWriter::Visit(M* m, int field_id, T* field, T* other) {
 
 template <int field_type, typename M, typename T>
 M* JsonWriter::Visit(M* m, int field_id, absl::optional<T>* field,
-                     absl::optional<T>* other) {
+                     absl::optional<T>* other, bool optional) {
   if (!field->has_value()) {
     return m;
   }
-  return Visit<field_type>(m, field_id, &(**field), static_cast<T*>(nullptr));
+  return Visit<field_type>(m, field_id, &(**field), static_cast<T*>(nullptr),
+                           optional);
 }
 
 template <int field_type, typename M, typename T,
           const auto* DefaultValuePointer>
 M* JsonWriter::Visit(M* m, int field_id,
                      OptionalWithDefault<T, DefaultValuePointer>* field,
-                     OptionalWithDefault<T, DefaultValuePointer>* other) {
+                     OptionalWithDefault<T, DefaultValuePointer>* other,
+                     bool optional) {
   if (!field->HasValue()) {
     return m;
   }
   return Visit<field_type>(m, field_id, &field->MutableValue(),
-                           static_cast<T*>(nullptr));
+                           static_cast<T*>(nullptr), /*optional=*/true);
 }
 
 template <int field_type, typename M, typename T>
 M* JsonWriter::Visit(M* m, int field_id, CopyablePtr<T>* field,
-                     CopyablePtr<T>* other) {
+                     CopyablePtr<T>* other, bool optional) {
   if (!*field) {
     return m;
   }
-  return Visit<field_type>(m, field_id, field->get(), static_cast<T*>(nullptr));
+  return Visit<field_type>(m, field_id, field->get(), static_cast<T*>(nullptr),
+                           optional);
 }
 
 template <int field_type, RepeatedMergeStrategy merge_type, typename M,
           typename T>
 M* JsonWriter::Visit(M* m, int field_id, std::vector<T>* field,
-                     std::vector<T>* other) {
+                     std::vector<T>* other, bool optional) {
   if (field->empty()) {
     return m;
   }
@@ -223,7 +257,7 @@ M* JsonWriter::Visit(M* m, int field_id, std::vector<T>* field,
 
 template <int key_type, int value_type, typename M, typename K, typename V>
 M* JsonWriter::Visit(M* m, int field_id, std::map<K, V>* field,
-                     std::map<K, V>* other) {
+                     std::map<K, V>* other, bool optional) {
   if (field->empty()) {
     return m;
   }
@@ -243,9 +277,9 @@ M* JsonWriter::Visit(M* m, int field_id, std::map<K, V>* field,
 }
 
 template <int field_type, typename M, typename T>
-M* JsonWriter::WriteInt(M* m, int field_id, T& field) {
+M* JsonWriter::WriteInt(M* m, int field_id, T& field, bool optional) {
   if (field_id) {
-    if (!field) {
+    if (!field && !optional) {
       return m;
     }
     absl::StrAppend(str_, "\"", GetFieldJsonName<M>(field_id), "\": ");
@@ -255,9 +289,9 @@ M* JsonWriter::WriteInt(M* m, int field_id, T& field) {
 }
 
 template <int field_type, typename M, typename T>
-M* JsonWriter::WriteFloat(M* m, int field_id, T& field) {
+M* JsonWriter::WriteFloat(M* m, int field_id, T& field, bool optional) {
   if (field_id) {
-    if (field == 0.0f) {
+    if (field == 0.0f && !optional) {
       return m;
     }
     absl::StrAppend(str_, "\"", GetFieldJsonName<M>(field_id), "\": ");
@@ -268,9 +302,10 @@ M* JsonWriter::WriteFloat(M* m, int field_id, T& field) {
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, bool* field, bool* other) {
+M* JsonWriter::Visit(M* m, int field_id, bool* field, bool* other,
+                     bool optional) {
   if (field_id) {
-    if (!*field) {
+    if (!*field && !optional) {
       return m;
     }
     absl::StrAppend(str_, "\"", GetFieldJsonName<M>(field_id), "\": ");
@@ -280,40 +315,46 @@ M* JsonWriter::Visit(M* m, int field_id, bool* field, bool* other) {
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, int32_t* field, int32_t* other) {
-  return WriteInt<field_type>(m, field_id, *field);
+M* JsonWriter::Visit(M* m, int field_id, int32_t* field, int32_t* other,
+                     bool optional) {
+  return WriteInt<field_type>(m, field_id, *field, optional);
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, uint32_t* field, uint32_t* other) {
-  return WriteInt<field_type>(m, field_id, *field);
+M* JsonWriter::Visit(M* m, int field_id, uint32_t* field, uint32_t* other,
+                     bool optional) {
+  return WriteInt<field_type>(m, field_id, *field, optional);
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, int64_t* field, int64_t* other) {
-  return WriteInt<field_type>(m, field_id, *field);
+M* JsonWriter::Visit(M* m, int field_id, int64_t* field, int64_t* other,
+                     bool optional) {
+  return WriteInt<field_type>(m, field_id, *field, optional);
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, uint64_t* field, uint64_t* other) {
-  return WriteInt<field_type>(m, field_id, *field);
+M* JsonWriter::Visit(M* m, int field_id, uint64_t* field, uint64_t* other,
+                     bool optional) {
+  return WriteInt<field_type>(m, field_id, *field, optional);
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, float* field, float* other) {
-  return WriteFloat<field_type>(m, field_id, *field);
+M* JsonWriter::Visit(M* m, int field_id, float* field, float* other,
+                     bool optional) {
+  return WriteFloat<field_type>(m, field_id, *field, optional);
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, double* field, double* other) {
-  return WriteFloat<field_type>(m, field_id, *field);
+M* JsonWriter::Visit(M* m, int field_id, double* field, double* other,
+                     bool optional) {
+  return WriteFloat<field_type>(m, field_id, *field, optional);
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, std::string* field,
-                     std::string* other) {
+M* JsonWriter::Visit(M* m, int field_id, std::string* field, std::string* other,
+                     bool optional) {
   if (field_id) {
-    if (field->empty()) {
+    if (field->empty() && !optional) {
       return m;
     }
     absl::StrAppend(str_, "\"", GetFieldJsonName<M>(field_id), "\": ");
@@ -328,9 +369,9 @@ M* JsonWriter::Visit(M* m, int field_id, std::string* field,
 
 template <int field_type, typename M>
 M* JsonWriter::Visit(M* m, int field_id, absl::string_view* field,
-                     absl::string_view* other) {
+                     absl::string_view* other, bool optional) {
   if (field_id) {
-    if (field->empty()) {
+    if (field->empty() && !optional) {
       return m;
     }
     absl::StrAppend(str_, "\"", GetFieldJsonName<M>(field_id), "\": ");
@@ -344,9 +385,10 @@ M* JsonWriter::Visit(M* m, int field_id, absl::string_view* field,
 }
 
 template <int field_type, typename M>
-M* JsonWriter::Visit(M* m, int field_id, absl::Cord* field, absl::Cord* other) {
+M* JsonWriter::Visit(M* m, int field_id, absl::Cord* field, absl::Cord* other,
+                     bool optional) {
   if (field_id) {
-    if (field->empty()) {
+    if (field->empty() && !optional) {
       return m;
     }
     absl::StrAppend(str_, "\"", GetFieldJsonName<M>(field_id), "\": ");
@@ -411,8 +453,73 @@ void JsonWriter::RegisterKnownType() {
   });
 }
 
-// TODO: Fix bug where json writer doesn't handle printing optional
-// fields correctly when they are set to default values.
+template <typename M, typename... Tags, typename FieldType,
+          FieldType... field_types, size_t... I>
+M* JsonWriter::VisitOneOf(M* m, imp::OneOf<Tags...>* field,
+                          imp::OneOf<Tags...>* other,
+                          absl::string_view field_name,
+                          std::integer_sequence<FieldType, field_types...>,
+                          const std::vector<int>& variant_field_ids,
+                          std::index_sequence<I...>) {
+  constexpr FieldType types_array[] = {field_types...};
+  (
+      [&]() {
+        if (!field->template Holds<Tags>()) {
+          return;
+        }
+
+        int variant_field_id = variant_field_ids[I];
+        if constexpr (proto_traits::kIsStandardProto<typename Tags::Type>) {
+          m = VisitStandardProto(m, variant_field_id,
+                                 field->template GetIf<Tags>(),
+                                 (other && other->template Holds<Tags>())
+                                     ? other->template GetIf<Tags>()
+                                     : nullptr);
+        } else {
+          constexpr FieldType field_type = types_array[I];
+          m = Visit<field_type>(m, variant_field_id,
+                                field->template GetIf<Tags>(),
+                                (other && other->template Holds<Tags>())
+                                    ? other->template GetIf<Tags>()
+                                    : nullptr,
+                                /*optional=*/true);
+        }
+      }(),
+      ...);
+  return m;
+}
+
+template <typename M, typename T, typename FieldType, FieldType... field_types>
+M* JsonWriter::VisitVariant(
+    M* m, T* field, T* other, absl::string_view field_name,
+    std::integer_sequence<int, field_types...> variant_field_types,
+    const std::vector<int>& variant_field_ids) {
+  ForConstexpr<0, std::variant_size_v<T>>([&m, &variant_field_ids,
+                                           &variant_field_types, field, other,
+                                           this](auto i) mutable {
+    if (field->index() != i) {
+      return;
+    }
+    if constexpr (i != 0) {
+      using VariantAlternativeT = std::variant_alternative_t<i, T>;
+      constexpr int field_type = GetAt<i - 1>(variant_field_types);
+      int variant_field_id = variant_field_ids[i - 1];
+
+      if constexpr (proto_traits::kIsStandardProto<VariantAlternativeT>) {
+        m = this->VisitStandardProto(
+            m, variant_field_id, absl::get_if<i>(field),
+            (!other || other->index() != i) ? nullptr : absl::get_if<i>(other));
+      } else {
+        m = this->Visit<field_type>(
+            m, variant_field_id, absl::get_if<i>(field),
+            (!other || other->index() != i) ? nullptr : absl::get_if<i>(other),
+            /*optional=*/true);
+      }
+    }
+  });
+  return m;
+}
+
 template <typename T>
 bool ToJson(T* msg, std::string* str) {
   *str = "{ ";

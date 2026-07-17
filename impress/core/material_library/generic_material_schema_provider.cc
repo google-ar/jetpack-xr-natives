@@ -63,7 +63,7 @@ using MinFilter = schemas::MinFilter;
 using MagFilter = schemas::MagFilter;
 using WrapMode = schemas::WrapMode;
 using TextureInfoFlags = schemas::TextureInfoFlags;
-using PathOrIndex = absl::variant<std::string, int>;
+using PathOrIndex = std::variant<std::string, int>;
 using InternalFormat = ::filament::Texture::InternalFormat;
 
 std::string GetTextureNameHelper(const Image& image, int index) {

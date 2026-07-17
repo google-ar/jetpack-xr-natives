@@ -18,10 +18,12 @@
 #define THIRD_PARTY_IMPRESS_CORE_INPUT_DEV_MODE_INPUT_INTERCEPTOR_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/types/optional.h"
 #include "core/actions/input_action_event.h"
+#include "core/geometry/shapes/rect.h"
 #include "core/input/input_manager.h"
 #include "core/input/keyboard_controller.h"
 #include "core/input/keyboard_event.h"
@@ -59,7 +61,11 @@ class DevModeInputInterceptor : public InputInterceptor {
   void FilterInputActionEvents(
       std::vector<InputActionEvent>& input_action_events) override;
 
+  // Returns true if the wheel event was consumed.
+  bool TryConsumeWheelEvent(const WheelEvent& wheel_event);
+
  private:
+  std::optional<Rect> GetViewportRect() const;
   // For platforms with soft keyboards, e.g. Android and iOS.
   std::unique_ptr<KeyboardController> soft_keyboard_controller_;
   absl::optional<Pointer::Id> captured_id_;

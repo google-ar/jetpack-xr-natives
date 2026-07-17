@@ -25,6 +25,8 @@
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/strings/cord.h"
@@ -32,6 +34,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/one_of.h"
 #include "core/common/optional_with_default.h"
 #include "core/common/template_helpers.h"
 #include "core/math/almost_equal.h"
@@ -106,11 +109,21 @@ class ProtoDiffer {
   Cursor* Visit(Cursor* cursor, int field_id, std::map<K, V>* field,
                 std::map<K, V>* other);
 
+  // Diffs a oneof field that is not using OptionalWithDefault and OneOf.
   template <typename T, typename FieldType, FieldType... field_types>
   Cursor* VisitVariant(
       Cursor* cursor, T* field, T* other, absl::string_view field_name,
       std::integer_sequence<int, field_types...> variant_field_types,
       const std::vector<int>& variant_field_ids);
+
+  // Diffs a oneof field that is using OptionalWithDefault and OneOf.
+  template <typename... Tags, typename FieldType, FieldType... field_types,
+            size_t... I>
+  Cursor* VisitOneOf(Cursor* cursor, imp::OneOf<Tags...>* field,
+                     imp::OneOf<Tags...>* other, absl::string_view field_name,
+                     std::integer_sequence<FieldType, field_types...>,
+                     const std::vector<int>& variant_field_ids,
+                     std::index_sequence<I...>);
 
   template <int field_type>
   Cursor* Visit(Cursor* cursor, int field_id, bool* field, bool* other);
@@ -450,6 +463,81 @@ ProtoDiffer::Cursor* ProtoDiffer::VisitVariant(
       }
     }
   });
+
+  return cursor;
+}
+
+template <typename... Tags, typename FieldType, FieldType... field_types,
+          size_t... I>
+ProtoDiffer::Cursor* ProtoDiffer::VisitOneOf(
+    Cursor* cursor, imp::OneOf<Tags...>* field, imp::OneOf<Tags...>* other,
+    absl::string_view field_name,
+    std::integer_sequence<FieldType, field_types...>,
+    const std::vector<int>& variant_field_ids, std::index_sequence<I...>) {
+  // Safety check in case the generator passes a nullptr for 'other'
+  if (!other) {
+    cursor->result = Result::kFoundDifferences;
+    return cursor;
+  }
+
+  bool field_empty = true;
+  bool other_empty = true;
+  bool type_mismatch = false;
+
+  // A list of the field types in the same order as the OneOf tags.
+  constexpr FieldType types_array[] = {field_types...};
+  // A fold expression that expands into one lambda call per field type. This is
+  // essentially a for loop across the types in the OneOf.
+  (
+      [&]() {
+        bool field_holds = field->template Holds<Tags>();
+        bool other_holds = other->template Holds<Tags>();
+
+        if (field_holds) field_empty = false;
+        if (other_holds) other_empty = false;
+
+        // Only process the diff if the primary field actually holds this type.
+        if (field_holds) {
+          if (!other_holds) {
+            type_mismatch = true;
+            return;
+          }
+
+          constexpr FieldType field_type = types_array[I];
+          int variant_field_id = variant_field_ids[I];
+
+          Cursor sub_cursor{.mode = cursor->mode};
+
+          // Dispatch to the correct diffing function based on type.
+          if constexpr (field_type == TYPE_MESSAGE &&
+                        proto_traits::kIsStandardProto<Tags>) {
+            VisitStandardProto(&sub_cursor, variant_field_id,
+                               field->template GetIf<Tags>(),
+                               other->template GetIf<Tags>());
+          } else {
+            Visit<field_type>(&sub_cursor, variant_field_id,
+                              field->template GetIf<Tags>(),
+                              other->template GetIf<Tags>());
+          }
+
+          // If the contents match perfectly and we are in removal mode, clear
+          // the OneOf.
+          if (sub_cursor.result == Result::kFoundAllFieldsMatch) {
+            if (cursor->mode == Mode::kRemoveMatchingFields) {
+              field->Reset();
+            }
+          } else {
+            cursor->result = Result::kFoundDifferences;
+          }
+        }
+      }(),
+      ...);
+
+  // If one was empty and the other wasn't, or they held different active tags,
+  // record a difference.
+  if (type_mismatch || (field_empty != other_empty)) {
+    cursor->result = Result::kFoundDifferences;
+  }
 
   return cursor;
 }

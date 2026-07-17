@@ -107,15 +107,51 @@ T ToCompressedFilamentEnum(basisu::texture_format format) {
     case basisu::texture_format::cBC3:  // DXT5 (BC4/DXT5A block followed by a
                                         // BC1/DXT1 block)
       return T::DXT5_RGBA;
-    case basisu::texture_format::cASTC4x4:  // LDR only
+    case basisu::texture_format::cASTC_LDR_4x4:  // LDR only
       return T::SRGB8_ALPHA8_ASTC_4x4;
+    case basisu::texture_format::cASTC_LDR_5x4:
+      return T::SRGB8_ALPHA8_ASTC_5x4;
+    case basisu::texture_format::cASTC_LDR_5x5:
+      return T::SRGB8_ALPHA8_ASTC_5x5;
+    case basisu::texture_format::cASTC_LDR_6x5:
+      return T::SRGB8_ALPHA8_ASTC_6x5;
+    case basisu::texture_format::cASTC_LDR_6x6:
+      return T::SRGB8_ALPHA8_ASTC_6x6;
+    case basisu::texture_format::cASTC_LDR_8x5:
+      return T::SRGB8_ALPHA8_ASTC_8x5;
+    case basisu::texture_format::cASTC_LDR_8x6:
+      return T::SRGB8_ALPHA8_ASTC_8x6;
+    case basisu::texture_format::cASTC_LDR_8x8:
+      return T::SRGB8_ALPHA8_ASTC_8x8;
+    case basisu::texture_format::cASTC_LDR_10x5:
+      return T::SRGB8_ALPHA8_ASTC_10x5;
+    case basisu::texture_format::cASTC_LDR_10x6:
+      return T::SRGB8_ALPHA8_ASTC_10x6;
+    case basisu::texture_format::cASTC_LDR_10x8:
+      return T::SRGB8_ALPHA8_ASTC_10x8;
+    case basisu::texture_format::cASTC_LDR_10x10:
+      return T::SRGB8_ALPHA8_ASTC_10x10;
+    case basisu::texture_format::cASTC_LDR_12x10:
+      return T::SRGB8_ALPHA8_ASTC_12x10;
+    case basisu::texture_format::cASTC_LDR_12x12:
+      return T::SRGB8_ALPHA8_ASTC_12x12;
     case basisu::texture_format::cETC2_R11_EAC:
       return T::EAC_R11;
     case basisu::texture_format::cETC2_RG11_EAC:
       return T::EAC_RG11;
+    case basisu::texture_format::cBC6HSigned:
+      return T::RGB_BPTC_SIGNED_FLOAT;
+    case basisu::texture_format::cBC6HUnsigned:
+      return T::RGB_BPTC_UNSIGNED_FLOAT;
 
       // Unhandled formats:
       // These may be unimplemented or not mapped to a useful filament format.
+    case basisu::texture_format::cASTC_HDR_4x4:
+    case basisu::texture_format::cASTC_HDR_6x6:
+    case basisu::texture_format::cUASTC_HDR_4x4:
+    case basisu::texture_format::cRGBA_HALF:
+    case basisu::texture_format::cRGB_HALF:
+    case basisu::texture_format::cRGB_9E5:
     case basisu::texture_format::cETC2_ALPHA:  // ETC2 EAC alpha block
     case basisu::texture_format::cBC4:         // DXT5A
     case basisu::texture_format::cBC5:         // 3DC/DXN (two BC4/DXT5A blocks)
@@ -229,7 +265,7 @@ absl::StatusOr<CompressedImageContents> Ktx2DecodeImage(
   absl::optional<ktx2::BasisLzGlobalData> basis_lz_global_data;
 
   // Initializes the transcoder according to color model.
-  absl::variant<basist::basisu_lowlevel_uastc_transcoder,
+  absl::variant<basist::basisu_lowlevel_uastc_ldr_4x4_transcoder,
                 basist::basisu_lowlevel_etc1s_transcoder>
       transcoder;
   if (basic_data_format_descriptor_block.header.color_model ==
@@ -273,7 +309,8 @@ absl::StatusOr<CompressedImageContents> Ktx2DecodeImage(
     }
   } else if (basic_data_format_descriptor_block.header.color_model ==
              kDescriptorFormatColorModelUastc) {
-    transcoder.emplace<basist::basisu_lowlevel_uastc_transcoder>();
+    transcoder
+        .template emplace<basist::basisu_lowlevel_uastc_ldr_4x4_transcoder>();
 
     if (compression_type == TextureTranscodeCompressionType::AstcAndEtc) {
       transcoder_texture_format =
@@ -389,9 +426,9 @@ absl::StatusOr<CompressedImageContents> Ktx2DecodeImage(
               basis_lz_image_desc.alpha_slice_byte_length, 0, has_alpha)) {
         return absl::InternalError("Error transcoding BasisLZ rgb slice");
       }
-    } else if (auto uastc_transcoder =
-                   absl::get_if<basist::basisu_lowlevel_uastc_transcoder>(
-                       &transcoder)) {
+    } else if (auto uastc_transcoder = absl::get_if<
+                   basist::basisu_lowlevel_uastc_ldr_4x4_transcoder>(
+                   &transcoder)) {
       if (!uastc_transcoder->transcode_image(
               transcoder_texture_format, &buffer[buffer_offset],
               transcoder_block_count, level_data_bytes.data(),

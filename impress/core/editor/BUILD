@@ -49,10 +49,10 @@ cc_library(
     deps = [
         ":editor_info",
         ":editor_plugin",
+        "//core/assets/gltf:gltf_asset",
         "//core/camera",
         "//core/geometry/shapes",
         "//core/ncsb",
-        "//core/view/framework",
         "@com_google_absl//absl/container:flat_hash_set",
     ],
     alwayslink = 1,
@@ -90,6 +90,7 @@ cc_library(
         "//core/assets/gltf:gltf_asset",
         "//core/assets/gltf:gltf_audio_extension",
         "//core/assets/gltf:gltf_interactivity_extension",
+        "//core/async:executor",
         "//core/async:future",
         "//core/camera",
         "//core/common:platform_helpers",
@@ -104,6 +105,7 @@ cc_library(
         "//core/editor/layout:editor_control_flags",
         "//core/editor/layout:editor_panel_ids",
         "//core/editor/layout:layout_config_imp_cc_proto",
+        "//core/editor/remote_editor",
         "//core/editor/visualizers:visualizer",
         "//core/editor/widgets:asset_library",
         "//core/editor/widgets:component_ui",
@@ -125,6 +127,9 @@ cc_library(
         "//core/editor/widgets:visualize_colliders",
         "//core/editor/widgets:visualize_origins",
         "//core/editor/widgets/performance",
+        "//core/editor/widgets/viewport:viewport_helpers",
+        "//core/editor/widgets/viewport:viewport_render_target",
+        "//core/editor/widgets/viewport:viewport_widget",
         "//core/editor/widgets/window:window_widget",
         "//core/geometry/shapes",
         "//core/input",
@@ -137,12 +142,15 @@ cc_library(
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
+        "//core/view/utils:device",
+        "//core/window:filament_host",
         "//previewer/widgets:header_widgets",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
     ] + if_desktop([
     ]) + if_android([
         "//core/view/platforms/android/wrappers:imp_lifecycle_callback",
@@ -350,6 +358,7 @@ cc_library(
         "//core/common:bit_flag",
         "//core/common:copyable_ptr",
         "//core/common:invocable",
+        "//core/common:one_of",
         "//core/common:optional_with_default",
         "//core/common:registry",
         "//core/common:template_helpers",
@@ -400,8 +409,12 @@ cc_library(
     deps = [
         ":editor",
         ":editor_constants",
+        "//core/camera",
+        "//core/collision:ray",
         "//core/common:registry",
+        "//core/geometry/shapes",
         "//core/input",
+        "//core/math",
         "//core/ncsb",
         "//core/view/framework",
         "@com_google_absl//absl/algorithm:container",
@@ -464,6 +477,7 @@ cc_library(
     deps = [
         ":editor",
         ":editor_touch",
+        ":editor_utils",
         ":events",
         ":file_type_loader",
         ":file_type_registry",
@@ -480,6 +494,7 @@ cc_library(
         "//core/lighting:environment_light_factory",
         "//core/lighting:image_based_lighting_asset",
         "//core/lighting:image_based_lighting_asset_iblprefilter_loader",
+        "//core/math",
         "//core/ncsb",
         "//core/resources",
         "//core/view:base_view",
@@ -555,6 +570,16 @@ imp_cc_proto_library(
         "//core/proto:any_imp_proto",
         "//core/proto:test_standard_cc_proto",
     ],
+)
+
+proto_library(
+    name = "editor_proto_visitor_2024_test_message_proto",
+    srcs = ["editor_proto_visitor_2024_test_message.proto"],
+)
+
+imp_cc_proto_library(
+    name = "editor_proto_visitor_2024_test_message_imp_proto",
+    proto = ":editor_proto_visitor_2024_test_message_proto",
 )
 
 proto_library(

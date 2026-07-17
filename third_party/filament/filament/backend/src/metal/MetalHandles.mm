@@ -20,6 +20,7 @@
 #include "MetalEnums.h"
 #include "MetalUtils.h"
 #include "MetalBufferPool.h"
+#include "MetalDriver.h"
 
 #include <filament/SwapChain.h>
 
@@ -183,9 +184,7 @@ id<MTLTexture> MetalSwapChain::createMultisampledTexture(MetalContext const& con
     descriptor.resourceOptions = MTLResourceStorageModePrivate;
 
     if (context.supportsMemorylessRenderTargets) {
-        if (@available(macOS 11.0, *)) {
-            descriptor.resourceOptions = MTLResourceStorageModeMemoryless;
-        }
+        descriptor.resourceOptions = MTLResourceStorageModeMemoryless;
     }
 
     return [context.device newTextureWithDescriptor:descriptor];
@@ -547,17 +546,18 @@ MetalAttachment MetalSwapChain::acquireBaseDrawable() {
 
 
 MetalBufferObject::MetalBufferObject(MetalContext& context, BufferObjectBinding bindingType,
-        BufferUsage usage, uint32_t byteCount)
-        : HwBufferObject(byteCount, false), buffer(context, bindingType, usage, byteCount) {}
+        BufferUsage usage, uint32_t byteCount, bool async)
+        : HwBufferObject(byteCount, async),
+          buffer(context, bindingType, usage, byteCount) {}
 
-void MetalBufferObject::updateBuffer(
-        void* data, size_t size, uint32_t byteOffset, TagResolver&& getHandleTag) {
-    buffer.copyIntoBuffer(data, size, byteOffset, std::move(getHandleTag));
+void MetalBufferObject::updateBuffer(void* data, size_t size, uint32_t byteOffset,
+        TagResolver&& getHandleTag) {
+    buffer.copyIntoBuffer(nil, data, size, byteOffset, std::move(getHandleTag));
 }
 
-void MetalBufferObject::updateBufferUnsynchronized(
-        void* data, size_t size, uint32_t byteOffset, TagResolver&& getHandleTag) {
-    buffer.copyIntoBufferUnsynchronized(data, size, byteOffset, std::move(getHandleTag));
+void MetalBufferObject::updateBufferUnsynchronized(void* data, size_t size, uint32_t byteOffset,
+        TagResolver&& getHandleTag) {
+    buffer.copyIntoBufferUnsynchronized(nil, data, size, byteOffset, std::move(getHandleTag));
 }
 
 MetalVertexBufferInfo::MetalVertexBufferInfo(MetalContext& context, uint8_t bufferCount,
@@ -639,8 +639,9 @@ MetalVertexBuffer::MetalVertexBuffer(MetalContext& context,
 }
 
 MetalIndexBuffer::MetalIndexBuffer(MetalContext& context, BufferUsage usage, uint8_t elementSize,
-        uint32_t indexCount) : HwIndexBuffer(elementSize, indexCount, false),
-        buffer(context, BufferObjectBinding::VERTEX, usage, elementSize * indexCount, true) { }
+        uint32_t indexCount, bool async)
+        : HwIndexBuffer(elementSize, indexCount, async),
+          buffer(context, BufferObjectBinding::VERTEX, usage, elementSize * indexCount, true) {}
 
 MetalProgram::MetalProgram(MetalContext& context, Program&& program) noexcept
     : HwProgram(program.getName()), mContext(context) {
@@ -667,8 +668,9 @@ void MetalProgram::initialize() {
 
 MetalTexture::MetalTexture(MetalContext& context, SamplerType target, uint8_t levels,
         TextureFormat format, uint8_t samples, uint32_t width, uint32_t height, uint32_t depth,
-        TextureUsage usage) noexcept
-    : HwTexture(target, levels, samples, width, height, depth, format, usage, false), context(context) {
+        TextureUsage usage, bool async) noexcept
+        : HwTexture(target, levels, samples, width, height, depth, format, usage, async),
+          context(context) {
     assert_invariant(target != SamplerType::SAMPLER_EXTERNAL);
 
     devicePixelFormat = decidePixelFormat(&context, format);
@@ -894,7 +896,8 @@ PixelBufferShape PixelBufferShape::compute(const PixelBufferDescriptor& data,
     return result;
 }
 
-void MetalTexture::loadImage(uint32_t level, MTLRegion region, PixelBufferDescriptor& p) noexcept {
+void MetalTexture::loadImage(id<MTLCommandBuffer> cmdBuffer, uint32_t level, MTLRegion region,
+        PixelBufferDescriptor& p) noexcept {
     PixelBufferDescriptor* data = &p;
     PixelBufferDescriptor reshapedData;
     if(reshape(p, reshapedData)) {
@@ -904,7 +907,7 @@ void MetalTexture::loadImage(uint32_t level, MTLRegion region, PixelBufferDescri
     switch (target) {
         case SamplerType::SAMPLER_2D:
         case SamplerType::SAMPLER_3D: {
-            loadSlice(level, region, 0, 0, *data);
+            loadSlice(cmdBuffer, level, region, 0, 0, *data);
             break;
         }
 
@@ -921,7 +924,7 @@ void MetalTexture::loadImage(uint32_t level, MTLRegion region, PixelBufferDescri
 
             uint32_t byteOffset = 0;
             for (uint32_t s = slice; s < slice + sliceCount; s++) {
-                loadSlice(level, region, byteOffset, s, *data);
+                loadSlice(cmdBuffer, level, region, byteOffset, s, *data);
                 byteOffset += shape.bytesPerSlice;
             }
 
@@ -940,8 +943,8 @@ void MetalTexture::generateMipmaps() noexcept {
     [blitEncoder endEncoding];
 }
 
-void MetalTexture::loadSlice(uint32_t level, MTLRegion region, uint32_t byteOffset, uint32_t slice,
-        PixelBufferDescriptor const& data) noexcept {
+void MetalTexture::loadSlice(id<MTLCommandBuffer> cmdBuffer, uint32_t level, MTLRegion region,
+        uint32_t byteOffset, uint32_t slice, PixelBufferDescriptor const& data) noexcept {
     const PixelBufferShape shape = PixelBufferShape::compute(data, format, region.size, byteOffset);
 
     FILAMENT_CHECK_PRECONDITION(data.size >= shape.totalBytes)
@@ -969,20 +972,20 @@ void MetalTexture::loadSlice(uint32_t level, MTLRegion region, uint32_t byteOffs
     const bool largeUpload = stagingBufferSize > deviceMaxBufferLength;
 
     if (conversionNecessary || largeUpload) {
-        loadWithBlit(level, slice, region, data, shape);
+        loadWithBlit(cmdBuffer, level, slice, region, data, shape);
     } else {
-        loadWithCopyBuffer(level, slice, region, data, shape);
+        loadWithCopyBuffer(cmdBuffer, level, slice, region, data, shape);
     }
 }
 
-void MetalTexture::loadWithCopyBuffer(uint32_t level, uint32_t slice, MTLRegion region,
-        PixelBufferDescriptor const& data, const PixelBufferShape& shape) {
+void MetalTexture::loadWithCopyBuffer(id<MTLCommandBuffer> blitCommandBuffer, uint32_t level,
+        uint32_t slice, MTLRegion region, PixelBufferDescriptor const& data,
+        const PixelBufferShape& shape) {
     const size_t stagingBufferSize = shape.totalBytes;
     auto entry = context.bufferPool->acquireBuffer(stagingBufferSize);
     memcpy(entry->buffer.get().contents,
             static_cast<uint8_t*>(data.buffer) + shape.sourceOffset,
             stagingBufferSize);
-    id<MTLCommandBuffer> blitCommandBuffer = getPendingCommandBuffer(&context);
     id<MTLBlitCommandEncoder> blitCommandEncoder = [blitCommandBuffer blitCommandEncoder];
     blitCommandEncoder.label = @"Texture upload buffer blit";
     [blitCommandEncoder copyFromBuffer:entry->buffer.get()
@@ -1004,7 +1007,7 @@ void MetalTexture::loadWithCopyBuffer(uint32_t level, uint32_t slice, MTLRegion 
     [blitCommandEncoder endEncoding];
 }
 
-void MetalTexture::loadWithBlit(uint32_t level, uint32_t slice, MTLRegion region,
+void MetalTexture::loadWithBlit(id<MTLCommandBuffer> cmdBuffer, uint32_t level, uint32_t slice, MTLRegion region,
         PixelBufferDescriptor const& data, const PixelBufferShape& shape) {
     MTLPixelFormat stagingPixelFormat = getMetalFormat(data.format, data.type);
     MTLTextureDescriptor* descriptor = [MTLTextureDescriptor new];
@@ -1021,6 +1024,7 @@ void MetalTexture::loadWithBlit(uint32_t level, uint32_t slice, MTLRegion region
 #endif
 
     id<MTLTexture> stagingTexture = [context.device newTextureWithDescriptor:descriptor];
+
     // FIXME? Why is this not just `MTLRegion sourceRegion = region;` ?
     MTLRegion sourceRegion = MTLRegionMake3D(0, 0, 0,
             region.size.width, region.size.height, region.size.depth);
@@ -1058,7 +1062,7 @@ void MetalTexture::loadWithBlit(uint32_t level, uint32_t slice, MTLRegion region
     args.destination.slice = slice;
     args.destination.region = region;
     args.destination.texture = destinationTexture;
-    context.blitter->blit(getPendingCommandBuffer(&context), args, "Texture upload blit");
+    context.blitter->blit(cmdBuffer, args, "Texture upload blit");
 }
 
 MetalRenderTarget::MetalRenderTarget(MetalContext* context, uint32_t width, uint32_t height,
@@ -1375,9 +1379,7 @@ id<MTLTexture> MetalRenderTarget::createMultisampledTexture(MTLPixelFormat forma
     descriptor.resourceOptions = MTLResourceStorageModePrivate;
 
     if (context->supportsMemorylessRenderTargets) {
-        if (@available(macOS 11.0, *)) {
-            descriptor.resourceOptions = MTLResourceStorageModeMemoryless;
-        }
+        descriptor.resourceOptions = MTLResourceStorageModeMemoryless;
     }
 
     return [context->device newTextureWithDescriptor:descriptor];
@@ -1399,47 +1401,78 @@ MetalFence::MetalFence(MetalContext& context) : context(context), value(context.
 
 void MetalFence::encode() {
     if (@available(iOS 12, *)) {
+        // newSharedEvent can very seldomly return nil if the GPU is busy or in a bad state.
         event = [context.device newSharedEvent];
+        if (UTILS_VERY_UNLIKELY(event == nil)) {
+            context.driver->signalFence([&] { state->status = FenceStatus::ERROR; });
+            return;
+        }
         [getPendingCommandBuffer(&context) encodeSignalEvent:event value:value];
 
-        // Using a weak_ptr here because the Fence could be deleted before the block executes.
+        // Using a weak_ptr for the Fence state and driver lifetime because the Fence could be
+        // deleted, or the driver could be shut down, before this block executes asynchronously.
         std::weak_ptr<State> weakState = state;
-        [event notifyListener:context.eventListener atValue:value block:^(id <MTLSharedEvent> o,
-                uint64_t value) {
-            if (auto s = weakState.lock()) {
-                std::lock_guard<std::mutex> guard(s->mutex);
-                s->status = FenceStatus::CONDITION_SATISFIED;
-                s->cv.notify_all();
-            }
-        }];
+        std::weak_ptr<DriverLifetimeTracker> weakDriverLifetime = context.driverLifetimeTracker;
+        [event notifyListener:context.eventListener
+                      atValue:value
+                        block:^(id<MTLSharedEvent> o, uint64_t value) {
+                          auto s = weakState.lock();
+                          // weakDriverLifetime ensures that the Driver is still alive before
+                          // accessing it.
+                          auto lifetime = weakDriverLifetime.lock();
+                          if (s && lifetime) {
+                              std::lock_guard<std::mutex> lock(lifetime->mutex);
+                              if (lifetime->driver) {
+                                  lifetime->driver->signalFence(
+                                          [&] { s->status = FenceStatus::CONDITION_SATISFIED; });
+                              }
+                          }
+                        }];
     }
 }
 
 void MetalFence::onSignal(MetalFenceSignalBlock block) {
-    [event notifyListener:context.eventListener atValue:value block:block];
+    if (UTILS_VERY_LIKELY(event)) {
+        if (@available(iOS 12, *)) {
+            [event notifyListener:context.eventListener atValue:value block:block];
+        }
+    } else {
+        block(nil, value);
+    }
 }
 
 FenceStatus MetalFence::wait(uint64_t timeoutNs) {
     if (@available(iOS 12, *)) {
         using ns = std::chrono::nanoseconds;
-        std::unique_lock<std::mutex> guard(state->mutex);
-        while (state->status == FenceStatus::TIMEOUT_EXPIRED) {
-            if (timeoutNs == FENCE_WAIT_FOR_EVER) {
-                state->cv.wait(guard);
-            } else if (timeoutNs == 0 ||
-                    state->cv.wait_for(guard, ns(timeoutNs)) == std::cv_status::timeout) {
-                return state->status;
+        FenceStatus result = FenceStatus::TIMEOUT_EXPIRED;
+        auto predicate = [&] {
+            if (state->status != FenceStatus::TIMEOUT_EXPIRED) {
+                result = state->status;
+                return true;
             }
+            return false;
+        };
+
+        FenceStatus status;
+        if (timeoutNs == FENCE_WAIT_FOR_EVER) {
+            status = context.driver->waitForFence(predicate);
+        } else {
+            auto const until = std::chrono::steady_clock::now() + ns(timeoutNs);
+            status = context.driver->waitForFence(predicate, until);
         }
-        return state->status;
+        
+        if (status == FenceStatus::ERROR) {
+            return FenceStatus::ERROR;
+        }
+        return result;
     }
     return FenceStatus::ERROR;
 }
 
 void MetalFence::cancel() {
-    std::unique_lock guard(state->mutex);
-    state->status = FenceStatus::ERROR;
-    state->cv.notify_all();
+    context.driver->signalFence([&] {
+        state->status = FenceStatus::ERROR;
+    });
 }
 
 MetalDescriptorSetLayout::MetalDescriptorSetLayout(DescriptorSetLayout&& l) noexcept

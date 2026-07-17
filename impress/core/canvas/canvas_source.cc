@@ -48,7 +48,8 @@ namespace imp {
 std::unique_ptr<CanvasSource> CanvasSource::Create(
     Context context, bool use_hardware_rendering,
     bool force_auto_method_rendering, int glyph_cache_size_bytes,
-    bool force_individual_glyph_source_instances) {
+    bool force_individual_glyph_source_instances,
+    bool use_bitmap_surface_provider) {
   // Instantiate the correct platform implementation.
 #if IMP_PLATFORM(ANDROID)
   // TODO: Shaper method fails to render text weight properly.
@@ -61,7 +62,7 @@ std::unique_ptr<CanvasSource> CanvasSource::Create(
   }
   auto platform_source = std::make_unique<AndroidPlatformCanvasSource>(
       context, method, use_hardware_rendering, glyph_cache_size_bytes,
-      force_individual_glyph_source_instances);
+      force_individual_glyph_source_instances, use_bitmap_surface_provider);
 #elif IMP_PLATFORM(IOS)
   auto platform_source = std::make_unique<IosPlatformCanvasSource>();
 #elif IMP_PLATFORM(WASM)
@@ -152,6 +153,16 @@ std::unique_ptr<ScopedCanvas> CanvasSource::StartDrawing(
 void CanvasSource::ForceReset() {
   absl::MutexLock lock(platform_source_mutex_);
   platform_source_->ForceReset();
+}
+
+void CanvasSource::OnPause() {
+  absl::MutexLock lock(platform_source_mutex_);
+  platform_source_->OnPause();
+}
+
+void CanvasSource::OnResume() {
+  absl::MutexLock lock(platform_source_mutex_);
+  platform_source_->OnResume();
 }
 
 }  // namespace imp

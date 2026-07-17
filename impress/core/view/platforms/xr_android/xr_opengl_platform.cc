@@ -42,8 +42,8 @@ typedef int Bool;
 #include "core/view/platforms/xr_android/xr_session_host.h"
 #include "core/view/platforms/xr_android/xr_swap_chain.h"
 namespace imp {
-XrGraphicsBindingOpenGLESAndroidKHR XrOpenGLPlatform::GetGraphicsBinding() {
 #if IMP_PLATFORM(ANDROID)
+XrGraphicsBindingOpenGLESAndroidKHR XrOpenGLPlatform::GetGraphicsBinding() {
   return XrGraphicsBindingOpenGLESAndroidKHR{
       .type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR,
       .next = nullptr,
@@ -51,10 +51,8 @@ XrGraphicsBindingOpenGLESAndroidKHR XrOpenGLPlatform::GetGraphicsBinding() {
       .config = getEglConfig(),
       .context = getContextForType(ContextType::UNPROTECTED),
   };
-#else
-  return {};
-#endif
 }
+#endif
 
 filament::backend::Driver* XrOpenGLPlatform::createDriver(
     void* sharedContext, const Platform::DriverConfig& driverConfig) noexcept {
@@ -93,10 +91,12 @@ filament::backend::Platform::SwapChain* XrOpenGLPlatform::createSwapChain(
   IMP_TRACE();
 
   XrSessionHost* host = reinterpret_cast<XrSessionHost*>(nativewindow);
+#if IMP_PLATFORM(ANDROID) && defined(XR_KHR_android_thread_settings)
   auto status = host->SetThreadType(XR_ANDROID_THREAD_TYPE_RENDERER_MAIN_KHR);
   if (!status.ok()) {
     IMP_LOG(imp::INFO) << "Failed to reported thread type to OpenXR due to " << status;
   }
+#endif
   // BUG((broken link)): The thread name should already be "FEngine::loop", but
   // SysUI renames threads.  This puts the original setting back.
   SetThreadName("FEngine::loop");

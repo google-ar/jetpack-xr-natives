@@ -92,6 +92,7 @@ cc_library(
         "//core/common:platform_helpers",
         "//core/loader:loader_details",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",

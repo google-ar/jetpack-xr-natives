@@ -85,6 +85,8 @@ void DisplayLayerManager::RenderLayers() {
       const filament::Viewport& viewport =
           view_.GetHost()->GetView()->getViewport();
       layer->filament_view.Get()->setViewport(viewport);
+      layer->filament_view.Get()->setRenderTarget(
+          view_.GetHost()->GetView()->getRenderTarget());
 
       filament::Scene* scene =
           view_.GetGroupsManager().GetScene(layer->group_name);

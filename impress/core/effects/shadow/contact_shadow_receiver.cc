@@ -98,7 +98,7 @@ void ContactShadowReceiver::OnActiveStatusChanged(bool is_active) {
         if (!status.ok()) IMP_LOG(imp::INFO) << status;
       }
       receiver_material->SetParameter(state_.shadow_parameter_name,
-                                      disabled_shadows_texture_.get());
+                                      disabled_shadows_texture_.Borrow());
     } else {
       receiver_material->SetParameter(state_.shadow_parameter_name,
                                       enabled_shadows_texture_);
@@ -213,8 +213,11 @@ absl::Status ContactShadowReceiver::SetupTextures() {
   // Generate and save a blank texture, to hide shadows on disable.
   constexpr int kDisabledShadowsTextureSize = 1;
   disabled_shadows_texture_ = GetView().GetTextureFactory().CreateTexture(
-      kDisabledShadowsTextureSize, kDisabledShadowsTextureSize,
-      filament::Texture::InternalFormat::RGB8);
+      imp::TextureFactory::TextureCreationSettings{
+          .width = static_cast<uint32_t>(kDisabledShadowsTextureSize),
+          .height = static_cast<uint32_t>(kDisabledShadowsTextureSize),
+          .format = filament::Texture::InternalFormat::RGB8,
+      });
 
   constexpr size_t buffer_size =
       kDisabledShadowsTextureSize * kDisabledShadowsTextureSize * 3;

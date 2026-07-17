@@ -111,7 +111,10 @@ absl::optional<RayHit> MeshCollider::Intersect(const Ray& world_ray) {
                 // TODO Output the correct surface normal.
                 quatf{0.0f},
                 // Transform the collision point back into world space.
-                world_point, GetNode(), world_normal);
+                world_point, GetNode(), world_normal,
+                collision::CollidedTriangle{
+                    .primitive_id = i,
+                    .triangle_id = static_cast<size_t>(result->triangle_id)});
           }
           return std::nullopt;
         }
@@ -128,7 +131,10 @@ absl::optional<RayHit> MeshCollider::Intersect(const Ray& world_ray) {
                         // TODO Output the correct surface normal.
                         quatf{0.0f},
                         // Transform the collision point back into world space.
-                        world_point, GetNode(), world_normal);
+                        world_point, GetNode(), world_normal,
+                        collision::CollidedTriangle{
+                            .primitive_id = i,
+                            .triangle_id = mesh_intersection->triangle_id});
         }
       }
     }
@@ -183,7 +189,10 @@ absl::optional<DoubleRayHit> MeshCollider::IntersectPrecise(
                 // TODO Output the correct surface normal.
                 quat{0.0f},
                 // Transform the collision point back into world space.
-                world_point, GetNode(), world_normal);
+                world_point, GetNode(), world_normal,
+                collision::CollidedTriangle{
+                    .primitive_id = i,
+                    .triangle_id = static_cast<size_t>(result->triangle_id)});
           }
           return std::nullopt;
         }
@@ -201,7 +210,10 @@ absl::optional<DoubleRayHit> MeshCollider::IntersectPrecise(
               // TODO Output the correct surface normal.
               quat{0.0f},
               // Transform the collision point back into world space.
-              world_point, GetNode(), world_normal);
+              world_point, GetNode(), world_normal,
+              collision::CollidedTriangle{
+                  .primitive_id = i,
+                  .triangle_id = mesh_intersection->triangle_id});
         }
       }
     }

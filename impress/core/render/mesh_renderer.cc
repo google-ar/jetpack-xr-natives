@@ -29,6 +29,7 @@
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/small_source_location.h"
+#include "core/config.h"
 #include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
@@ -38,6 +39,11 @@
 #include "core/render/base_renderable_manager.h"
 #include "core/render/render_order_constants.h"
 #include "core/view/base_view.h"
+
+#if IMP_RUNTIME(DEV)
+#include "dear_imgui/imgui.h"
+#include "core/common/string_numbers.h"
+#endif
 
 namespace imp {
 namespace {
@@ -248,6 +254,20 @@ void MeshRenderer::SetMaterial(BorrowedMaterialPtr material,
   primitives_[primitive_index].raw_material = nullptr;
   primitives_[primitive_index].held_material_type =
       HeldPtrType::kBorrowedPointer;
+}
+
+void MeshRenderer::ClearMaterial(size_t primitive_index) {
+  if (!IsWithinCount(primitive_index)) {
+    return;
+  }
+
+  GetRenderableManager().ClearMaterialInstanceAt(GetInstance(),
+                                                 primitive_index);
+
+  primitives_[primitive_index].owned_or_borrowed_material =
+      OwnedOrBorrowedPtr<Material>();
+  primitives_[primitive_index].raw_material = nullptr;
+  primitives_[primitive_index].held_material_type = HeldPtrType::kNone;
 }
 
 Material* MeshRenderer::GetMaterial(size_t primitive_index) const {
@@ -531,5 +551,76 @@ void MeshRenderer::ApplyAllMeshPropertyChanges() {
   }
   UpdateRenderableAabb();
 }
+
+#if IMP_RUNTIME(DEV)
+void MeshRenderer::DrawEditorUi() {
+  size_t primitive_count = GetPrimitiveCount();
+
+  if (primitive_count == 1) {
+    DrawPrimitiveEditorUi(0);
+  } else {
+    ImGui::Text("Primitives: %zu", primitive_count);
+    for (size_t i = 0; i < primitive_count; ++i) {
+      if (ImGui::TreeNode((void*)(intptr_t)i, "Primitive %zu", i)) {
+        DrawPrimitiveEditorUi(i);
+        ImGui::TreePop();
+      }
+    }
+  }
+}
+
+void MeshRenderer::DrawPrimitiveEditorUi(size_t primitive_index) {
+  Mesh* mesh = GetMesh(primitive_index);
+  if (!mesh) {
+    ImGui::Text("Mesh: None");
+    return;
+  }
+
+  ImGui::Text("Vertex Buffer (GPU): %p", mesh->GetVertexBuffer());
+  ImGui::Text("Index Buffer (GPU): %p", mesh->GetIndexBuffer());
+
+  if (mesh->IsSubmesh()) {
+    ImGui::Text("Type: Submesh");
+  } else {
+    ImGui::Text("Type: Top-level Mesh");
+  }
+
+  MeshDescription desc = mesh->GetDescription();
+
+  size_t vertex_size = 0;
+  for (size_t g = 0; g < desc.vertex_format.GetAttributeGroupsCount(); ++g) {
+    vertex_size += desc.vertex_format.GetVertexSize(g);
+  }
+  size_t total_vertex_bytes = desc.vertex_count * vertex_size;
+  size_t total_index_bytes = desc.index_count * desc.GetIndexSize();
+  size_t total_bytes = total_vertex_bytes + total_index_bytes;
+
+  ImGui::Text("Buffer Details (Shared):");
+  ImGui::BulletText("Vertices: %s (%s B, %zu B/vertex)",
+                    imp::SimpleItoaWithCommas(desc.vertex_count).c_str(),
+                    imp::SimpleItoaWithCommas(total_vertex_bytes).c_str(),
+                    vertex_size);
+  ImGui::BulletText("Indices: %s (%s B, %zu B/index)",
+                    imp::SimpleItoaWithCommas(desc.index_count).c_str(),
+                    imp::SimpleItoaWithCommas(total_index_bytes).c_str(),
+                    desc.GetIndexSize());
+  ImGui::BulletText("Buffer Size: %s B",
+                    imp::SimpleItoaWithCommas(total_bytes).c_str());
+
+  ImGui::Text("Render Details (This Primitive):");
+  size_t draw_count = mesh->GetIndexRenderCount();
+  size_t draw_offset = mesh->GetIndexRenderOffset();
+  if (desc.index_count > 0) {
+    float coverage = 100.0f * draw_count / desc.index_count;
+    ImGui::BulletText("Indices Drawn: %s (Coverage: %.1f%%)",
+                      imp::SimpleItoaWithCommas(draw_count).c_str(), coverage);
+  } else {
+    ImGui::BulletText("Indices Drawn: %s",
+                      imp::SimpleItoaWithCommas(draw_count).c_str());
+  }
+  ImGui::BulletText("Index Offset: %s",
+                    imp::SimpleItoaWithCommas(draw_offset).c_str());
+}
+#endif
 
 }  // namespace imp

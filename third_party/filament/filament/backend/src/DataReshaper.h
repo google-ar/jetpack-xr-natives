@@ -285,6 +285,7 @@ public:
                 switch (srcType) {
                     case UBYTE: reshaper = reshapeImageImpl<float, uint8_t>; break;
                     case FLOAT: reshaper = reshapeImageImpl<float, float>; break;
+                    case HALF: reshaper = reshapeImageImpl<float, math::half>; break;
                     case INT: reshaper = reshapeImageImpl<float, int32_t>; break;
                     case UINT: reshaper = reshapeImageImpl<float, uint32_t>; break;
                     case UINT_10F_11F_11F_REV:
@@ -301,6 +302,7 @@ public:
                 switch (srcType) {
                     case UBYTE: reshaper = reshapeImageImpl<int32_t, uint8_t>; break;
                     case FLOAT: reshaper = reshapeImageImpl<int32_t, float>; break;
+                    case HALF: reshaper = reshapeImageImpl<int32_t, math::half>; break;
                     case INT: reshaper = reshapeImageImpl<int32_t, int32_t>; break;
                     case UINT: reshaper = reshapeImageImpl<int32_t, uint32_t>; break;
                     case UINT_10F_11F_11F_REV:
@@ -317,6 +319,7 @@ public:
                 switch (srcType) {
                     case UBYTE: reshaper = reshapeImageImpl<uint32_t, uint8_t>; break;
                     case FLOAT: reshaper = reshapeImageImpl<uint32_t, float>; break;
+                    case HALF: reshaper = reshapeImageImpl<uint32_t, math::half>; break;
                     case INT: reshaper = reshapeImageImpl<uint32_t, int32_t>; break;
                     case UINT: reshaper = reshapeImageImpl<uint32_t, uint32_t>; break;
                     case UINT_10F_11F_11F_REV:

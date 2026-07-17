@@ -102,8 +102,11 @@ void WidgetUiSystem::SetLayoutComposer(
   if (layout_composer) {
     layout_composer->SetWindowConfiguration(&window_configuration_);
   }
-
   layout_composer_ = std::move(layout_composer);
+}
+
+std::unique_ptr<LayoutComposer> WidgetUiSystem::ReleaseLayoutComposer() {
+  return std::move(layout_composer_);
 }
 
 void WidgetUiSystem::AddWidget(const WidgetLayoutInfo& layout_info,

@@ -43,6 +43,7 @@ cc_library(
         "//core/common:jni_helpers",
         "//core/common:registry",
         "//core/proto:proto_reader",
+        "//core/scripting",
         "//core/scripting:message_helpers",
         "//core/scripting/proto:bridge_cc_proto",
         "//core/view:base_view",
@@ -91,26 +92,31 @@ cc_library(
 cc_library(
     name = "remote_editor",
     srcs = [
-        "remote_editor_server.cc",
+        "noop_remote_editor.h",
+        "remote_editor.cc",
+        "web_ui_remote_editor.cc",
     ] + if_android([
-        "android_remote_editor_server_wrapper.cc",
+        "android_web_ui_remote_editor.cc",
         "android_remote_editor_script_api_bridge_wrapper.cc",
+        "android_remote_editor_wrapper.cc",
     ]),
     hdrs = [
-        "remote_editor_config.h",
-        "remote_editor_server.h",
-        "remote_editor_server_wrapper.h",
+        "remote_editor.h",
+        "web_ui_remote_editor.h",
     ] + if_android([
-        "android_remote_editor_server_wrapper.h",
+        "android_web_ui_remote_editor.h",
+        "android_remote_editor_wrapper.h",
         "android_remote_editor_script_api_bridge_wrapper.h",
     ]),
     linkstatic = 1,
     deps = [
+        ":remote_editor_info",
         ":remote_editor_renderer",
         "//core:config",
         "//core/async:executor",
         "//core/async:future",
         "//core/common:jni_helpers",
+        "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor",
         "//core/editor:editor_constants",
@@ -118,6 +124,9 @@ cc_library(
         "//core/editor:widget_ui_system",
         "//core/editor/components:world_space_editor_ui_assets",
         "//core/editor/layout",
+        "//core/scripting",
+        "//core/scripting:basic_api",
+        "//core/scripting:basic_api_handlers",
         "//core/view:base_view",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -126,3 +135,15 @@ cc_library(
     ],
     alwayslink = 1,
 )
+
+cc_library(
+    name = "remote_editor_info",
+    hdrs = ["remote_editor_info.h"],
+    alwayslink = 1,
+)
+
+# The remote editor has an Android-specific implementation that uses JNI to
+# communicate with Android system APIs. remote_editor_test.cc tests this
+# implementation when built for Android, so it needs to be run in a
+# simulated Android environment. cc_test_on_robolectric runs the test using
+# Robolectric, which provides this simulated environment.

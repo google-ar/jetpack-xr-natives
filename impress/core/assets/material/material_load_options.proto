@@ -64,4 +64,11 @@ message MaterialPreCompileOptions {
   // Default is `SHADOW_SAMPLING_QUALITY_LOW` when set to
   // `SHADOW_SAMPLING_QUALITY_UNSPECIFIED`.
   ShadowSamplingQuality shadow_sampling_quality = 5;
+
+  enum UboBatchingOption {
+    UBO_BATCHING_OPTION_UNSPECIFIED = 0;
+    UBO_BATCHING_OPTION_DEFAULT = 1;
+    UBO_BATCHING_OPTION_DISABLED = 2;
+  }
+  UboBatchingOption ubo_batching_option = 6;
 }

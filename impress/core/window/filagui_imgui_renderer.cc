@@ -16,6 +16,7 @@
 
 #include "core/window/filagui_imgui_renderer.h"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 
@@ -56,10 +57,13 @@ void FilaguiImGuiRenderer::Initialize(float2 texture_resolution) {
   texture_size_ = texture_resolution;
   texture_ =
       OwnedOrBorrowedTexturePtr(base_view_.GetTextureFactory().CreateTexture(
-          texture_size_.x, texture_size_.y,
-          filament::Texture::InternalFormat::RGBA8,
-          filament::Texture::Usage::COLOR_ATTACHMENT |
-              filament::Texture::Usage::SAMPLEABLE));
+          TextureFactory::TextureCreationSettings{
+              .width = static_cast<uint32_t>(texture_size_.x),
+              .height = static_cast<uint32_t>(texture_size_.y),
+              .format = filament::Texture::InternalFormat::RGBA8,
+              .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                       filament::Texture::Usage::SAMPLEABLE,
+          }));
 }
 
 void FilaguiImGuiRenderer::RenderImGui(float timeStepInSeconds,

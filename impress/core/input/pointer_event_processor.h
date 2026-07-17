@@ -36,10 +36,16 @@ class PointerEventProcessor {
   PointerEventProcessor();
   ~PointerEventProcessor();
 
-  PointerEvent CreatePointerEvent(uint8_t action,
-                                  const std::vector<Pointer::Id>& changed_ids,
-                                  const std::vector<float2>& changed_points,
-                                  absl::Duration elapsed_time);
+  // Creates a new PointerEvent object from the given parameters.
+  // action maps to the PointerEventType enum declared in pointer_event.h
+  // changed_ids and changed_points are the pointers that were changed in this
+  // event. They have a 1:1 correspondence and must have the same size.
+  // elapsed_time is the time in milliseconds since the system started.
+  // device_type is the type of device that triggered this event.
+  PointerEvent CreatePointerEvent(
+      uint8_t action, const std::vector<Pointer::Id>& changed_ids,
+      const std::vector<float2>& changed_points, absl::Duration elapsed_time,
+      PointerEvent::DeviceType device_type = PointerEvent::DeviceType::UNKNOWN);
   absl::Status UpdatePointerEvent(PointerEvent& event,
                                   const std::vector<Pointer::Id>& changed_ids,
                                   const std::vector<float2>& changed_points);

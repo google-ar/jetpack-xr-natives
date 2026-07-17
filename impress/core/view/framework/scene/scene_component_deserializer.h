@@ -188,7 +188,7 @@ void SceneComponentDeserializer::RegisterComponentIsfInfo() {
   // Fill in all the required fields in the handler.
   if (was_inserted) {
     handler.type_url = ComponentIsfInfo::kTypeUrl;
-    handler.component_id = kComponentId<T>;
+    handler.component_id = GetComponentTypeId<T>();
     handler.parse = ComponentIsfInfo::Parse;
 
     handler.has_component = shared_isf_info_handlers::HasComponent<T>;

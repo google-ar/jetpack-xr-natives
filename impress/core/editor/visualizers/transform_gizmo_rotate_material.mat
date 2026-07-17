@@ -1,0 +1,90 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+    name : "Transform Gizmo",
+    requires : [
+        position,
+        tangents
+    ],
+    constants : [
+        {
+            // Flag that indicates if P3 is supported on this platform.
+            // Do not modify or update by yourself.
+            name : enableColorConversion,
+            type : bool,
+            default : false
+        }
+    ],
+    variables : [
+        localDotProduct
+    ],
+    parameters : [
+        {
+            type : float4,
+            name : baseColor,
+        },
+        {
+            type : float,
+            name : scaleFactor,
+        },
+        {
+            type : float,
+            name : discardThreshold,
+        }
+    ],
+    shadingModel : unlit,
+    blending : masked,
+    depthWrite : true,
+    featureLevel: 0,
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float scale = materialParams.scaleFactor;
+        // Move the vertex along the normal vector by the scale factor.
+        // Allows us to set the thicknesss of the mesh for hover/select states.
+        // Requires the model to have averaged normals, otherwise it breaks.
+        material.worldPosition.xyz += material.worldNormal * scale;
+
+        // Rotate gizmos have an effect where the rings disappear where they
+        // face away from the camera. The perfect math for this would be to
+        // get the normalized local space vertex position and dot it with the
+        // local space view direction and then discard based on the value.
+        // However we can't use getWorldViewVector() in a vertex shader and we
+        // don't want to do all this math per-fragment so we instead use the
+        // difference between the camera and the vertex position.
+        // The difference is imperceptible so this is fine.
+        vec3 localPos = getPosition().xyz;
+        vec3 localDir = normalize(localPos);
+
+        vec3 cameraWorldPos = getWorldCameraPosition();
+        vec3 viewWorldDir = cameraWorldPos - material.worldPosition.xyz;
+        vec3 localViewDir = normalize((inverse(getWorldFromModelMatrix()) * vec4(viewWorldDir, 0.0)).xyz);
+
+        material.localDotProduct.x = dot(localDir, localViewDir);
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+
+        if (variable_localDotProduct.x < materialParams.discardThreshold) {
+            discard;
+        }
+
+        material.baseColor = materialParams.baseColor;
+    }
+}

@@ -66,7 +66,9 @@ cc_binary(
         "-lbinder_ndk",
     ],
     linkshared = 1,
-    deps = JNI_DEPS + ["//common:stub"],
+    deps = JNI_DEPS + [
+        "//common:stub",
+    ],
 )
 
 cc_library(
@@ -78,6 +80,7 @@ cc_library(
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/types:span",
         "//common:openxr_utils",
         "@third_party//OpenXR_KHR:generated_openxr_headers_public",  # build_cleaner: keep
         "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # build_cleaner: keep

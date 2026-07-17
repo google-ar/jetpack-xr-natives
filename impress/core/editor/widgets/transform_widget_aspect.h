@@ -22,17 +22,23 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "core/async/future.h"
 #include "core/camera/camera_component.h"
 #include "core/editor/command.h"
 #include "core/editor/command_manager.h"
 #include "core/editor/editor.h"
 #include "core/editor/widgets/transform_widget_aspect_state.proto.imp.h"
+#include "core/geometry/shapes/box.h"
+#include "core/materials/material.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/isf_info.h"
 #include "core/ncsb/node_handle.h"
+#include "core/view/framework/assets/gltf_renderer.h"
+#include "core/view/framework/gestures/drag_gesture.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp::editor {
@@ -44,10 +50,28 @@ class TransformWidgetAspect : public imp::Component {
  public:
   static constexpr bool kExcludeFromEditor = true;
 
-  absl::Status Setup();
+  imp::Future<absl::Status> Setup();
   void Update(const FrameTime& frame_time);
 
  private:
+  // Creates a box collider for the aspect based on the mesh bounds.
+  void CreateBoxCollider(Box bounds);
+
+  // Creates a cylinder collider for the aspect based on the mesh bounds.
+  void CreateCylinderCollider(const Box& bounds);
+
+  // Called when a drag gesture starts on the aspect.
+  imp::Dispatcher::PropagationResult OnDragStart(
+      const DragGesture::StartEvent& event);
+
+  // Called when a drag gesture updates on the aspect.
+  imp::Dispatcher::PropagationResult OnDragUpdate(
+      const DragGesture::UpdateEvent& event);
+
+  // Called when a drag gesture finishes on the aspect.
+  imp::Dispatcher::PropagationResult OnDragFinish(
+      const DragGesture::FinishEvent& event);
+
   // Position, rotation, and scale packet associated with a node.
   struct NodeTransformData {
     NodeHandle node;
@@ -63,6 +87,9 @@ class TransformWidgetAspect : public imp::Component {
 
   // Compute the aspect change based on user input. Add undo/redo if commit.
   void UpdateAspect(bool commit = false);
+
+  // Updates the material color based on the current state (hovered, dragging).
+  void UpdateMaterial();
 
   // Computes the closest point between the ray projected by the cursor and the
   // axis this widget controls. (World-space)
@@ -113,11 +140,13 @@ class TransformWidgetAspect : public imp::Component {
   Editor* editor_;
   // Whether the transform widget handle/aspect is being hovered.
   bool hovered_;
-  // The scale of the transform widget handle before it was hovered.
-  float3 scale_before_hover_;
+
+  // The material instance used for the aspect.
+  OwnedMaterialPtr material_;
 
  public:
-  using IsfInfo = IsfInfo<&TransformWidgetAspect::state_>;
+  using IsfInfo =
+      IsfInfo<&TransformWidgetAspect::state_, IsfDependencies<GltfRenderer>>;
 };
 
 }  // namespace imp::editor

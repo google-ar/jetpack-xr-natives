@@ -144,7 +144,7 @@ float3 GltfNodeAnimation::EvalTranslation(
           return arg.Eval(t, cursor);
         else if constexpr (std::is_same_v<T, CubicCurve<float3>>)
           return arg.Eval(t, cursor);
-        else if constexpr (std::is_same_v<T, absl::monostate>)
+        else if constexpr (std::is_same_v<T, std::monostate>)
           return missing_channel_provider
                      ? missing_channel_provider->GetMissingTranslation()
                      : kZero3;
@@ -169,7 +169,7 @@ quatf GltfNodeAnimation::EvalRotation(
           return normalize(arg.Eval(t, cursor));
         else if constexpr (std::is_same_v<T, CubicCurve<quatf>>)
           return normalize(arg.Eval(t, cursor));
-        else if constexpr (std::is_same_v<T, absl::monostate>)
+        else if constexpr (std::is_same_v<T, std::monostate>)
           return missing_channel_provider
                      ? missing_channel_provider->GetMissingRotation()
                      : kIdentityQuatf;
@@ -194,7 +194,7 @@ float3 GltfNodeAnimation::EvalScale(
           return arg.Eval(t, cursor);
         else if constexpr (std::is_same_v<T, CubicCurve<float3>>)
           return arg.Eval(t, cursor);
-        else if constexpr (std::is_same_v<T, absl::monostate>)
+        else if constexpr (std::is_same_v<T, std::monostate>)
           return missing_channel_provider
                      ? missing_channel_provider->GetMissingScale()
                      : kOne3;

@@ -103,6 +103,30 @@ filament::Texture::InternalFormat FormatFromTexture(
       return filament::Texture::InternalFormat::DEPTH24;
     case TexturePipelineRendererState::Texture::DEPTH32F:
       return filament::Texture::InternalFormat::DEPTH32F;
+    case TexturePipelineRendererState::Texture::R8UI:
+      return filament::Texture::InternalFormat::R8UI;
+    case TexturePipelineRendererState::Texture::RG8UI:
+      return filament::Texture::InternalFormat::RG8UI;
+    case TexturePipelineRendererState::Texture::RGB8UI:
+      return filament::Texture::InternalFormat::RGB8UI;
+    case TexturePipelineRendererState::Texture::RGBA8UI:
+      return filament::Texture::InternalFormat::RGBA8UI;
+    case TexturePipelineRendererState::Texture::R16UI:
+      return filament::Texture::InternalFormat::R16UI;
+    case TexturePipelineRendererState::Texture::RG16UI:
+      return filament::Texture::InternalFormat::RG16UI;
+    case TexturePipelineRendererState::Texture::RGB16UI:
+      return filament::Texture::InternalFormat::RGB16UI;
+    case TexturePipelineRendererState::Texture::RGBA16UI:
+      return filament::Texture::InternalFormat::RGBA16UI;
+    case TexturePipelineRendererState::Texture::R32UI:
+      return filament::Texture::InternalFormat::R32UI;
+    case TexturePipelineRendererState::Texture::RG32UI:
+      return filament::Texture::InternalFormat::RG32UI;
+    case TexturePipelineRendererState::Texture::RGB32UI:
+      return filament::Texture::InternalFormat::RGB32UI;
+    case TexturePipelineRendererState::Texture::RGBA32UI:
+      return filament::Texture::InternalFormat::RGBA32UI;
     default:
       // This should never happen.
       IMP_LOG(imp::FATAL) << "Unsupported texture format in TexturePipelineRenderer.";
@@ -461,7 +485,18 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
                           TexturePipelineRendererState::Texture::RGBA8);
 
     OwnedTexturePtr color_texture;
+    TextureSamplerOptions color_sampler_options;
+    if (filament::backend::isUnsignedIntFormat(color_format) ||
+        filament::backend::isSignedIntFormat(color_format)) {
+      color_sampler_options.min_filter =
+          TextureSamplerOptions::MinFilter::NEAREST;
+      color_sampler_options.mag_filter =
+          TextureSamplerOptions::MagFilter::NEAREST;
+    }
+
     if (is_multiview) {
+      color_sampler_options.sampler_type =
+          TextureSamplerOptions::SamplerType::SAMPLER_2D_ARRAY;
       TextureFactory::TextureCreationSettings settings = {
           .width = texture_size.x,
           .height = texture_size.y,
@@ -470,11 +505,7 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
           .levels = 1,
           .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
                    filament::Texture::Usage::SAMPLEABLE,
-          .sampler_options =
-              TextureSamplerOptions{
-                  .sampler_type =
-                      TextureSamplerOptions::SamplerType::SAMPLER_2D_ARRAY,
-              },
+          .sampler_options = color_sampler_options,
       };
       color_texture = GetView().GetTextureFactory().CreateTexture(settings);
     } else {
@@ -485,6 +516,7 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
               .format = color_format,
               .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
                        filament::Texture::Usage::SAMPLEABLE,
+              .sampler_options = color_sampler_options,
           });
     }
 
@@ -883,7 +915,7 @@ void TexturePipelineRenderer::System::RunTexturePipelines(
   sorted_texture_pipelines.reserve(
       GetView()
           .GetComponentManager()
-          .GetComponentPoolById(kComponentId<TexturePipelineRenderer>)
+          .GetComponentPoolById(GetComponentTypeId<TexturePipelineRenderer>())
           ->GetComponentCount());
 
   GetComponentManager().ForEach<TexturePipelineRenderer>(

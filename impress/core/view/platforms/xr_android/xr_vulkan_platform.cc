@@ -50,6 +50,7 @@
 
 namespace imp {
 
+#if IMP_PLATFORM(ANDROID)
 namespace {
 
 // To avoid hitching when compiling samplers with external samplers,
@@ -113,6 +114,7 @@ constexpr std::array kExternalSamplerFormats = {
 };
 
 }  // namespace
+#endif  // IMP_PLATFORM(ANDROID)
 
 XrVulkanPlatform::XrVulkanPlatform() { bluevk::initialize(); }
 
@@ -140,7 +142,6 @@ filament::backend::Driver* XrVulkanPlatform::createDriver(
 }
 
 XrGraphicsBindingVulkan2KHR XrVulkanPlatform::GetGraphicsBinding() {
-#if IMP_PLATFORM(ANDROID)
   return XrGraphicsBindingVulkan2KHR{
       .type = XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR,
       .next = nullptr,
@@ -150,9 +151,6 @@ XrGraphicsBindingVulkan2KHR XrVulkanPlatform::GetGraphicsBinding() {
       .queueFamilyIndex = getGraphicsQueueFamilyIndex(),
       .queueIndex = getGraphicsQueueIndex(),
   };
-#else
-  return {};
-#endif
 }
 
 void XrVulkanPlatform::setXrInstance(XrInstance instance) {
@@ -351,10 +349,12 @@ filament::backend::Platform::SwapChain* XrVulkanPlatform::createSwapChain(
     void* nativewindow, uint64_t flags, VkExtent2D extent) noexcept {
   IMP_TRACE();
   XrSessionHost* host = reinterpret_cast<XrSessionHost*>(nativewindow);
+#if IMP_PLATFORM(ANDROID)
   auto status = host->SetThreadType(XR_ANDROID_THREAD_TYPE_RENDERER_MAIN_KHR);
   if (!status.ok()) {
     IMP_LOG(imp::INFO) << "Failed to reported thread type to OpenXR due to " << status;
   }
+#endif
   // BUG((broken link)): The thread name should already be "FEngine::loop", but
   // SysUI renames threads.  This puts the original setting back.
   SetThreadName("FEngine::loop");
@@ -401,6 +401,7 @@ void XrVulkanPlatform::destroy(SwapChain* swapChain) noexcept {
 }
 
 void XrVulkanPlatform::registerAndroidExternalFormatsForCachePrewarm() {
+#if IMP_PLATFORM(ANDROID)
   if (__builtin_available(android 26, *)) {
     for (const auto& externalFormat : kExternalSamplerFormats) {
       AHardwareBuffer_Desc desc{
@@ -466,6 +467,19 @@ void XrVulkanPlatform::registerAndroidExternalFormatsForCachePrewarm() {
       AHardwareBuffer_release(buffer);
     }
   }
+#endif
 }
+
+#if !IMP_PLATFORM(ANDROID)
+XrVulkanPlatform::ExtensionSet
+XrVulkanPlatform::getSwapchainInstanceExtensions() const {
+  return {};
+}
+
+XrVulkanPlatform::SurfaceBundle XrVulkanPlatform::createVkSurfaceKHR(
+    void* nativeWindow, VkInstance instance, uint64_t flags) const noexcept {
+  return {VK_NULL_HANDLE, {0, 0}};
+}
+#endif
 
 }  // namespace imp

@@ -17,6 +17,9 @@ function(build_material MAT_FILE TARGET_DIR MAT_NAME OUT_LIST)
     if (NOT CMAKE_BUILD_TYPE MATCHES Release)
         set(MATC_FLAGS -g ${MATC_FLAGS})
     endif()
+    if (FILAMENT_SUPPORTS_WEBGPU)
+        set(MATC_FLAGS -a webgpu ${MATC_FLAGS})
+    endif()
     set(mat_src "${CMAKE_CURRENT_SOURCE_DIR}/${MAT_FILE}")
     set(output_path "${SERVER_DIR}/${TARGET_DIR}/${MAT_NAME}.filamat")
     add_custom_command(
@@ -26,24 +29,6 @@ function(build_material MAT_FILE TARGET_DIR MAT_NAME OUT_LIST)
             DEPENDS matc
             COMMENT "Compiling material ${mat_src} to ${output_path}")
     set(${OUT_LIST} ${${OUT_LIST}} ${output_path} PARENT_SCOPE)
-endfunction()
-
-function(build_material_fl0 MAT_FILE TARGET_DIR MAT_NAME OUT_LIST)
-    if (FILAMENT_ENABLE_FEATURE_LEVEL_0)
-        set(MATC_FLAGS -a opengl -p mobile)
-        if (NOT CMAKE_BUILD_TYPE MATCHES Release)
-            set(MATC_FLAGS -g ${MATC_FLAGS})
-        endif()
-        set(mat_src "${CMAKE_CURRENT_SOURCE_DIR}/${MAT_FILE}")
-        set(output_path "${SERVER_DIR}/${TARGET_DIR}/${MAT_NAME}_fl0.filamat")
-        add_custom_command(
-                OUTPUT ${output_path}
-                COMMAND matc ${MATC_FLAGS} -PfeatureLevel=0 -o ${output_path} ${mat_src}
-                MAIN_DEPENDENCY ${mat_src}
-                DEPENDS matc
-                COMMENT "Compiling material FL0 ${mat_src} to ${output_path}")
-        set(${OUT_LIST} ${${OUT_LIST}} ${output_path} PARENT_SCOPE)
-    endif()
 endfunction()
 
 function(add_ktxfiles SOURCE TARGET EXTRA_ARGS TARGET_DIR OUT_LIST)
@@ -105,7 +90,7 @@ function(add_envmap SOURCE TARGET TARGET_DIR OUT_LIST)
         WORKING_DIRECTORY "${SERVER_DIR}/${TARGET_DIR}"
         MAIN_DEPENDENCY ${source_envmap}
         DEPENDS cmgen)
-        
+
     set(${OUT_LIST} ${${OUT_LIST}} ${target_skybox} ${target_skybox_tiny} ${target_envmap} PARENT_SCOPE)
 endfunction()
 
@@ -148,7 +133,7 @@ add_envmap("third_party/environments/lightroom_14b.hdr" "default_env" ${TARGET_D
 
 set(TARGET_DIR "cube_fl0")
 add_localfile("cube_fl0.html" "cube_fl0.html" ${TARGET_DIR} ALL_DEMO_ASSETS)
-build_material_fl0("materials/nonlit.mat" ${TARGET_DIR} "nonlit" ALL_DEMO_ASSETS)
+build_material("materials/nonlit.mat" ${TARGET_DIR} "nonlit" ALL_DEMO_ASSETS)
 
 set(TARGET_DIR "helmet")
 add_localfile("helmet.html" "helmet.html" ${TARGET_DIR} ALL_DEMO_ASSETS)

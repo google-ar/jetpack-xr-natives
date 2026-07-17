@@ -24,6 +24,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
 
@@ -55,15 +56,15 @@ class CallstackPanel {
   static constexpr int kInvalidId = -1;
 
   // Returns all samples with a specific name for a given frame and thread.
-  absl::StatusOr<const std::vector<SampleNode*>*> GetSamples(
+  absl::StatusOr<absl::Span<SampleNode* const>> GetSamples(
       int frame_index, SampleProcessor& sample_processor,
       std::thread::id thread_id, absl::string_view selected_sample_name);
 
   // Draws the call stack table, splitter, and the full call stack panel.
-  void DrawCallstackPanel(const std::vector<SampleNode*>& samples);
+  void DrawCallstackPanel(absl::Span<SampleNode* const> samples);
 
   // Draws the table contents with a row for each allocation in the samples.
-  void DrawCallstackTable(const std::vector<SampleNode*>& samples);
+  void DrawCallstackTable(absl::Span<SampleNode* const> samples);
 
   // Draws the splitter between the table and the full call stack panel.
   void DrawSplitter();

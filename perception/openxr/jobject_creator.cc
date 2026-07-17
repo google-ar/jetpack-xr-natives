@@ -665,4 +665,33 @@ jobject CreateJavaDisplayBlendMode(
       static_cast<uint32_t>(xr_blend_mode));
 }
 
+jobject CreateJavaQrCodeState(JNIEnv* env,
+                              const XrTrackableQrCodeANDROID& xr_qr_code) {
+  jclass qr_code_state_class =
+      GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "QrCodeState");
+  jmethodID qr_code_state_constructor = env->GetMethodID(
+      qr_code_state_class, "<init>",
+      absl::StrFormat(
+          "(L%s;L%s;L%s;Ljava/lang/String;)V",
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "TrackingState"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "Pose"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "FloatSize2d"))
+          .c_str());
+  jobject tracking_state =
+      CreateJavaTrackingState(env, xr_qr_code.trackingState);
+  jobject pose = CreateJavaPose(env, xr_qr_code.centerPose);
+  jobject extents = CreateJavaFloatSize2d(env, xr_qr_code.extents);
+  jstring data;
+  if (xr_qr_code.bufferCountOutput > 0 && xr_qr_code.buffer != nullptr) {
+    data = env->NewStringUTF(xr_qr_code.buffer);
+  } else {
+    data = env->NewStringUTF("");
+  }
+
+  jobject qr_code_state =
+      env->NewObject(qr_code_state_class, qr_code_state_constructor,
+                     tracking_state, pose, extents, data);
+  return qr_code_state;
+}
+
 }  // namespace androidx::xr::openxr

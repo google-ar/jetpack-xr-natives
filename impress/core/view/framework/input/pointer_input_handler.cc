@@ -88,7 +88,7 @@ absl::optional<RayHit> PointerHitEvent::GetTruncatedRayHit(size_t index) const {
   return {};
 }
 
-absl::variant<absl::monostate, RayHit, DoubleRayHit>
+std::variant<absl::monostate, RayHit, DoubleRayHit>
 PointerHitEvent::GetRayHitOrDoubleRayHit(size_t index) const {
   if (index >= GetPointerCount()) {
     IMP_LOG(imp::FATAL) << "Size of hits is " << GetPointerCount()

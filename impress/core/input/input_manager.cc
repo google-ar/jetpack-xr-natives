@@ -41,12 +41,14 @@ InputManager::~InputManager() {}
 
 absl::Status InputManager::ProcessPointerInput(
     uint8_t action, const std::vector<Pointer::Id>& ids,
-    const std::vector<float2>& points, absl::Duration elapsed_time) {
+    const std::vector<float2>& points, absl::Duration elapsed_time,
+    PointerEvent::DeviceType device_type) {
   if (!pointer_events_.empty()) {
     PointerEvent& last = pointer_events_.back();
     if (last.ElapsedTime() == elapsed_time &&
         last.Type() == PointerEventType::kMove &&
-        last.Type() == static_cast<PointerEventType>(action)) {
+        last.Type() == static_cast<PointerEventType>(action) &&
+        last.GetDeviceType() == device_type) {
       // The host OS may batch together touches into OS-specific events; for
       // example on iOS with two fingers, touchesMoved may be called once or
       // twice per frame.
@@ -54,7 +56,7 @@ absl::Status InputManager::ProcessPointerInput(
     }
   }
   pointer_events_.push_back(pointer_event_processor_.CreatePointerEvent(
-      action, ids, points, elapsed_time));
+      action, ids, points, elapsed_time, device_type));
   return absl::OkStatus();
 }
 

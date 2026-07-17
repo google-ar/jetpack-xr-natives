@@ -66,6 +66,12 @@
 
 #include "runtime_interface.hpp"
 
+// Begin google3
+#if defined(OPENXR_LOADER_GOOGLE3)
+#include "third_party/OpenXR_KHR/internal/runtime_registry.h"
+#endif // OPENXR_LOADER_GOOGLE3
+// End google3
+
 // Utility functions for finding files in the appropriate paths
 
 static inline bool StringEndsWith(const std::string &value, const std::string &ending) {
@@ -650,6 +656,16 @@ void RuntimeManifestFile::CreateIfValid(const Json::Value &root_node, const std:
 // Find all manifest files in the appropriate search paths/registries for the given type.
 XrResult RuntimeManifestFile::FindManifestFiles(const std::string &openxr_command,
                                                 std::vector<std::unique_ptr<RuntimeManifestFile>> &manifest_files) {
+    // Begin google3
+#if defined(XR_OS_LINUX) && defined(OPENXR_LOADER_GOOGLE3)
+    if (openxr_khr::HermeticRegistry::GetRegistry().HasHermeticRuntime()) {
+        manifest_files.emplace_back(new RuntimeManifestFile(
+            "hermetic_registered_runtime", "hermetic_registered_runtime"));
+        return XR_SUCCESS;
+    }
+#endif
+    // End google3
+
     XrResult result = XR_SUCCESS;
     std::string filename = LoaderProperty::GetSecure(OPENXR_RUNTIME_JSON_ENV_VAR);
     if (!filename.empty()) {
@@ -953,6 +969,23 @@ void ApiLayerManifestFile::PopulateApiLayerProperties(XrApiLayerProperties &prop
 // Find all layer manifest files in the appropriate search paths/registries for the given type.
 XrResult ApiLayerManifestFile::FindManifestFiles(const std::string &openxr_command, ManifestFileType type,
                                                  std::vector<std::unique_ptr<ApiLayerManifestFile>> &manifest_files) {
+    // Begin google3
+#if defined(OPENXR_LOADER_GOOGLE3)
+    {
+        const auto& layers = openxr_khr::HermeticRegistry::GetRegistry().GetHermeticApiLayers();
+        for (const auto& [_, layer] : layers) {
+            auto props = layer->GetProperties();
+            JsonVersion api_version{props.api_version_major,
+                                    props.api_version_minor, 0};
+            std::string library_path = "hermetic_api_layer:" + props.layer_name;
+            manifest_files.emplace_back(new ApiLayerManifestFile(
+                type, "hermetic_registered_layer", props.layer_name,
+                props.description, api_version, props.implementation_version,
+                library_path));
+        }
+    }
+#endif
+    // End google3
     std::string relative_path;
     std::string override_env_var;
 #ifdef XR_OS_WINDOWS

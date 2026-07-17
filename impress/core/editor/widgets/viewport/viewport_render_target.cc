@@ -52,7 +52,7 @@ void ViewportRenderTarget::SetSize(uint2 size) {
                        .height(size.y)
                        .levels(1)
                        .sampler(filament::Texture::Sampler::SAMPLER_2D)
-                       .format(filament::Texture::InternalFormat::DEPTH24)
+                       .format(filament::Texture::InternalFormat::DEPTH32F)
                        .usage(filament::Texture::Usage::DEPTH_ATTACHMENT)
                        .build(engine_);
 

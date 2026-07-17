@@ -48,8 +48,7 @@ absl::Status ApiLevelValidator::operator()(
   // bsearch lookup for a few attributes.
   const reflection::KeyValue* requires_api_attr = nullptr;
   for (const auto* attr : *attributes) {
-    if (std::strncmp(attr->key()->c_str(), kRequiresApiAttrName.data(),
-                     kRequiresApiAttrName.size()) == 0) {
+    if (attr->key()->string_view() == kRequiresApiAttrName) {
       requires_api_attr = attr;
       break;
     }
@@ -72,6 +71,25 @@ absl::Status ApiLevelValidator::operator()(
         absl::StrCat("Requires API level ", api_level,
                      " but the maximum API level is ", max_api_level_));
   }
+  return absl::OkStatus();
+}
+
+absl::Status UnstableApiAttributeValidator::operator()(
+    const flatbuffers::Vector<
+        flatbuffers::Offset<reflection::KeyValue>>* /*absl_nullable*/  attributes)
+    const {
+  if (attributes == nullptr) {
+    return absl::OkStatus();
+  }
+
+  for (const auto* attr : *attributes) {
+    if (attr->key()->string_view() == kUnstableApiAttrName) {
+      return absl::PermissionDeniedError(
+          absl::StrCat("Attribute '", kUnstableApiAttrName,
+                       "' is present but not allowed for this application."));
+    }
+  }
+
   return absl::OkStatus();
 }
 

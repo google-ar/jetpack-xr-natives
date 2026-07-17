@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <variant>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -36,6 +37,7 @@
 #include "core/loader/creator/inflight_creation.h"
 #include "core/material_library/schemas/generic_material_generated.h"
 #include "core/model/mesh/base_mesh_builder.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 
 namespace imp::loader::details {

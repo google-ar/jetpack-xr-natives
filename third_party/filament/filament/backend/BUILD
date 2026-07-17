@@ -598,7 +598,7 @@ cc_library(
     deps = [
         # These should come early in the dep list.
         "@third_party//filament/libs:bluegl_linux_user",
-        "@third_party//filament/libs:bluevk",
+        "@third_party//filament/libs:bluevk_linux_user",
     ] + backend_opengl_deps + backend_vulkan_deps + [
         "//third_party/mesa:OSMesa_header_thirdparty",
         "@third_party//gl",

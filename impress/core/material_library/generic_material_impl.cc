@@ -131,7 +131,11 @@ GenericMaterialImpl::GenericMaterialImpl(
       parameter_info_(parameter_info),
       placeholder_texture_(view.GetTextureFactory().BorrowPlaceholderTexture()),
       placeholder_sampler_() {
-  material_ = OwnedMaterialPtr(new CustomMaterial(&material_instance, {}));
+  material_ = OwnedMaterialPtr(new CustomMaterial(
+      &material_instance, {},
+      view.GetConfig()
+          .experimental_feature_flags
+          ->enable_filament_material_instance_destruction_check.Value()));
   material_->SetName(name);
 }
 

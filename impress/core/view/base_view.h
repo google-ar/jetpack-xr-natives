@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -73,6 +74,7 @@ class SkinningSystem;
 class TextureFactory;
 class TextureRegistry;
 class MaterialFactory;
+class ModelFactory;
 class EnvironmentLightFactory;
 class GroupsManager;
 class Monitor;
@@ -166,6 +168,9 @@ class BaseView : public Rememberer,
   // Returns the MaterialFactory used to load materials.
   virtual MaterialFactory& GetMaterialFactory() noexcept = 0;
 
+  // Returns the ModelFactory used to load models.
+  virtual ModelFactory& GetModelFactory() noexcept = 0;
+
   // Returns the EnvironmentLightFactory used to load IBLs.
   virtual EnvironmentLightFactory& GetEnvironmentLightFactory() noexcept = 0;
 
@@ -193,6 +198,11 @@ class BaseView : public Rememberer,
   // Returns the size of the view being rendered to in UI pixels.
   virtual uint2 GetSize() const = 0;
 
+#if IMP_RUNTIME(DEV)
+  // Overrides the size of the view returned by GetSize().
+  virtual void SetSizeOverride(std::optional<uint2> size_override) = 0;
+#endif
+
   // Returns the margins of the viewport being rendered to in UI pixels.
   virtual uint4 GetMargins() const = 0;
 
@@ -219,6 +229,11 @@ class BaseView : public Rememberer,
     static const ViewConfig kDefaultConfig;
     return kDefaultConfig;
   }
+
+  // The ViewConfig can be used to configure various systems and components in
+  // impress. For some settings, it may be appropriate to call ApplyViewConfig()
+  // afterwards.
+  virtual void SetConfig(const ViewConfig& view_config) = 0;
 
   // Returns the desired Filament feature level.
   // Filament may use a lower feature level depending on device support.

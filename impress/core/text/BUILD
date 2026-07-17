@@ -180,9 +180,16 @@ imp_material(
     enable_metal_postprocessing = True,
 )
 
+imp_material(
+    name = "blit_slice_external_material",
+    src = "blit_slice_external.mat",
+    enable_metal_postprocessing = True,
+)
+
 imp_assets(
     name = "sliced_glyph_atlas_assets",
     srcs = [
+        ":blit_slice_external_material",
         ":blit_slice_material",
     ],
     namespace = "imp::sliced_glyph_atlas_assets",
@@ -442,6 +449,14 @@ cc_library(
     ] + if_desktop([
         # icu data heavily inflates binary size so do not include it for non desktop platforms for now
     ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "text_material_helpers",
+    srcs = ["text_material_helpers.cc"],
+    hdrs = ["text_material_helpers.h"],
+    deps = ["//core/view/utils:view_config_proto_cc_imp"],
     alwayslink = 1,
 )
 

@@ -15,8 +15,8 @@
 #include <openxr/public/xr_android_light_estimation_cubemap.h>
 #include <openxr/public/xr_android_recommended_settings.h>
 #include <openxr/public/xr_android_spatial_anchor_space.h>
+#include <openxr/public/xr_android_viewport_feathering.h>
 
-// IWYU pragma: end_exports
 
 // These extensions are experimental and MUST be included explicitly by code
 // that needs them to avoid breaks on updates.
@@ -25,10 +25,13 @@
 #include <openxr/public/xr_androidx1_body_tracking.h>
 #include <openxr/public/xr_androidx1_eye_tracking_calibration_state.h>
 #include <openxr/public/xr_androidx1_light_estimation_point_lights.h>
+#include <openxr/public/xr_androidx1_scene_meshing_semantic_label2.h>
 #include <openxr/public/xr_androidx1_spatial_occupancy_grid.h>
 #include <openxr/public/xr_androidx2_geospatial_streetscape.h>
 #include <openxr/public/xr_androidx_spatial_interaction.h>
 #endif  // DO_NOT_USE_INCLUDE_LATEST_EXPERIMENTAL_EXTENSIONS
+
+// IWYU pragma: end_exports
 
 // This macro extends the base XR_LIST_EXTENSIONS macro with the extensions in
 // this header.
@@ -48,5 +51,7 @@
     _(XR_ANDROID_global_passthrough_dimming, 797)\
     _(XR_ANDROID_geospatial_anchor, 798)\
     _(XR_ANDROIDX2_geospatial_streetscape, 799)\
+    _(XR_ANDROIDX1_scene_meshing_semantic_label2, 802)\
+    _(XR_ANDROID_viewport_feathering, 807)\
 
 #endif  // OPENXR_EXTENSIONS_HELPER_PUBLIC_H_

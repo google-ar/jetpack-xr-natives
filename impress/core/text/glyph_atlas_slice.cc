@@ -134,8 +134,10 @@ Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view, bool single_slice) {
     return EndFrameResult::kBlitRequired;
   }
 
-  if (!canvas_ && canvas_source_->IsFeatureSupported(
-                      ScopedCanvas::Feature::kKeepContents)) {
+  if (!canvas_ &&
+      canvas_source_->IsFeatureSupported(
+          ScopedCanvas::Feature::kKeepContents) &&
+      texture_status_ != TextureStatus::kReadyToApplyDrawCommands) {
     canvas_mutex_.unlock();
     return EndFrameResult::kStable;
   }
@@ -159,6 +161,10 @@ Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view, bool single_slice) {
   }
 
   if (texture_status_ == TextureStatus::kReadyToApplyDrawCommands) {
+    if (!canvas_) {
+      GetOrStartDrawing(view, ScopedCanvas::DrawMode::kKeepContents,
+                        single_slice);
+    }
     UpdateTexture();
   }
 
@@ -241,7 +247,13 @@ Future<absl::Status> Slice::DrawGlyphsToCanvasAsync(
           // drawn to the canvas, and so the only thing left to do is to release
           // the pixel buffer in the canvas.
           if (glyphs->empty()) {
-            texture_status_ = TextureStatus::kReadyToApplyDrawCommands;
+            if (texture_status_ == TextureStatus::kStable) {
+              texture_status_ = TextureStatus::kReadyToApplyDrawCommands;
+            } else {
+              // Defer the state transition until the current update/blit cycle
+              // completes.
+              has_pending_draw_commands_ = true;
+            }
             return Future<absl::Status>(absl::OkStatus());
           }
           // If the status is an error, it means that the glyphs haven't
@@ -329,7 +341,7 @@ void Slice::DrawGlyphToCanvas(ScopedCanvas& canvas, CanvasOptionsGlyphKey glyph,
   float2 glyph_top_left =
       glyph_info.atlas_entry.GetTopLeft() + float2{kHalfPadding};
   GlyphEmulator::DrawGlyph(canvas, glyph.glyph, glyph_top_left,
-                           glyph.canvas_options);
+                           glyph.canvas_options, &glyph_info.measurements);
 }
 
 void Slice::UpdateTexture() {
@@ -374,8 +386,15 @@ void Slice::UpdateTexture() {
 void Slice::UpdateTextureSync() {
   texture_status_ = TextureStatus::kReadyToBlit;
   canvas_.reset();
+#if IMP_PLATFORM(WASM)
+  // TODO: Properly resolve this race condition.
+  for (const auto& future : texture_update_futures_) {
+    future.Return(absl::OkStatus());
+  }
+#else
   absl::c_move(texture_update_futures_,
                std::back_inserter(texture_blit_futures_));
+#endif  // IMP_PLATFORM(WASM)
   texture_update_futures_.clear();
 }
 
@@ -390,7 +409,12 @@ void Slice::OnBlitCompleted() {
   // e.g. kHasNewGlyphs which can happen if new glyphs are added to the slice
   // while waiting for the blit to complete.
   if (texture_status_ == TextureStatus::kReadyToBlit) {
-    texture_status_ = TextureStatus::kStable;
+    if (has_pending_draw_commands_) {
+      texture_status_ = TextureStatus::kReadyToApplyDrawCommands;
+      has_pending_draw_commands_ = false;
+    } else {
+      texture_status_ = TextureStatus::kStable;
+    }
   }
 }
 

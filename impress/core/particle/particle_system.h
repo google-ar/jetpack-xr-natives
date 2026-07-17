@@ -35,10 +35,40 @@ namespace imp {
 // proto.
 class ParticleSystem : public Component {
  public:
+  // Initializes the particle system with the given state and custom particle
+  // behavior. If no custom particle behavior is provided, a null pointer is
+  // provided to the emitter, signaling that no customization is required.
   Future<absl::Status> SetupWithState(
       std::unique_ptr<CustomParticleBehavior> custom_particle_behavior =
           std::unique_ptr<CustomParticleBehavior>());
+
+  // Updates the particle system. This will be called once per frame by the
+  // component lifecycle.
   void Update(const FrameTime& frame_time);
+
+  // Returns the current particles per second count. This is the number of
+  // particles, on average, that are being created per second.
+  float GetEmissionRate() const;
+
+  // Sets a new particles per second value. The emitter will attempt to create
+  // the number of requested particles each second. This is limited by the
+  // maximum number of particles requested when the system was initialized. This
+  // value must be strictly > 0.0f. If you wish to pause emission of new
+  // particles, please see SetEmissionPaused().
+  void SetEmissionRate(float particles_per_second);
+
+  // Returns the paused state of particle emission. See SetEmissionPaused for
+  // more detail about this state.
+  bool IsEmissionPaused() const;
+
+  // Sets whether the system's active particle emission is paused.
+  //
+  // When `pause` is true, the system acts as a gate and suspends emission of
+  // any new particles. When `pause` is false, particles are emitted as normal.
+  //
+  // This does not affect existing particles. Emission remains limited by the
+  // maximum particle count requested when the system was initialized.
+  void SetEmissionPaused(bool pause);
 
  private:
   ParticleEmitterState state_;

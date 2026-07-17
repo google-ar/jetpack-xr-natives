@@ -118,15 +118,15 @@ class PropertyAnimation {
       animation::EaseOutBackCurve<T>, animation::EaseInOutBackCurve<T>>;
 
   using PropertyCurveVariant =
-      absl::variant<CurveVariant<float>, CurveVariant<float2>,
-                    CurveVariant<float3>, CurveVariant<float4>,
-                    CurveVariant<quatf>>;
-  using FramesVariant = absl::variant<std::vector<animation::Frame<float>>,
-                                      std::vector<animation::Frame<float2>>,
-                                      std::vector<animation::Frame<float3>>,
-                                      std::vector<animation::Frame<float4>>,
-                                      std::vector<animation::Frame<quatf>>>;
-  using ValueVariant = absl::variant<float, float2, float3, float4, quatf>;
+      std::variant<CurveVariant<float>, CurveVariant<float2>,
+                   CurveVariant<float3>, CurveVariant<float4>,
+                   CurveVariant<quatf>>;
+  using FramesVariant = std::variant<std::vector<animation::Frame<float>>,
+                                     std::vector<animation::Frame<float2>>,
+                                     std::vector<animation::Frame<float3>>,
+                                     std::vector<animation::Frame<float4>>,
+                                     std::vector<animation::Frame<quatf>>>;
+  using ValueVariant = std::variant<float, float2, float3, float4, quatf>;
 
   using PropertyAnimationCursor = animation::BaseCurve::Cursor;
 
@@ -280,7 +280,7 @@ absl::StatusOr<std::unique_ptr<PropertyAnimation>> PropertyAnimation::Create(
   MP_RETURN_IF_ERROR(absl::visit(
       [](auto&& values_variant) -> absl::Status {
         using ArrayType = std::decay_t<decltype(values_variant)>;
-        if constexpr (std::is_same_v<ArrayType, absl::monostate>) {
+        if constexpr (std::is_same_v<ArrayType, std::monostate>) {
           return absl::FailedPreconditionError(
               "Missing AnimationSampler values_array");
         } else {

@@ -64,7 +64,7 @@ namespace imp {
 // comprehensive documentation on OpenXR input & haptics.
 class XrActionController {
  public:
-  explicit XrActionController(XrSessionHost& xr_session_host);
+  XrActionController(BaseView& view, const XrSessionHost& xr_session_host);
 
   // Registers XrActions, suggests interaction profile bindings, and attaches
   // XrActionSets.
@@ -197,7 +197,7 @@ class XrActionController {
       std::optional<absl::string_view> action_set_name = std::nullopt,
       absl::string_view action_name = kDefaultHapticActionName);
 
-  BaseView* view_;
+  BaseView& view_;
   const XrSessionHost& xr_session_host_;
   StringMap<XrActionSetReference> action_set_name_to_xr_action_set_reference_;
   bool have_action_sets_been_attached_ = false;

@@ -49,4 +49,20 @@ void ParticleSystem::Update(const FrameTime& frame_time) {
   emitter_->UpdateParticleSystem(frame_time);
 }
 
+float ParticleSystem::GetEmissionRate() const {
+  return emitter_->GetEmissionRate();
+}
+
+void ParticleSystem::SetEmissionRate(float particles_per_second) {
+  emitter_->SetEmissionRate(particles_per_second);
+}
+
+bool ParticleSystem::IsEmissionPaused() const {
+  return emitter_->IsEmissionPaused();
+}
+
+void ParticleSystem::SetEmissionPaused(bool pause) {
+  emitter_->SetEmissionPaused(pause);
+}
+
 }  // namespace imp

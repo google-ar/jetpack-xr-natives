@@ -142,14 +142,26 @@ class AssetCache : public BaseAssetCache {
     if (unused_asset_keys_.Size() > lru_capacity_) {
       EvictAssets();
     }
+
+    std::vector<AssetHolder> unnamed_to_destroy;
+
     auto itr1 = unnamed_assets_.begin();
     while (itr1 != unnamed_assets_.end()) {
       if (IsUnused(*itr1)) {
-        ClearAssetHolder(*itr1);
+        // Extract the AssetHolder to destroy it safely later. We can't destroy
+        // it immediately because cancelling the Future may cause a chain
+        // reaction of Future::Cancel calls, which could modify the assets_ map
+        // and invalidate the iterator.
+        unnamed_to_destroy.push_back(std::move(*itr1));
         itr1 = unnamed_assets_.erase(itr1);
-        continue;
+      } else {
+        itr1++;
       }
-      itr1++;
+    }
+
+    // Safely trigger cancellations
+    for (auto& holder : unnamed_to_destroy) {
+      ClearAssetHolder(holder);
     }
   }
 
@@ -235,6 +247,8 @@ class AssetCache : public BaseAssetCache {
   // Shrinks the pool of retained assets to lru_capacity_.
   void EvictAssets() {
     int64_t space_remaining = lru_capacity_ - unused_asset_keys_.Size();
+
+    std::vector<AssetHolder> assets_to_destroy;
     for (auto retained_iter = unused_asset_keys_.Begin();
          space_remaining < 0 && retained_iter != unused_asset_keys_.End();) {
       size_t assetkey = *retained_iter;
@@ -243,15 +257,23 @@ class AssetCache : public BaseAssetCache {
 
       if (key_vs_holder_itr != assets_.end() &&
           IsUnused(key_vs_holder_itr->second)) {
-        // Remove asset from retained asset pool and destroy it because the
-        // cache is over capacity.
-        ClearAssetHolder(key_vs_holder_itr->second);
+        // Defer destruction to avoid invalidating the iterator. We can't
+        // destroy immediately because cancelling the Future may cause a chain
+        // reaction of Future::Cancel calls, which could modify the assets_ map
+        // and invalidate the iterator.
+        assets_to_destroy.push_back(std::move(key_vs_holder_itr->second));
+
         assets_.erase(key_vs_holder_itr);
         retained_iter = unused_asset_keys_.Erase(retained_iter);
         space_remaining++;
       } else {
         ++retained_iter;
       }
+    }
+
+    // Safely trigger cancellations
+    for (auto& holder : assets_to_destroy) {
+      ClearAssetHolder(holder);
     }
   }
 

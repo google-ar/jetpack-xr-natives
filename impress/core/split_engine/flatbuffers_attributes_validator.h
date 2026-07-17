@@ -170,6 +170,21 @@ class ApiLevelValidator {
   int32_t max_api_level_;
 };
 
+// A validator that checks that the `unstable_api` attribute is not present
+// unless it is allowed.
+class UnstableApiAttributeValidator {
+ public:
+  explicit UnstableApiAttributeValidator() {}
+
+  absl::Status operator()(
+      const flatbuffers::Vector<
+          flatbuffers::Offset<reflection::KeyValue>>* /*absl_nullable*/  attributes)
+      const;
+
+ private:
+  static constexpr std::string_view kUnstableApiAttrName = "unstable_api";
+};
+
 // Dispatches to the visitor based on the integer type of the field.
 // The visitor is expected to be a class with a template Visit method that
 // takes a single template parameter that is the integer type and is overloaded
@@ -261,6 +276,7 @@ absl::StatusOr<const reflection::Object* /*absl_nullable*/ > GetUnionChildObject
 // Options for the `FlatbuffersAttributesValidator`.
 struct FlatbuffersAttributesValidatorOptions {
   std::optional<int32_t> max_api_level;
+  bool allow_unstable_apis = false;
 };
 
 // Used to validate the flatbuffers objects against the type and fields
@@ -286,6 +302,9 @@ class FlatbuffersAttributesValidator {
     if (options.max_api_level.has_value()) {
       attribute_validators_.push_back(
           ApiLevelValidator{*options.max_api_level});
+    }
+    if (!options.allow_unstable_apis) {
+      attribute_validators_.push_back(UnstableApiAttributeValidator{});
     }
   }
 

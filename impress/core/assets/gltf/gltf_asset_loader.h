@@ -29,6 +29,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "mediapipe/framework/deps/clock.h"
 #include "absl/time/time.h"
 #include "core/assets/gltf/gltf_asset.h"
 #include "core/async/future.h"
@@ -41,7 +42,6 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/view/utils/string_map.h"
-#include "mediapipe/framework/deps/clock.h"
 
 namespace imp {
 

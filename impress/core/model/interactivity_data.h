@@ -88,7 +88,7 @@ struct InteractivityData {
       ConfigurationValue value;
     };
 
-    using ValueData = absl::variant<VariableData, FlowData>;
+    using ValueData = std::variant<VariableData, FlowData>;
 
     std::string type;
     int index = 0;

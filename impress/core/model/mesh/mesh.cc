@@ -140,6 +140,13 @@ MeshRange Mesh::GetMeshDataRange() const {
                              mesh_data_gpu_->GetDescription().index_count)};
 }
 
+MeshDescription Mesh::GetDescription() const {
+  if (parent_mesh_) {
+    return parent_mesh_->GetDescription();
+  }
+  return mesh_data_gpu_->GetDescription();
+}
+
 const Box& Mesh::GetAabb() const { return aabb_; }
 
 Box Mesh::CalculateAabb(MeshData* mesh_data, size_t offset, size_t count) {

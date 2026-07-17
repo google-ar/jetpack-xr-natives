@@ -95,7 +95,8 @@ class IosPlatformCanvasSource::IosScopedCanvas : public ScopedCanvas {
   void DrawRoundedRect(float3 color, float2 corner_radius, const Rect& rect) override;
   void DrawRoundedRect(float4 color, float2 corner_radius, const Rect& rect) override;
   void DrawText(absl::string_view text, float2 pos, const TextOptions& text_options) override;
-  void DrawGlyph(GlyphId glyph, float2 pos, const TextOptions& text_options) override;
+  void DrawGlyph(GlyphId glyph, float2 pos, const TextOptions& text_options,
+                 const TextMetrics* pre_cached_metrics) override;
   void ClearRect(const Rect& rect) override;
 
  private:
@@ -631,7 +632,8 @@ void IosPlatformCanvasSource::IosScopedCanvas::DrawText(absl::string_view text, 
 }
 
 void IosPlatformCanvasSource::IosScopedCanvas::DrawGlyph(GlyphId glyph, float2 pos,
-                                                         const TextOptions& text_options) {
+                                                         const TextOptions& text_options,
+                                                         const TextMetrics* pre_cached_metrics) {
   @autoreleasepool {
     UIFont* text_font = FontFromTextOptions(text_options, source_.pixels_per_dp_);
     UIColor* text_color = [UIColor colorWithRed:text_options.color.x

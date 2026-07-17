@@ -30,6 +30,7 @@
 #include "core/ncsb/node_handle.h"
 #include "core/render_passes/group_to_projection_quad_texture_renderer/group_to_projection_quad_texture_renderer_state.proto.imp.h"
 #include "core/render_passes/texture_pipeline_renderer.h"
+#include "core/render_passes/texture_pipeline_renderer_helper.h"
 #include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
 #include "core/view/utils/frame_time.h"
@@ -37,9 +38,6 @@
 
 namespace imp {
 namespace {
-
-// TODO: Delay initial use of TPR to workaround bug.
-constexpr int kFrameDelayForTPR = 3;
 
 // The suffix of the depth texture used in each rendering pass.
 constexpr char kDepthSuffix[] = "_depth";
@@ -68,6 +66,7 @@ Future<absl::Status> GroupToProjectionQuadTextureRenderer::SetupWithState() {
 void GroupToProjectionQuadTextureRenderer::Update(
     const imp::FrameTime& frame_time) {
   // TODO: Delay initial use of TPR to workaround black screen.
+  static int kFrameDelayForTPR = GetFrameDelayForTPR(GetNode()->GetView());
   static int frame_delay_counter = 0;
   if (texture_pipeline_renderer_.IsValid() &&
       frame_delay_counter++ > kFrameDelayForTPR) {
