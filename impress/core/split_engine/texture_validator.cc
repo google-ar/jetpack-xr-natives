@@ -22,10 +22,12 @@
 #include <cstdint>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "core/split_engine/flatbuffer_utils.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 
@@ -84,12 +86,21 @@ absl::Status TextureValidator::ValidateAddTexturesMessage(
           "Invalid AddTextures message. "
           "Arrays image_params and pixel_buffers must have the same length.");
     }
+    const absl::StatusOr<filament::backend::TextureFormat> texture_format =
+        UnPack(texture->format());
+    if (!texture_format.ok()) {
+      return texture_format.status();
+    }
+    const absl::StatusOr<filament::backend::SamplerType> sampler_type =
+        UnPack(texture->sampler());
+    if (!sampler_type.ok()) {
+      return sampler_type.status();
+    }
 
     if (texture->mips()) {
       // Prevent panic in Filament's FTexture::generateMipmaps:
       // FILAMENT_CHECK_PRECONDITION(mTarget != SamplerType::SAMPLER_3D)
-      if (static_cast<filament::Texture::Sampler>(texture->sampler()) ==
-          filament::backend::SamplerType::SAMPLER_3D) {
+      if (*sampler_type == filament::backend::SamplerType::SAMPLER_3D) {
         return absl::InvalidArgumentError(
             "Invalid AddTextures message. "
             "3D Textures are not mipmappable.");
@@ -97,9 +108,8 @@ absl::Status TextureValidator::ValidateAddTexturesMessage(
 
       // Prevent panic in Filament's FTexture::generateMipmaps:
       // FILAMENT_CHECK_PRECONDITION(formatMipmappable)
-      if (!filament::Texture::isTextureFormatMipmappable(
-              engine, static_cast<filament::backend::TextureFormat>(
-                          texture->format()))) {
+      if (!filament::Texture::isTextureFormatMipmappable(engine,
+                                                         *texture_format)) {
         return absl::InvalidArgumentError(
             "Invalid AddTextures message. Texture format is not mipmappable.");
       }
@@ -108,15 +118,11 @@ absl::Status TextureValidator::ValidateAddTexturesMessage(
     // Prevent panic in Filament's FTexture::setImage:
     // FILAMENT_CHECK_PRECONDITION(!mExternal)
     // mExternal is set to true when the sampler is SAMPLER_EXTERNAL.
-    if (static_cast<filament::Texture::Sampler>(texture->sampler()) ==
-        filament::backend::SamplerType::SAMPLER_EXTERNAL) {
+    if (*sampler_type == filament::backend::SamplerType::SAMPLER_EXTERNAL) {
       return absl::InvalidArgumentError(
           "Invalid AddTextures message. "
           "External textures are not supported.");
     }
-
-    const auto texture_format =
-        static_cast<filament::backend::TextureFormat>(texture->format());
 
     const int num_images = texture->image_params()->size();
     for (int i = 0; i < num_images; ++i) {
@@ -136,18 +142,23 @@ absl::Status TextureValidator::ValidateAddTexturesMessage(
       const android_xr::schemas::ImageParams* image_params =
           texture->image_params()->Get(i);
 
-      const auto pixel_data_type =
-          static_cast<filament::backend::PixelDataType>(image_params->type());
-      const auto pixel_data_format =
-          static_cast<filament::backend::PixelDataFormat>(
-              image_params->format());
+      const absl::StatusOr<filament::backend::PixelDataType> pixel_data_type =
+          UnPack(image_params->type());
+      if (!pixel_data_type.ok()) {
+        return pixel_data_type.status();
+      }
+      const absl::StatusOr<filament::backend::PixelDataFormat>
+          pixel_data_format = UnPack(image_params->format());
+      if (!pixel_data_format.ok()) {
+        return pixel_data_format.status();
+      }
 
       // Prevent panic in Filament's FTexture::setImage:
       // FILAMENT_CHECK_PRECONDITION(p.type == PixelDataType::COMPRESSED ||
       //     validatePixelFormatAndType(mFormat, p.format, p.type))
-      if (pixel_data_type != filament::backend::PixelDataType::COMPRESSED &&
+      if (*pixel_data_type != filament::backend::PixelDataType::COMPRESSED &&
           !filament::Texture::validatePixelFormatAndType(
-              texture_format, pixel_data_format, pixel_data_type)) {
+              *texture_format, *pixel_data_format, *pixel_data_type)) {
         return absl::InvalidArgumentError(
             "Invalid AddTextures message. "
             "Invalid combination of format and type");
@@ -189,9 +200,9 @@ absl::Status TextureValidator::ValidateAddTexturesMessage(
                                  : ValueForLevel(i, texture->width());
       const int32_t height = ValueForLevel(i, texture->height());
       const size_t bpp =
-          PBD::computeDataSize(pixel_data_format, pixel_data_type, 1, 1, 1);
+          PBD::computeDataSize(*pixel_data_format, *pixel_data_type, 1, 1, 1);
       const size_t bpr =
-          PBD::computeDataSize(pixel_data_format, pixel_data_type, stride, 1,
+          PBD::computeDataSize(*pixel_data_format, *pixel_data_type, stride, 1,
                                image_params->alignment());
       const size_t bpl = bpr * height;
       // Prevent panic in Filament's FTexture::setImage:

@@ -21,8 +21,8 @@
 #include <optional>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/status/status.h"
-#include "absl/types/optional.h"
 #if defined(__ANDROID__)
 #include "filament/filament/include/filament/Fence.h"
 #endif  // defined(__ANDROID__)
@@ -106,6 +106,18 @@ class TexturePipelineRenderer : public Component {
   };
 
   Future<absl::Status> Setup();
+
+  // Creates TexturePipelineRenderer with the given `state`, but also attach
+  // additional color attachments to work around the issue in (broken link).
+  // TODO: Remove this once Qualcomm driver no longer requires
+  // such hack.
+  ABSL_DEPRECATED(
+      "This Setup is specifically to work around Qualcomm driver issue "
+      "b/520148138")
+  Future<absl::Status> Setup(TexturePipelineRendererState state,
+                             int additional_color_attachments_count,
+                             TexturePipelineRendererState::Texture::Format
+                                 additional_color_attachments_format);
 
   // Enables or disables the given pass. `pass_index` must be less than the
   // number of passes, otherwise this is a no-op.
@@ -219,6 +231,14 @@ class TexturePipelineRenderer : public Component {
     bool use_main_view_camera_projection_matrix = true;
 
     std::optional<render_settings::ViewRenderSettings> render_settings;
+
+    // Additional empty color texture attached to the render pass for
+    // SetupWithAdditionalColorAttachments(). This is to workaround the issue in
+    // (broken link).
+    // TODO: Remove this once Qualcomm driver no longer requires
+    // such hack.
+    std::vector<TextureRegistry::ScopedTextureRegistration>
+        additional_color_texture_registrations;
   };
 
   // (Re)initializes the textures and view render targets to the current
@@ -226,6 +246,21 @@ class TexturePipelineRenderer : public Component {
   absl::Status InitializeTextures(
       const TexturePipelineRendererState::Pass& pass,
       RuntimePass& runtime_pass);
+
+  // Marks the additional color attachments for deletion. This is to workaround
+  // (broken link).
+  // TODO: Remove this once Qualcomm driver no longer requires
+  // such hack.
+  void MarkAdditionalColorAttachmentsForDeletion(RuntimePass& runtime_pass);
+
+  // Creates and attaches additional color attachments to workaround
+  // (broken link).
+  // TODO: Remove this once Qualcomm driver no longer requires
+  // such hack.
+  absl::Status CreateAndAttachAdditionalColorAttachments(
+      const TexturePipelineRendererState::Pass& pass, RuntimePass& runtime_pass,
+      filament::RenderTarget::Builder& render_target_builder,
+      uint2 texture_size, bool is_multiview, size_t stereo_depth);
 
   void RenderPasses(filament::Renderer* filament_renderer);
 
@@ -250,6 +285,17 @@ class TexturePipelineRenderer : public Component {
 
   // Optional projection quad. See SetProjectionQuad() for more information.
   std::optional<TexturePipelineRendererProjectionQuad> projection_quad_;
+
+  // Specifies the number of additional color attachments to create, and their
+  // format. This is to be used with the Setup(state,
+  // additional_color_attachments_count, additional_color_attachments_format) to
+  // work around the issue in (broken link).
+  // TODO: Remove this once Qualcomm driver no longer requires
+  // such hack.
+  int additional_color_attachments_count_ = 0;
+  TexturePipelineRendererState::Texture::Format
+      additional_color_attachments_format_ =
+          TexturePipelineRendererState::Texture::RGBA8;
 
  public:
   // PrimitiveShapeRenderer needs to be dependent since it might be using

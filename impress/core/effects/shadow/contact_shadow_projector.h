@@ -25,7 +25,9 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/assets/asset_ptr.h"
+#include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
+#include "core/camera/camera_component.h"
 #include "core/effects/shadow/contact_shadow_projector_state.proto.imp.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
@@ -34,9 +36,9 @@
 #include "core/ncsb/component_system.h"
 #include "core/ncsb/isf_info.h"
 #include "core/ncsb/node_handle.h"
+#include "core/render/mesh_renderer.h"
 #include "core/render_passes/texture_pipeline_renderer.h"
-#include "core/view/framework/camera/camera_component.h"
-#include "core/view/framework/render/mesh_renderer.h"
+#include "core/view/utils/frame_time.h"
 #include "core/view/utils/string_map.h"
 
 namespace imp {
@@ -87,7 +89,7 @@ class ContactShadowProjector : public Component {
 
   void Cleanup();
 
-  void Update();
+  void Update(const FrameTime& frame_time);
 
   Future<absl::Status> Setup();
 
@@ -101,6 +103,10 @@ class ContactShadowProjector : public Component {
 
  private:
   Future<absl::Status> SetupProjector();
+  void UpdateProjectorClipFromWorld();
+
+  // Returns true if the projector is static.
+  bool IsStatic() const;
 
   ComponentHandle<MeshRenderer> DrawRenderPassToCameraQuad(
       std::string blur_pass_name, float2 blur_axis,

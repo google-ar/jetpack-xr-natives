@@ -35,7 +35,8 @@ material {
     ],
     shadingModel : unlit,
     blending : transparent,
-    depthWrite : false
+    depthWrite : false,
+    featureLevel : 0
 }
 
 vertex {

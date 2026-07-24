@@ -38,25 +38,6 @@ Java_androidx_xr_arcore_openxr_OpenXrAugmentedObject_nativeGetAugmentedObjectSta
   return androidx::xr::openxr::CreateJavaAugmentedObjectState(env, object);
 }
 
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrAugmentedObject_nativeCreateAnchorForObject(
-    JNIEnv* env, jclass /*clazz*/, jlong object_id, jobject pose,
-    jlong monotonic_time_ns) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
-  XrPosef xr_pose = androidx::xr::openxr::ConvertToXrPosef(env, pose);
-  XrSpace anchor;
-  androidx::xr::openxr::OpenXrManager::CreateAnchorResult result =
-      xr_manager.CreateAnchorForObject(object_id,
-                                       /*object=*/nullptr,
-                                       static_cast<int64_t>(monotonic_time_ns),
-                                       xr_pose, &anchor);
-  if (result !=
-      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
-    return static_cast<jlong>(result);
-  }
-  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
-}
 
 }  // extern "C"

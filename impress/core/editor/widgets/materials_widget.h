@@ -31,6 +31,7 @@ class MaterialsWidget : public editor::Widget, public imp::Rememberer {
   explicit MaterialsWidget(BaseView& base_view);
   void DrawImGui() override;
   absl::string_view GetName() const override { return "Materials"; }
+  bool IsCloseable() const override { return false; }
   bool HasContent() const override;
 
  private:

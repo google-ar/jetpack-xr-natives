@@ -42,6 +42,7 @@ class RuntimeMaterialCompiler {
  public:
   using Platform = schemas::Platform;
   using TargetApi = schemas::TargetApi;
+  using VariantFilter = schemas::VariantFilter;
 
   RuntimeMaterialCompiler(BaseView& view,
                           std::unique_ptr<MaterialCompilerClient> native_client,
@@ -63,8 +64,8 @@ class RuntimeMaterialCompiler {
   // Compiles the given source material (.mat) and returns the raw compiled
   // bytes. Expects the material input to be already inlined.
   Future<std::vector<uint8_t>> CompileMaterialToBytes(
-      absl::string_view source_material_string, Platform platform,
-      TargetApi target_api);
+      absl::string_view source_material_string,
+      const MaterialCompilerConfig& config);
 
  protected:
   std::unique_ptr<MaterialCompilerClient> native_client_;

@@ -23,6 +23,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 
 #include "absl/strings/string_view.h"
@@ -203,6 +204,9 @@ struct ScopedCanvas {
     bool force_non_separable = false;
 
     std::optional<TextAndFontMetrics> precomputed_metrics = std::nullopt;
+
+    // The locale of the text to render.
+    std::optional<std::string> locale = std::nullopt;
   };
 
   // The inputs necessary to measure text.

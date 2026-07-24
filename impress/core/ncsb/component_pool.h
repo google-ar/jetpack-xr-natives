@@ -17,22 +17,18 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_NCSB_COMPONENT_POOL_H_
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_COMPONENT_POOL_H_
 
-#include <memory>
+#include <cstddef>
 #include <optional>
-#include <type_traits>
 #include <utility>
 
-#include "filament/libs/utils/include/utils/Entity.h"
-#include "core/common/base_pool_allocator.h"
 #include "core/common/pool_allocator.h"
 #include "core/common/trace.h"
 #include "core/config.h"
 #include "core/ncsb/base_component_pool.h"
+#include "core/ncsb/component.h"
 #include "core/ncsb/component_id.h"
-#include "core/ncsb/component_traits.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
-#include "core/view/utils/frame_time.h"
 
 #if IMP_RUNTIME(DEV)
 #include "core/common/type_traits.h"
@@ -74,7 +70,9 @@ class ComponentPool : public BaseComponentPool {
   template <typename Fn>
   void UpdateEachUsingAllocator(Fn&& fn);
 
-  std::optional<PoolAllocator<T>> allocator_;
+  using PoolAllocator = PoolAllocator<T, true, 4, kNumSubsets>;
+
+  std::optional<PoolAllocator> allocator_;
 };
 
 template <typename T>
@@ -117,6 +115,10 @@ void ComponentPool<T>::Cleanup(Component& component) noexcept {
 template <typename T>
 void ComponentPool<T>::NotifyActive(Component* component,
                                     bool active) noexcept {
+  if (allocator_) {
+    allocator_->SetSubsetBit(kSubsetActive, component, active);
+  }
+
   T* casted_component = static_cast<T*>(component);
   casted_component->SetActiveFlagInternal(active);
 
@@ -137,7 +139,7 @@ template <typename T>
 Component* ComponentPool<T>::Emplace(NodeHandle node,
                                      ComponentKey* out_key) noexcept {
   if (allocator_) {
-    using AllocateResult = typename PoolAllocator<T>::AllocateResult;
+    using AllocateResult = typename PoolAllocator::AllocateResult;
     AllocateResult result = allocator_->Allocate();
     *out_key = result.key;
     return result.ptr;
@@ -169,43 +171,30 @@ void ComponentPool<T>::UpdateEach(Fn&& fn) {
 template <typename T>
 template <typename Fn>
 void ComponentPool<T>::ForEachUsingAllocator(Fn&& fn) {
-  allocator_->ForEach([fn = std::forward<Fn>(fn)](T* component) mutable {
-    if (!component->IsRunningAsyncSetup()) {
-      fn(component);
-    }
-  });
+  allocator_->template ForEach<kSubsetReady>(std::forward<Fn>(fn));
 }
 
 template <typename T>
 template <typename Fn>
 void ComponentPool<T>::UpdateEachUsingAllocator(Fn&& fn) {
-  // Logic intentionally duplicated from
-  // ComponentPoolWithUpdater::UpdateUsingAllocator because the compiler
-  // optimizes the code better when the logic is explicitly inlined in this
-  // function.
   // LINT.IfChange
-  allocator_->ForEach([fn = std::forward<Fn>(fn), this](T* component) {
+  constexpr size_t kSubset = (T::kUpdateMode == T::UpdateMode::kAlwaysUpdate)
+                                 ? kSubsetReady
+                                 : kSubsetActive;
 #if IMP_RUNTIME(DEV)
-    // Skip components that should not be updated in editor draft/pause mode.
-    if constexpr (!component_traits::kShouldRunInEditMode<T>) {
-      if (editor::ShouldNotUpdate(this->GetView().GetRegistry()) &&
-          !component->IsEditorStaging()) {
-        return;
-      }
-    }
-#endif  // IMP_RUNTIME(DEV)
-    if constexpr (T::kUpdateMode == T::UpdateMode::kAlwaysUpdate) {
-      // Skip components where async setup is still running.
-      if (!component->IsRunningAsyncSetup()) {
+  allocator_->template ForEach<kSubset>(
+      [fn = std::forward<Fn>(fn), this](T* component) {
+        if constexpr (!component_traits::kShouldRunInEditMode<T>) {
+          if (editor::ShouldNotUpdate(this->GetView().GetRegistry()) &&
+              !component->IsEditorStaging()) {
+            return;
+          }
+        }
         fn(component);
-      }
-    } else {
-      // Skip components where async setup is still running.
-      if (component->IsActive()) {
-        fn(component);
-      }
-    }
-  });
+      });
+#else
+  allocator_->template ForEach<kSubset>(std::forward<Fn>(fn));
+#endif
   // LINT.ThenChange(//depot/google3/third_party/impress/core/ncsb/component_pool_with_updater.h)
 }
 

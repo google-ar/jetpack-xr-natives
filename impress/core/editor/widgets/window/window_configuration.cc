@@ -67,10 +67,23 @@ bool WindowConfiguration::IsWindowVisible(absl::string_view window_name) const {
 }
 
 void WindowConfiguration::SetWindowVisibility(absl::string_view window_name,
-                                              WindowVisibility visibility) {
+                                              WindowVisibility visibility,
+                                              bool request_focus) {
   if (auto itr = window_infos_.find(window_name); itr != window_infos_.end()) {
     itr->second->current_visibility = visibility;
+    if (request_focus) {
+      itr->second->focus_requested = true;
+    }
   }
+}
+
+bool WindowConfiguration::PopFocusRequest(absl::string_view window_name) {
+  if (auto itr = window_infos_.find(window_name); itr != window_infos_.end()) {
+    bool requested = itr->second->focus_requested;
+    itr->second->focus_requested = false;
+    return requested;
+  }
+  return false;
 }
 
 void WindowConfiguration::RestoreDefault() {

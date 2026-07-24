@@ -109,22 +109,51 @@ void TransformWidgetAspectRotate::CreateCollider(Box bounds) {
 }
 
 void TransformWidgetAspectRotate::UpdateWidgetTransform() {
-  if (!state_.camera_facing) return;
-  // We want the node's Y-axis to face the camera.
-  // The camera's world rotation aligns its -Z with the view direction.
-  // To align the node's +Y with the camera's +Z (back vector), we rotate the
-  // camera's rotation by 90 degrees around the X-axis.
-  const quatf cam_rot = GetCamera()->GetNode()->GetWorldRotation();
-  const quatf align_y =
-      quatf::fromAxisAngle(float3(1.0f, 0.0f, 0.0f), M_PI / 2.0f);
-  GetNode()->SetWorldRotation(cam_rot * align_y);
+  if (state_.camera_facing.Value()) {
+    // We want the node's Y-axis to face the camera.
+    // The camera's world rotation aligns its -Z with the view direction.
+    // To align the node's +Y with the camera's +Z (back vector), we rotate the
+    // camera's rotation by 90 degrees around the X-axis.
+    const quatf cam_rot = GetCamera()->GetNode()->GetWorldRotation();
+    const quatf align_y =
+        quatf::fromAxisAngle(float3(1.0f, 0.0f, 0.0f), M_PI / 2.0f);
+    GetNode()->SetWorldRotation(cam_rot * align_y);
+    return;
+  }
+
+  // If using world space or rotating multiple nodes, use the world axis.
+  if (!use_local_space_ || !HasOneNodeSelected()) {
+    GetNode()->GetParent()->SetWorldRotation(kIdentityQuatf);
+    return;
+  }
+
+  // If rotating a single node in local space, align the aspect with the node.
+  GetNode()->GetParent()->SetWorldRotation(
+      selected_nodes_[0]->GetWorldRotation());
 }
 
 float3 TransformWidgetAspectRotate::GetAxis() const {
-  if (!state_.camera_facing) return state_.axis.Value();
+  if (state_.camera_facing.Value()) {
+    // For camera-facing rotation, the axis points towards the camera.
+    return -GetCamera()->GetNode()->GetWorldForward();
+  }
 
-  // For camera-facing rotation, the axis points towards the camera.
-  return -GetCamera()->GetNode()->GetWorldForward();
+  // If using world space or rotating multiple nodes, use the world axis.
+  if (!use_local_space_ || !HasOneNodeSelected()) {
+    return GetAxisFromState();
+  }
+
+  // If dragging, base the axis on the initial rotation of the node.
+  if (IsDragging() && !initial_node_transform_data_.empty()) {
+    return initial_node_transform_data_[0].rotation_start * GetAxisFromState();
+  }
+
+  // Otherwise, base it on the node's current world rotation.
+  return selected_nodes_[0]->GetWorldRotation() * GetAxisFromState();
+}
+
+float3 TransformWidgetAspectRotate::GetAxisFromState() const {
+  return state_.axis.Value();
 }
 
 const AssetDefinition& TransformWidgetAspectRotate::GetMaterialAsset() const {
@@ -154,7 +183,6 @@ void TransformWidgetAspectRotate::UpdateAspect(
   // The difference between these two angles is the angle to rotate to.
   const float angle = angle_start - angle_current;
 
-  // TODO: support local mode.
   // Quaternion representing the rotation around the selected axis.
   const quatf delta_rot = quatf::fromAxisAngle(GetAxis(), angle);
 

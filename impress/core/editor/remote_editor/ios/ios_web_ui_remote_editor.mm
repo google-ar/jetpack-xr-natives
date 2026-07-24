@@ -32,7 +32,6 @@
 #include "core/view/view_events.h"
 #include "core/window/filament_host.h"
 
-
 namespace imp::window::ios {
 namespace {
 // Helper template to allow overloading lambdas for std::visit.
@@ -148,34 +147,16 @@ void IosWebUiRemoteEditor::OnWebUiStart() {
             video_writer_->WriteFrame();
           }
         });
-
-    view_paused_connection_ =
-        view_.GetDispatcher().Connect([this](const imp::ViewPausedEvent& event) {
-          if (video_writer_) {
-            static_cast<void>(video_writer_->Close());
-          }
-          ClearConnections();
-        });
-
-    view_resumed_connection_ =
-        view_.GetDispatcher().Connect([this](const imp::ViewResumedEvent& event) {
-          if (video_writer_) {
-            if (auto status = video_writer_->Open(kDefaultDimensions); !status.ok()) {
-              IMP_LOG(imp::ERROR) << "Failed to reopen video writer: " << status;
-            }
-          }
-        });
   }
 }
 
 void IosWebUiRemoteEditor::OnWebUiStop() {
   processing_input_connection_.Disconnect();
   write_frame_connection_.Disconnect();
-  view_paused_connection_.Disconnect();
-  view_resumed_connection_.Disconnect();
   if (video_writer_) {
     static_cast<void>(video_writer_->Close());
   }
+  ClearConnections();
 }
 
 }  // namespace imp::window::ios

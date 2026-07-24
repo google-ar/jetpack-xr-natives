@@ -42,6 +42,18 @@ cc_library(
 )
 
 cc_library(
+    name = "editor_settings",
+    hdrs = [
+        "editor_settings.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/editor/common:notifying_property",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "editor",
     hdrs = ["editor.h"],
     copts = imp_google3_copts(),
@@ -49,11 +61,33 @@ cc_library(
     deps = [
         ":editor_info",
         ":editor_plugin",
+        ":editor_settings",
         "//core/assets/gltf:gltf_asset",
         "//core/camera",
         "//core/geometry/shapes",
         "//core/ncsb",
         "@com_google_absl//absl/container:flat_hash_set",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "editor_settings_storage",
+    srcs = ["editor_settings_storage.cc"],
+    hdrs = ["editor_settings_storage.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":editor_settings",
+        "//core/common:platform_storage_interface",
+        "//core/editor/common:notifying_property",
+        "//core/editor/components:grid",
+        "//core/editor/widgets:input_settings_widget_constants",
+        "//core/editor/widgets:settings_widget_constants",
+        "//core/editor/widgets:visualize_bounds",
+        "//core/editor/widgets:visualize_colliders",
+        "//core/editor/widgets:visualize_origins",
+        "@com_google_absl//absl/strings",
     ],
     alwayslink = 1,
 )
@@ -78,6 +112,8 @@ cc_library(
         ":editor_info",
         ":editor_input_handler",
         ":editor_plugin",
+        ":editor_settings",
+        ":editor_settings_storage",
         ":editor_style",
         ":events",
         ":file_loader_helper",
@@ -97,6 +133,7 @@ cc_library(
         "//core/common:platform_storage_interface",
         "//core/common:registry",
         "//core/common:robin_map",
+        "//core/editor/common:notifying_property",
         "//core/editor/components:camera_rotate",
         "//core/editor/components:camera_translate",
         "//core/editor/components:camera_zoom",
@@ -118,12 +155,14 @@ cc_library(
         "//core/editor/widgets:event_injector",
         "//core/editor/widgets:filament_view_settings_widget",
         "//core/editor/widgets:file_drag_and_drop",
+        "//core/editor/widgets:gltf_asset_details_widget",
         "//core/editor/widgets:hierarchy",
         "//core/editor/widgets:input_settings_widget_constants",
         "//core/editor/widgets:material_editor_widget",
         "//core/editor/widgets:materials_widget",
         "//core/editor/widgets:node_details",
         "//core/editor/widgets:settings_widget",
+        "//core/editor/widgets:settings_widget_constants",
         "//core/editor/widgets:toggle_camera",
         "//core/editor/widgets:transform",
         "//core/editor/widgets:vertex_select_widget",

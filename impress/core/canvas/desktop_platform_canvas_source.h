@@ -143,6 +143,9 @@ class DesktopPlatformCanvasSource : public PlatformCanvasSource {
   sk_sp<FontCollection> FontCollectionFromTextOptions(
       const ScopedCanvas::TextOptions& text_options);
 
+  sk_sp<SkTypeface> GetTypeface(const ScopedCanvas::TextOptions& text_options)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(paragraph_mutex_);
+
   // Creates TextStyle from TextOptions which specifies font properties and
   // coloring.
   skia::textlayout::TextStyle CreateTextStyle(

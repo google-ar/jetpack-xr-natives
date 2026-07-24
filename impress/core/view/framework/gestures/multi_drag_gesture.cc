@@ -50,13 +50,13 @@ MultiDragGesture::CreateFn MultiDragGesture::GetCreateFunction(
                                   absl::Span<const MultiDragGesture> gestures)
           -> std::optional<MultiDragGesture> {
         if (pointer_hit.event.Type() != PointerEventType::kDown) {
-          return absl::nullopt;
+          return std::nullopt;
         }
 
         std::vector<Pointer::Id> pointer_ids;
         for (const auto& pointer : pointer_hit.event.GetPointers()) {
           if (pointer_utils->IsPointerRetained(pointer.id)) {
-            return absl::nullopt;
+            return std::nullopt;
           }
           pointer_ids.push_back(pointer.id);
         }
@@ -65,7 +65,7 @@ MultiDragGesture::CreateFn MultiDragGesture::GetCreateFunction(
                        pointer_ids.size() <= kMaxPointersPerMultiDrag
                    ? std::optional<MultiDragGesture>(MultiDragGesture(
                          dispatcher, pointer_utils, pointer_hit, pointer_ids))
-                   : absl::nullopt;
+                   : std::nullopt;
       };
 }
 
@@ -234,7 +234,7 @@ std::optional<float2> MultiDragGesture::TryUpdateCentroidPosition(
   for (const auto& pointer_id : pointer_ids_) {
     int move_idx = event.GetIndexForChangedPointerId(pointer_id);
     if (move_idx == -1) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     total_position += event.GetChangedPointer(move_idx).point;
@@ -242,7 +242,7 @@ std::optional<float2> MultiDragGesture::TryUpdateCentroidPosition(
 
   float2 centroid_new_position = total_position / pointer_ids_.size();
   if (AlmostEqual(centroid_new_position, centroid_current_position_)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   float2 centroid_delta = centroid_new_position - centroid_current_position_;

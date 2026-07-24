@@ -93,6 +93,7 @@ cc_library(
         "utils/include/utils/Mutex.h",
         "utils/include/utils/NameComponentManager.h",
         "utils/include/utils/PagedArenaBitset.h",
+        "utils/include/utils/PagedArenaBitsetPool.h",
         "utils/include/utils/Panic.h",
         "utils/include/utils/Path.h",
         "utils/include/utils/PrivateImplementation.h",
@@ -230,6 +231,7 @@ cc_library(
         "utils/src/Log.cpp",
         "utils/src/NameComponentManager.cpp",
         "utils/src/PagedArenaBitset.cpp",
+        "utils/src/PagedArenaBitsetPool.cpp",
         "utils/src/Panic.cpp",
         "utils/src/Path.cpp",
         "utils/src/Profiler.cpp",
@@ -292,6 +294,7 @@ cc_library(
     deps = [
         ":math_hdrs",
         ":utils_hdrs",
+        "@robin_map",
         "@third_party//filament/filament/backend:driver_enums",
     ],
     alwayslink = 1,

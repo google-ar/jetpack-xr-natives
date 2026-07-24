@@ -13,11 +13,12 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load(
     "//build_tools:imp.bzl",
     "if_android",
     "if_ios",
+    "imp_defines",
+    "imp_google3_copts",
 )
 
 package(
@@ -29,19 +30,6 @@ package(
 
 licenses(["notice"])
 
-# Backward-compatible redirect for remote_editor_jni.
-cc_library(
-    name = "remote_editor_jni",
-    deps = ["//core/editor/remote_editor/android:remote_editor_jni"],
-    alwayslink = 1,
-)
-
-# Backward-compatible redirect for ios_web_ui_remote_editor.
-objc_library(
-    name = "ios_web_ui_remote_editor",
-    deps = ["//core/editor/remote_editor/ios:ios_web_ui_remote_editor"],
-)
-
 cc_library(
     name = "remote_editor_renderer",
     srcs = [
@@ -50,29 +38,20 @@ cc_library(
     hdrs = [
         "remote_editor_renderer.h",
     ],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
     linkstatic = 1,
     deps = [
-        "//core/assets",
-        "//core/assets/material:material_asset",
-        "//core/async:future",
         "//core/common:rememberer",
-        "//core/editor/components:world_space_editor_ui_assets",
-        "//core/materials",
-        "//core/math",
         "//core/ncsb",
-        "//core/render",
-        "//core/render:primitive_shape_renderer",
-        "//core/render:primitive_shape_renderer_state_cc_proto",
         "//core/view:base_view",
-        "//core/view/framework",
+        "//core/view:view_events",
         "//core/view/utils:frame_time",
         "//core/window:filament_host",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
+        "//core/window:imgui_renderer",
         "@com_google_absl//absl/time",
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
-        "@third_party//filament/libs:utils_hdrs",
     ],
     alwayslink = 1,
 )
@@ -91,7 +70,9 @@ cc_library(
         "//core/common:rememberer",
         "//core/editor:editor_info",
         "//core/editor/layout",
+        "//core/ncsb",
         "//core/view:base_view",
+        "//core/view:view_events",
     ],
     alwayslink = 1,
 )
@@ -121,6 +102,7 @@ cc_library(
         "//core/editor:editor_constants",
         "//core/editor:editor_info",
         "//core/editor:widget_ui_system",
+        "//core/editor/components:world_space_editor_ui",
         "//core/editor/components:world_space_editor_ui_assets",
         "//core/editor/layout",
         "//core/ncsb",

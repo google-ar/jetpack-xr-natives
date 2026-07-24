@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include "downcast.h"
 #include "FTrsTransformManager.h"
 
-#include "filament/libs/utils/include/utils/Log.h"
+#include <gltfio/TrsTransformManager.h>
 
-#include "downcast.h"
-#include "gltfio/TrsTransformManager.h"
+#include "filament/libs/utils/include/utils/Log.h"
 
 using namespace utils;
 

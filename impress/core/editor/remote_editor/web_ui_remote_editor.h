@@ -19,6 +19,7 @@
 
 #include "core/editor/remote_editor/remote_editor.h"
 #include "core/editor/remote_editor/remote_editor_info.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -43,6 +44,10 @@ class WebUiRemoteEditor : public RemoteEditor {
   virtual void OnWebUiStop() {}
 
   RemoteEditorInfo::RemoteUiConfig config_;
+
+ private:
+  Dispatcher::ScopedConnection view_paused_connection_;
+  Dispatcher::ScopedConnection view_resumed_connection_;
 };
 
 }  // namespace imp::editor

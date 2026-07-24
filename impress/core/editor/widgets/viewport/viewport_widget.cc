@@ -66,34 +66,64 @@ void ViewportWidget::DrawImGui() {
 
   if (viewport_panel_size.x <= 0 || viewport_panel_size.y <= 0) return;
 
+  const bool isRemoteScreen =
+      editor_.GetDisplayMode() == EditorInfo::DisplayMode::kRemoteScreen;
+
   const float2 pixel_ratio = editor::GetPhysicalPixelRatio(view_);
 
-  const uint2 target_size = {
-      static_cast<uint32_t>(viewport_panel_size.x * pixel_ratio.x),
-      static_cast<uint32_t>(viewport_panel_size.y * pixel_ratio.y)};
+  ImVec2 image_size = viewport_panel_size;
+  uint2 target_size;
+
+  if (isRemoteScreen) {
+    const uint2 device_size = view_.GetHost()->GetDimensions();
+    target_size = view_.GetHost()->GetPixelDimensions();
+    if (device_size.y > 0) {
+      const float device_aspect =
+          static_cast<float>(device_size.x) / static_cast<float>(device_size.y);
+      const float panel_aspect = viewport_panel_size.x / viewport_panel_size.y;
+
+      if (panel_aspect > device_aspect) {
+        image_size.x = viewport_panel_size.y * device_aspect;
+      } else {
+        image_size.y = viewport_panel_size.x / device_aspect;
+      }
+    }
+
+#if IMP_RUNTIME(DEV)
+    view_.SetSizeOverride(std::nullopt);
+#endif
+
+    const ImVec2 offset = ImVec2((viewport_panel_size.x - image_size.x) * 0.5f,
+                                 (viewport_panel_size.y - image_size.y) * 0.5f);
+    ImGui::SetCursorPos(ImVec2(ImGui::GetCursorPosX() + offset.x,
+                               ImGui::GetCursorPosY() + offset.y));
+  } else {
+    target_size = {static_cast<uint32_t>(image_size.x * pixel_ratio.x),
+                   static_cast<uint32_t>(image_size.y * pixel_ratio.y)};
+
+#if IMP_RUNTIME(DEV)
+    // SetSizeOverride uses logical pixels instead of physical pixels.
+    view_.SetSizeOverride(uint2{static_cast<uint32_t>(viewport_panel_size.x),
+                                static_cast<uint32_t>(viewport_panel_size.y)});
+#endif
+  }
 
   viewport_render_target_->SetSize(target_size);
-#if IMP_RUNTIME(DEV)
-  // SetSizeOverride uses logical pixels instead of physical pixels.
-  view_.SetSizeOverride(uint2{static_cast<uint32_t>(viewport_panel_size.x),
-                              static_cast<uint32_t>(viewport_panel_size.y)});
-#endif
 
   // Must get this value BEFORE drawing the image or it will be incorrect.
   // If this value is incorrect, input coords will not be transformed properly.
   const ImVec2 screen_pos = ImGui::GetCursorScreenPos();
 
-  ImGui::Image(viewport_render_target_->GetColorTexture(), viewport_panel_size,
-               kUv0, kUv1);
+  ImGui::Image(viewport_render_target_->GetColorTexture(), image_size, kUv0,
+               kUv1);
 
   HandleAssetDragDrop(screen_pos);
 
   // Update the viewport rect in the editor so input can be correctly
   // transformed.
-  const float2 center = {screen_pos.x + viewport_panel_size.x * 0.5f,
-                         screen_pos.y + viewport_panel_size.y * 0.5f};
-  const float2 half_extent = {viewport_panel_size.x * 0.5f,
-                              viewport_panel_size.y * 0.5f};
+  const float2 center = {screen_pos.x + image_size.x * 0.5f,
+                         screen_pos.y + image_size.y * 0.5f};
+  const float2 half_extent = {image_size.x * 0.5f, image_size.y * 0.5f};
   editor_.SetViewportRect(Rect{center, half_extent});
 }
 
@@ -115,15 +145,20 @@ void ViewportWidget::HandleAssetDragDrop(const ImVec2 screen_pos) {
 }
 
 bool ViewportWidget::HasContent() const {
-  // Do not use the viewport widget in WorldspaceUI or Remote Editor mode.
-  window::FilamentHost::DevModeExtension* dev_mode_extension =
-      view_.GetHost()->TryGetExtension();
-  const bool isWorldspaceUI =
-      dev_mode_extension && dev_mode_extension->HasRenderTarget();
   const bool isRemoteScreen =
       editor_.GetDisplayMode() == EditorInfo::DisplayMode::kRemoteScreen;
 
-  return !isWorldspaceUI && !isRemoteScreen;
+  // Do not use the viewport widget in WorldspaceUI.
+  // Note: Remote Editor mode also sets HasRenderTarget to true, but we want
+  // to display the viewport in that case.
+  // TODO: Replace with proper API to detect the mode we're in.
+  window::FilamentHost::DevModeExtension* dev_mode_extension =
+      view_.GetHost()->TryGetExtension();
+  const bool isWorldspaceUI = dev_mode_extension &&
+                              dev_mode_extension->HasRenderTarget() &&
+                              !isRemoteScreen;
+
+  return !isWorldspaceUI;
 }
 
 }  // namespace imp::editor

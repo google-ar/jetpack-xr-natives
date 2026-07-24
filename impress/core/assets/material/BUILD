@@ -64,6 +64,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:filabridge_hdrs",
     ],
     alwayslink = 1,
 )

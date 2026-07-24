@@ -67,6 +67,20 @@ cc_library(
     alwayslink = 1,
 )
 
+# Emission Shapes, manages where particles are created relative to the emitter node.
+cc_library(
+    name = "emission_shape",
+    hdrs = [
+        "emission_shape.h",
+    ],
+    deps = [
+        "//core/math",
+        "//core/ncsb",
+        "@com_google_absl//absl/time",
+    ],
+    alwayslink = 1,
+)
+
 # Particle Behavior, manages the behavior of particles in the system.
 cc_library(
     name = "particle_behavior_impl",
@@ -77,11 +91,13 @@ cc_library(
         "particle_behavior.h",
     ],
     deps = [
+        ":emission_shape",
         "//core/math",
         "//core/ncsb",
         "//core/particle:particle_behavior",
         "//core/particle:particle_emitter_state_proto_cc",
         "//core/particle:particle_instance",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -128,6 +144,7 @@ test_suite(
     name = "all_particle_impl_tests",
     tests = [
         ":data_provider_test",
+        ":emission_shape_test",
         ":particle_behavior_impl_test",
         ":particle_emitter_test",
         ":particle_format_test",

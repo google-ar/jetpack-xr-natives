@@ -304,6 +304,9 @@ OptionalWithDefault<T, DefaultValuePointer>::operator=(
 template <typename T, const auto* DefaultValuePointer>
 constexpr OptionalWithDefault<T, DefaultValuePointer>::operator bool()
     const noexcept {
+  static_assert(!std::is_same_v<T, bool>,
+                "Checking OptionalWithDefault<bool> by implicit conversion to "
+                "bool is error-prone. Use .HasValue() instead.");
   return HasValue();
 }
 

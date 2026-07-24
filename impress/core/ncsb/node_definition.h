@@ -103,6 +103,12 @@ class Node final {
   // Returns the name of the node, or the empty string if unnamed.
   absl::string_view GetName() const;
 
+  // Returns the name of the node as a null-terminated C-style string.
+  //
+  // GetName() is preferred, but this is available for compatibility with
+  // C-style APIs.
+  const char* GetNameCStr() const;
+
   // Sets the name of the node.
   void SetName(absl::string_view name);
 

@@ -379,7 +379,7 @@ void SplitEngineSerializerImpl::SetGeometryAt(
     filament::backend::PrimitiveType type, VertexBuffer* vertices,
     IndexBuffer* indices, size_t offset, size_t count) {
   const ResourceId vertex_buffer_id = GetId(vertices);
-  const ResourceId index_buffer_id = GetId(indices);
+  const ResourceId index_buffer_id = indices ? GetId(indices) : 0;
   SerializerDataTypes::GeometryUpdateInfo geometry_update_info;
   geometry_update_info.vertex_buffer_id = vertex_buffer_id;
   geometry_update_info.index_buffer_id = index_buffer_id;
@@ -389,9 +389,14 @@ void SplitEngineSerializerImpl::SetGeometryAt(
 
   utils::Entity entity = GetEntity(instance);
 
+  std::vector<ResourceId> required_ids =
+      (index_buffer_id != 0)
+          ? std::vector<ResourceId>{vertex_buffer_id, index_buffer_id}
+          : std::vector<ResourceId>{vertex_buffer_id};
+
   SerializerDataTypes::Batch<CommandTypes::UpdateRenderables>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::UpdateRenderables>(
-          {entity}, {vertex_buffer_id, index_buffer_id});
+          {entity}, required_ids);
   batch.data[entity].primitives[primitiveIndex].geometry = geometry_update_info;
 }
 void SplitEngineSerializerImpl::SetBonesInternal(

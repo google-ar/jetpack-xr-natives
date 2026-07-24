@@ -261,9 +261,9 @@ filament::VertexBuffer* BuildVertexBuffer(
     return nullptr;
   }
   const size_t block_count = info.blocks()->size();
-  if (!block_count || block_count > kMaxAttributeCount) {
-    // We need at least one block, and at most one block per attribute, so the
-    // max block count is the same as the max attribute count.
+  if (block_count > kMaxAttributeCount) {
+    // We can have 0 blocks for procedural meshes, and at most one block per
+    // attribute, so the max block count is the same as the max attribute count.
     IMP_LOG(imp::ERROR) << "block_count out of range";
     return nullptr;
   }

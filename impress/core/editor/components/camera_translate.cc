@@ -22,6 +22,7 @@
 #include "core/collision/ray.h"
 #include "core/common/platform_storage.h"
 #include "core/common/registry.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_plugin.h"
 #include "core/editor/events.h"
@@ -46,11 +47,8 @@ void CameraTranslate::Setup(NodeHandle pivot) {
 
   pivot_ = pivot;
 
-  PlatformStorage& storage = *GetView().GetRegistry().Get<PlatformStorage>();
-  use_legacy_camera_controls_ = storage.GetBool(
-      kUseLegacyCameraControlsKey, kUseLegacyCameraControlsDefault);
-
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+  editor_ = &editor;
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
 
   // Camera transformations
@@ -58,9 +56,10 @@ void CameraTranslate::Setup(NodeHandle pivot) {
   // TODO: Enable arrow keys for drag gesture movement
   auto drag_gesture_start_event_listener =
       [this](const DragGesture::StartEvent& event) mutable {
-        uint32_t active_pointer = use_legacy_camera_controls_
-                                      ? kMousePointerIdRight
-                                      : kMousePointerIdMiddle;
+        uint32_t active_pointer =
+            editor_->GetSettings().use_legacy_camera_controls.Get()
+                ? kMousePointerIdRight
+                : kMousePointerIdMiddle;
         if (event.pointer != active_pointer) {
           return;
         }
@@ -70,9 +69,10 @@ void CameraTranslate::Setup(NodeHandle pivot) {
 
   auto drag_gesture_update_event_listener =
       [this](const DragGesture::UpdateEvent& event) mutable {
-        uint32_t active_pointer = use_legacy_camera_controls_
-                                      ? kMousePointerIdRight
-                                      : kMousePointerIdMiddle;
+        uint32_t active_pointer =
+            editor_->GetSettings().use_legacy_camera_controls.Get()
+                ? kMousePointerIdRight
+                : kMousePointerIdMiddle;
         if (event.pointer != active_pointer ||
             !intersection_prev_.has_value()) {
           return;
@@ -99,16 +99,10 @@ void CameraTranslate::Setup(NodeHandle pivot) {
         MaybeUpdateCameraPivot(event.centroid_position);
       };
 
-  auto use_legacy_controls_event_listener =
-      [this](const UseLegacyCameraControlsEvent& event) mutable {
-        use_legacy_camera_controls_ = event.enabled;
-      };
-
   editor_dispatcher.Connect(drag_gesture_start_event_listener, this);
   editor_dispatcher.Connect(drag_gesture_update_event_listener, this);
   editor_dispatcher.Connect(multi_drag_gesture_start_event_listener, this);
   editor_dispatcher.Connect(multi_drag_gesture_update_event_listener, this);
-  editor_dispatcher.Connect(use_legacy_controls_event_listener, this);
 
   // When the app camera is ignored, the editor camera is always active and can
   // be controlled by the app dispatcher.
@@ -119,7 +113,6 @@ void CameraTranslate::Setup(NodeHandle pivot) {
     app_dispatcher.Connect(drag_gesture_update_event_listener, this);
     app_dispatcher.Connect(multi_drag_gesture_start_event_listener, this);
     app_dispatcher.Connect(multi_drag_gesture_update_event_listener, this);
-    app_dispatcher.Connect(use_legacy_controls_event_listener, this);
   }
 }
 

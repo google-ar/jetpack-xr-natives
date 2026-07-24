@@ -21,13 +21,10 @@
 #include "filament/libs/utils/include/utils/Allocator.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/CString.h"
-#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/debug.h"
-#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Mutex.h"
 #include "filament/libs/utils/include/utils/ostream.h"
-#include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 
 #include <algorithm>

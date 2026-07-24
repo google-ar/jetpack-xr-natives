@@ -54,8 +54,6 @@ class IosWebUiRemoteEditor : public editor::WebUiRemoteEditor {
   std::unique_ptr<video::WebServerVideoStreamWriterIos> video_writer_;
   Dispatcher::ScopedConnection write_frame_connection_;
   Dispatcher::ScopedConnection processing_input_connection_;
-  Dispatcher::ScopedConnection view_paused_connection_;
-  Dispatcher::ScopedConnection view_resumed_connection_;
 };
 
 }  // namespace imp::window::ios

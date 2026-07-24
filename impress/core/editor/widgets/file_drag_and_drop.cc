@@ -40,6 +40,7 @@
 #include "core/editor/file_type_registry.h"
 #include "core/editor/ui/drag_and_drop.h"
 #include "core/editor/widgets/asset_library.h"
+#include "core/materials/compiler/material_compiler_config.h"
 #include "core/materials/compiler/runtime_material_compiler.h"
 #include "core/materials/compiler/runtime_material_compiler_creator.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
@@ -188,11 +189,13 @@ void FileDragAndDrop::ProcessMatFile(std::string filename) {
   }
   if (buffer_access.ok()) {
     IMP_LOG(imp::INFO) << "Compiling .mat file: " << filename;
+    MaterialCompilerConfig compiler_config;
+    compiler_config.platform = schemas::Platform::Desktop;
+    compiler_config.target_api = schemas::TargetApi::OpenGL |
+                                 schemas::TargetApi::Vulkan |
+                                 schemas::TargetApi::Metal;
     runtime_material_compiler_
-        ->CompileMaterialToBytes(
-            buffer_access->StringView(), schemas::Platform::Desktop,
-            schemas::TargetApi::OpenGL | schemas::TargetApi::Vulkan |
-                schemas::TargetApi::Metal)
+        ->CompileMaterialToBytes(buffer_access->StringView(), compiler_config)
         .Then([filename, this](std::vector<uint8_t> bytes) {
           IMP_LOG(imp::INFO) << "Compiled .mat file: " << filename;
           auto editor = view_.GetRegistry().Get<Editor>();

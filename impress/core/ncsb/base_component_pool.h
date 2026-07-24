@@ -19,8 +19,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
-#include <memory>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -53,8 +51,17 @@ class System;
 
 class BaseComponentPool {
  public:
-  explicit BaseComponentPool(BaseView& view,
-                             BasePoolAllocator<>* base_allocator,
+  static constexpr size_t kNumSubsets = 2;
+
+  // ComponentPool configures PoolAllocator to have two subsets.
+  // First subset is for components that are fully active.
+  // Second subset is component that have finished Setup but aren't active.
+  static constexpr size_t kSubsetActive = 0;
+  static constexpr size_t kSubsetReady = 1;
+
+  using BaseAllocator = BasePoolAllocator<true, 4, kNumSubsets>;
+
+  explicit BaseComponentPool(BaseView& view, BaseAllocator* base_allocator,
                              ComponentId component_id);
 
   virtual ~BaseComponentPool();
@@ -158,7 +165,7 @@ class BaseComponentPool {
   // This is necessary because the allocator can't be initialized until after
   // the derived class's constructor is called.
   // TODO: Remove when the allocator flag is removed.
-  inline void SetBaseAllocator(BasePoolAllocator<>* base_allocator) {
+  void SetBaseAllocator(BaseAllocator* base_allocator) {
     base_allocator_ = base_allocator;
   }
 
@@ -269,7 +276,7 @@ class BaseComponentPool {
   // Store base allocator so it can be used for operations that don't require
   // type T. This allows us to reduce template bloat and skip virtual dispatch
   // in some cases.
-  BasePoolAllocator<>* base_allocator_;
+  BaseAllocator* base_allocator_;
 
   // Store component id so it can be accessed without requiring a virtual method
   // in ComponentPool which would add template bloat and dynamic dispatch

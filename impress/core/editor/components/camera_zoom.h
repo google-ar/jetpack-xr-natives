@@ -36,7 +36,7 @@ class CameraZoom : public Component {
 
   NodeHandle pivot_;
   float3 target_position_;
-  bool invert_scroll_enabled_ = kInvertMouseScrollDefault;
+  class Editor* editor_ = nullptr;
 };
 
 }  // namespace imp::editor

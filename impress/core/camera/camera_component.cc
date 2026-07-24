@@ -40,6 +40,7 @@
 
 #if IMP_RUNTIME(DEV)
 #include "filament/filament/include/filament/Viewport.h"
+#include "core/editor/editor_info.h"
 #include "core/editor/widgets/viewport/viewport_helpers.h"
 #endif  // IMP_RUNTIME(DEV)
 
@@ -527,6 +528,15 @@ float2 CameraComponent::GetViewportSize() const {
 
   if (!viewport_override) return size;
 
+  const editor::EditorInfo& editor_info =
+      GetView().GetRegistry().Get<editor::EditorInfo>()->get();
+  // If the Remote Editor is enabled we want to use the View Size from the
+  // actual device rather the viewport size.
+  // We only use the viewport size for Native Screen mode.
+  if (editor_info.GetDisplayMode() ==
+      editor::EditorInfo::DisplayMode::kRemoteScreen) {
+    return size;
+  }
   const float2 pixel_ratio = editor::GetPhysicalPixelRatio(GetView());
 
   return float2(viewport_override->width / pixel_ratio.x,
@@ -565,7 +575,16 @@ float CameraComponent::GetAspectRatio(const float2 scale) const {
         GetView().GetHost()->GetEditorViewportOverride();
 
     if (viewport_override) {
-      size = {viewport_override->width, viewport_override->height};
+      const editor::EditorInfo& editor_info =
+          GetView().GetRegistry().Get<editor::EditorInfo>()->get();
+
+      // If the Remote Editor is enabled we want to use the View Size from the
+      // actual device rather the viewport size.
+      // We only use the viewport size for Native Screen mode.
+      if (editor_info.GetDisplayMode() ==
+          editor::EditorInfo::DisplayMode::kNativeScreen) {
+        size = {viewport_override->width, viewport_override->height};
+      }
     }
 #endif  // IMP_RUNTIME(DEV)
 

@@ -17,9 +17,12 @@
 #include "CodeGenerator.h"
 
 #include "MaterialInfo.h"
+
 #include "../PushConstantDefinitions.h"
 
 #include "filament/filament/generated/shaders.h"
+
+#include <private/filament/Variant.h>
 
 #include <backend/DriverEnums.h>
 
@@ -327,6 +330,17 @@ utils::io::sstream& CodeGenerator::generateCommonProlog(utils::io::sstream& out,
                 +ReservedSpecializationConstants::CONFIG_SRGB_SWAPCHAIN_EMULATION, false);
     }
 
+    bool const isDepthVariant = filament::Variant::isValidDepthVariant(v);
+    if (isDepthVariant) {
+        out << "const bool RUNTIME_CONFIG_HAS_DYNAMIC_LIGHTING = false;\n";
+    } else {
+        bool const litVariants = material.isLit || material.hasShadowMultiplier;
+        generateSpecializationConstant(out, "RUNTIME_CONFIG_HAS_DYNAMIC_LIGHTING",
+                CONFIG_MAX_RESERVED_SPEC_CONSTANTS +
+                        +DynamicSpecializationConstants::RUNTIME_CONFIG_HAS_DYNAMIC_LIGHTING,
+                litVariants);
+    }
+
     out << '\n';
     out << SHADERS_COMMON_DEFINES_GLSL_DATA;
 
@@ -431,7 +445,7 @@ io::sstream& CodeGenerator::generateCommonVariable(io::sstream& out, ShaderStage
 
 io::sstream& CodeGenerator::generateSurfaceShaderInputs(io::sstream& out, ShaderStage stage,
         const AttributeBitset& attributes, Interpolation interpolation,
-        MaterialBuilder::PushConstantList const& pushConstants) const {
+        MaterialBuilder::PushConstantList const& pushConstants, uint32_t pushConstantOffset) const {
     auto const& attributeDatabase = MaterialBuilder::getAttributeDatabase();
 
     const char* shading = getInterpolationQualifier(interpolation);
@@ -457,8 +471,8 @@ io::sstream& CodeGenerator::generateSurfaceShaderInputs(io::sstream& out, Shader
         });
 
         out << "\n";
-        generatePushConstants(out, pushConstants, attributes.size());
     }
+    generatePushConstants(out, pushConstants, attributes.size(), pushConstantOffset);
 
     out << "\n";
     out << SHADERS_SURFACE_VARYINGS_GLSL_DATA;
@@ -899,12 +913,9 @@ utils::io::sstream& CodeGenerator::generateSpecializationConstant(utils::io::sst
     return out;
 }
 
-// Note that we've only introduced push constants to the vertex stage.  If we want to add push
-// constants to the fragment stage, in vulkan, we would have to offset the definition of the field
-// by the size of the constant struct in the vertex stage. This is due to vulkan having essentially
-// one block of memory for push constants that is shared across all stages).
 utils::io::sstream& CodeGenerator::generatePushConstants(utils::io::sstream& out,
-        MaterialBuilder::PushConstantList const& pushConstants, size_t const layoutLocation) const {
+        MaterialBuilder::PushConstantList const& pushConstants, size_t const layoutLocation,
+        uint32_t startOffset) const {
     if (UTILS_UNLIKELY(pushConstants.empty())) {
         return out;
     }
@@ -923,14 +934,19 @@ utils::io::sstream& CodeGenerator::generatePushConstants(utils::io::sstream& out
     bool const outputSpirv =
             mTargetLanguage == TargetLanguage::SPIRV && mTargetApi != TargetApi::OPENGL;
     if (outputSpirv) {
-        out << "layout(push_constant) uniform " << STRUCT_NAME << " {\n ";
+        out << "layout(push_constant) uniform " << STRUCT_NAME << " {\n";
     } else {
         out << "struct " << STRUCT_NAME << " {\n";
     }
 
     for (auto const& constant: pushConstants) {
+        if (outputSpirv && startOffset != 0) {
+            out << "layout(offset=" << startOffset << ") ";
+            startOffset = 0;
+        }
         out << getType(constant.type) << " " << constant.name.c_str() << ";\n";
     }
+
 
     if (outputSpirv) {
         out << "} " << PUSH_CONSTANT_STRUCT_VAR_NAME << ";\n";
@@ -1109,10 +1125,8 @@ io::sstream& CodeGenerator::generateSurfaceLit(io::sstream& out, ShaderStage sta
         if (variant.hasDirectionalLighting()) {
             out << SHADERS_SURFACE_LIGHT_DIRECTIONAL_FS_DATA;
         }
-        if (variant.hasDynamicLighting()) {
-            out << SHADERS_SURFACE_LIGHT_PUNCTUAL_FS_DATA;
-        }
 
+        out << SHADERS_SURFACE_LIGHT_PUNCTUAL_FS_DATA;
         out << SHADERS_SURFACE_SHADING_LIT_FS_DATA;
     }
     return out;
@@ -1176,6 +1190,7 @@ char const* CodeGenerator::getConstantName(MaterialBuilder::Property property) n
         case Property::SPECULAR_FACTOR:             return "SPECULAR_FACTOR";
         case Property::SPECULAR_COLOR_FACTOR:       return "SPECULAR_COLOR_FACTOR";
         case Property::SHADOW_STRENGTH:             return "SHADOW_STRENGTH";
+        case Property::CLIP_SPACE_POSITION:         return "CLIP_SPACE_POSITION";
     }
 }
 

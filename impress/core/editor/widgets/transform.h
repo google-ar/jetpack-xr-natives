@@ -36,6 +36,7 @@ class Transform : public editor::Widget, public imp::Rememberer {
   void DrawImGui() override;
   bool HasContent() const override;
   absl::string_view GetName() const override { return "Transform"; }
+  bool IsCloseable() const override { return false; }
 
  private:
   BaseView& view_;

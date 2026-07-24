@@ -36,7 +36,7 @@ HoverGesture::CreateFn HoverGesture::GetCreateFunction(
                                      absl::Span<const HoverGesture> gestures) {
     if (pointer_hit.event.Type() != PointerEventType::kHover ||
         !pointer_hit.GetHitNode().IsValid() || !gestures.empty()) {
-      return std::optional<HoverGesture>(absl::nullopt);
+      return std::optional<HoverGesture>(std::nullopt);
     }
 
     return std::optional<HoverGesture>(

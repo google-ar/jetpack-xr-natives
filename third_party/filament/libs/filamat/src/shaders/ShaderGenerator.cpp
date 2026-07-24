@@ -20,11 +20,11 @@
 #include "SibGenerator.h"
 #include "UibGenerator.h"
 
-#include <filament/MaterialEnums.h>
-
 #include <private/filament/DescriptorSets.h>
 #include <private/filament/EngineEnums.h>
 #include <private/filament/Variant.h>
+
+#include <filament/MaterialEnums.h>
 
 #include <filamat/MaterialBuilder.h>
 
@@ -51,8 +51,6 @@ void ShaderGenerator::generateSurfaceMaterialVariantDefines(io::sstream& out,
 
     CodeGenerator::generateDefine(out, "VARIANT_HAS_DIRECTIONAL_LIGHTING",
             litVariants && variant.hasDirectionalLighting());
-    CodeGenerator::generateDefine(out, "VARIANT_HAS_DYNAMIC_LIGHTING",
-            litVariants && variant.hasDynamicLighting());
     CodeGenerator::generateDefine(out, "VARIANT_HAS_SHADOWING",
             litVariants && filament::Variant::isShadowReceiverVariant(variant));
     CodeGenerator::generateDefine(out, "VARIANT_HAS_VSM",
@@ -86,6 +84,8 @@ void ShaderGenerator::generateSurfaceMaterialVariantDefines(io::sstream& out,
 
     CodeGenerator::generateDefine(out, "MATERIAL_HAS_SHADOW_MULTIPLIER",
             material.hasShadowMultiplier);
+
+    CodeGenerator::generateDefine(out, "MATERIAL_HAS_LIGHTING", hasLighting(material, variant));
 
     CodeGenerator::generateDefine(out, "MATERIAL_HAS_INSTANCES", material.instanced);
 
@@ -287,8 +287,8 @@ void ShaderGenerator::appendShader(io::sstream& ss,
 
 void ShaderGenerator::generateUserSpecConstants(
         const CodeGenerator& cg, io::sstream& fs, MaterialBuilder::ConstantList const& constants) {
-    // Constants 0 to CONFIG_MAX_RESERVED_SPEC_CONSTANTS - 1 are reserved by Filament.
-    size_t index = CONFIG_MAX_RESERVED_SPEC_CONSTANTS;
+    // Constants 0 to CONFIG_MAX_INTERNAL_SPEC_CONSTANTS - 1 are reserved by Filament.
+    size_t index = CONFIG_MAX_INTERNAL_SPEC_CONSTANTS;
     for (const auto& constant : constants) {
         std::string const fullName = std::string("materialConstants_") + constant.name.c_str();
         switch (constant.type) {
@@ -326,6 +326,7 @@ ShaderGenerator::ShaderGenerator(
         assert_invariant(materialVertexCode.empty());
     }
 
+    // TODO: can be replaced with std::ranges once client fully supports c++20
     std::copy(std::begin(properties), std::end(properties), std::begin(mProperties));
     std::copy(std::begin(variables), std::end(variables), std::begin(mVariables));
     std::copy(std::begin(outputs), std::end(outputs), std::back_inserter(mOutputs));
@@ -434,6 +435,7 @@ std::string ShaderGenerator::createSurfaceVertexProgram(ShaderModel const shader
     }
 
     MaterialBuilder::PushConstantList vertexPushConstants;
+    // TODO: can be replaced with std::ranges once client fully supports c++20
     std::copy_if(mPushConstants.begin(), mPushConstants.end(),
             std::back_insert_iterator(vertexPushConstants),
             [](MaterialBuilder::PushConstant const& constant) {
@@ -549,13 +551,29 @@ std::string ShaderGenerator::createSurfaceFragmentProgram(ShaderModel const shad
     generateSurfaceMaterialVariantProperties(fs, mProperties, mDefines);
 
     MaterialBuilder::PushConstantList fragmentPushConstants;
+    // TODO: can be replaced with std::ranges once client fully supports c++20
     std::copy_if(mPushConstants.begin(), mPushConstants.end(),
             std::back_insert_iterator(fragmentPushConstants),
             [](MaterialBuilder::PushConstant const& constant) {
                 return constant.stage == ShaderStage::FRAGMENT;
             });
+
+    uint32_t pushConstantOffset = 0;
+    for (auto const& constant : mPushConstants) {
+        if (constant.stage == ShaderStage::VERTEX) {
+            switch (constant.type) {
+                case ConstantType::BOOL:
+                case ConstantType::FLOAT:
+                case ConstantType::INT:
+                    // In GPU layouts (GLSL/SPIR-V/WGSL), scalars including booleans
+                    // are packed into 32-bit (4-byte) register slots.
+                    pushConstantOffset += sizeof(int32_t);
+                    break;
+            }
+        }
+    }
     cg.generateSurfaceShaderInputs(fs, ShaderStage::FRAGMENT, material.requiredAttributes,
-            interpolation, fragmentPushConstants);
+            interpolation, fragmentPushConstants, pushConstantOffset);
 
     CodeGenerator::generateSurfaceTypes(fs, ShaderStage::FRAGMENT);
 
@@ -576,31 +594,20 @@ std::string ShaderGenerator::createSurfaceFragmentProgram(ShaderModel const shad
             +PerRenderableBindingPoints::OBJECT_UNIFORMS,
             UibGenerator::getPerRenderableUib());
 
-    if (variant.hasDynamicLighting()) {
-        cg.generateUniforms(fs, ShaderStage::FRAGMENT,
-                DescriptorSetBindingPoints::PER_VIEW,
-                +PerViewBindingPoints::LIGHTS,
-                UibGenerator::getLightsUib());
-    }
+    if (hasLighting(material, variant) && !filament::Variant::isValidDepthVariant(variant)) {
+        cg.generateUniforms(fs, ShaderStage::FRAGMENT, DescriptorSetBindingPoints::PER_VIEW,
+                +PerViewBindingPoints::LIGHTS, UibGenerator::getLightsUib());
 
-    bool const litVariants = material.isLit || material.hasShadowMultiplier;
-    if (litVariants && filament::Variant::isShadowReceiverVariant(variant)) {
-        cg.generateUniforms(fs, ShaderStage::FRAGMENT,
-                DescriptorSetBindingPoints::PER_VIEW,
-                +PerViewBindingPoints::SHADOWS,
-                UibGenerator::getShadowUib());
-    }
+        if (filament::Variant::isShadowReceiverVariant(variant)) {
+            cg.generateUniforms(fs, ShaderStage::FRAGMENT, DescriptorSetBindingPoints::PER_VIEW,
+                    +PerViewBindingPoints::SHADOWS, UibGenerator::getShadowUib());
+        }
 
-    if (variant.hasDynamicLighting()) {
-        cg.generateUniforms(fs, ShaderStage::FRAGMENT,
-                DescriptorSetBindingPoints::PER_VIEW,
-                +PerViewBindingPoints::RECORD_BUFFER,
-                UibGenerator::getFroxelRecordUib());
+        cg.generateUniforms(fs, ShaderStage::FRAGMENT, DescriptorSetBindingPoints::PER_VIEW,
+                +PerViewBindingPoints::RECORD_BUFFER, UibGenerator::getFroxelRecordUib());
 
-        cg.generateUniforms(fs, ShaderStage::FRAGMENT,
-                DescriptorSetBindingPoints::PER_VIEW,
-                +PerViewBindingPoints::FROXEL_BUFFER,
-                UibGenerator::getFroxelsUib());
+        cg.generateUniforms(fs, ShaderStage::FRAGMENT, DescriptorSetBindingPoints::PER_VIEW,
+                +PerViewBindingPoints::FROXEL_BUFFER, UibGenerator::getFroxelsUib());
     }
 
     cg.generateUniforms(fs, ShaderStage::FRAGMENT,
@@ -861,6 +868,12 @@ bool ShaderGenerator::hasStereo(filament::Variant const variant,
             // HACK(exv): Ignore stereo variant when targeting ESSL 1.0. We should properly build a
             // system in matc which allows the set of included variants to differ per-feature level.
             && featureLevel > MaterialBuilder::FeatureLevel::FEATURE_LEVEL_0;
+}
+
+bool ShaderGenerator::hasLighting(MaterialInfo const& material,
+        filament::Variant const variant) noexcept {
+    return (material.isLit || material.hasShadowMultiplier) &&
+           !filament::Variant::isSSRVariant(variant);
 }
 
 } // namespace filament

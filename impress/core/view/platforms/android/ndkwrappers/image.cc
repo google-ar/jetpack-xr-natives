@@ -57,43 +57,68 @@ absl::StatusOr<std::unique_ptr<Image>> Image::Create(AImage& aimage) {
   }
 
   auto image = absl::WrapUnique<Image>(new Image(&aimage, ahardware_buffer));
-  absl::Status status = image->UpdateMultivewInfoUsingImageAPIProvider();
-  if (!status.ok() && !absl::IsUnavailable(status)) {
-    return status;
-  }
+  image->UpdateMultivewInfoUsingImageAPIProvider();
   return image;
 #else
   return absl::UnimplementedError("Requires Android API 26 or higher.");
 #endif  // IMP_PLATFORM(ANDROID_API26)
 }
 
-absl::Status Image::UpdateMultivewInfoUsingImageAPIProvider() {
+void Image::FallbackToSingleView() {
+  is_multiview_ = false;
+  is_left_primary_ = true;
+  auxiliary_view_ahardware_buffer_ = nullptr;
+}
+
+void Image::UpdateMultivewInfoUsingImageAPIProvider() {
+  // TODO: Add a bool supportsMultiview() method to ImageAPIProvider (which
+  // would return true on Moohan/Aura and false on Emulator/Mobile) and revisit
+  // and clean up this flow. Note that this will become more important when
+  // moving things.
   ImageAPIProvider* api_provider = GetImageAPIProvider().get();
   if (!api_provider) {
     IMP_LOG(imp::WARNING) << "ImageAPIProvider is not set. Assuming single view.";
-    is_multiview_ = false;
-    is_left_primary_ = true;
-    auxiliary_view_ahardware_buffer_ = nullptr;
-    return absl::UnavailableError("ImageAPIProvider is not set.");
+    FallbackToSingleView();
+    return;
   }
 
   uint32_t base_view_mask = 0;
-  MP_RETURN_IF_ERROR(api_provider->GetBaseView(ahardware_buffer_, base_view_mask));
+  absl::Status status =
+      api_provider->GetBaseView(ahardware_buffer_, base_view_mask);
+  if (!status.ok()) {
+    IMP_LOG(imp::WARNING) << "Unable to get base view from ImageAPIProvider. Error: "
+                 << status << ". Falling back to single view.";
+    FallbackToSingleView();
+    return;
+  }
 
   uint32_t auxiliary_view_mask = 0;
-  MP_RETURN_IF_ERROR(api_provider->GetAuxiliaryViewInfo(ahardware_buffer_,
-                                                     auxiliary_view_mask));
+  status = api_provider->GetAuxiliaryViewInfo(ahardware_buffer_,
+                                              auxiliary_view_mask);
+  if (!status.ok()) {
+    IMP_LOG(imp::WARNING)
+        << "Unable to get auxiliary view info from ImageAPIProvider. Error: "
+        << status << ". Falling back to single view.";
+    FallbackToSingleView();
+    return;
+  }
 
   is_multiview_ = false;
   if (base_view_mask != auxiliary_view_mask) {
-    MP_RETURN_IF_ERROR(api_provider->GetAuxiliaryBuffer(
+    status = api_provider->GetAuxiliaryBuffer(
         ahardware_buffer_,
         base_view_mask == kQCLeftViewMask ? kQCRightViewMask : kQCLeftViewMask,
-        auxiliary_view_ahardware_buffer_));
+        auxiliary_view_ahardware_buffer_);
+    if (!status.ok()) {
+      IMP_LOG(imp::WARNING)
+          << "Unable to get auxiliary buffer from ImageAPIProvider. Error: "
+          << status << ". Falling back to single view.";
+      FallbackToSingleView();
+      return;
+    }
     is_multiview_ = (auxiliary_view_ahardware_buffer_ != nullptr);
   }
   is_left_primary_ = base_view_mask == kQCLeftViewMask;
-  return absl::OkStatus();
 }
 
 Image::~Image() {

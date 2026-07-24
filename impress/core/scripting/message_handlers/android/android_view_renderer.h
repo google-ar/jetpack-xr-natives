@@ -29,6 +29,7 @@
 #include "absl/status/status.h"
 #include "absl/types/optional.h"
 #include "core/actions/controller_events.h"
+#include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/common/jni_helpers.h"
 #include "core/geometry/shapes/box.h"
@@ -57,7 +58,8 @@ class RenderViewToSurfaceTextureWrapper : public JavaWrapper {
  public:
   explicit RenderViewToSurfaceTextureWrapper(
       NodeHandle node, jobject android_view, ViewSize view_size,
-      float corner_radius, AndroidExternalTextureSurface& surface);
+      float corner_radius, AndroidExternalTextureSurface& surface,
+      Executor* foreground_executor, Component* owner_component);
   ~RenderViewToSurfaceTextureWrapper() override;
 
   BorrowedTexturePtr BorrowTexture();
@@ -77,6 +79,19 @@ class RenderViewToSurfaceTextureWrapper : public JavaWrapper {
  private:
   NodeHandle node_;
   AndroidExternalTextureSurface& surface_;
+  // When using a background thread as the Impress foreground/frame thread,
+  // RenderViewToSurfaceTexture will still call into the C++ layer from the
+  // Android UI thread because UI code must run on the Android UI thread.
+  //
+  // In that case, we must schedule work on the Impress foreground/frame thread
+  // using the foreground_executor. To do this, we store the foreground_executor
+  // because the static access to ForegroundExecutor is thread_local and
+  // therefore not guaranteed to be available on the Android UI thread.
+  Executor* foreground_executor_;
+  // Typically we store components as ComponentHandle, but in this case storing
+  // a pointer is fine because this class is scoped to the lifetime of the
+  // AndroidViewRenderer component.
+  Component* owner_component_;
   JniHandle release_;
   JniHandle dispatch_generic_motion_event_;
   JniHandle dispatch_touch_event_;

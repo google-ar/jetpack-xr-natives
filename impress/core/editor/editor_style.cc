@@ -28,6 +28,7 @@ void SetupEditorImGuiStyle() {
 
   style.FrameRounding = 3.0f;
   style.WindowRounding = 3.0f;
+  style.DockingNodeHasCloseButton = false;
 
   colors[ImGuiCol_Text] = kDarkTextGrey;
   colors[ImGuiCol_TextDisabled] = kDarkTextGreyAlt;

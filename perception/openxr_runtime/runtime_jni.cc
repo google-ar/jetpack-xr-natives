@@ -30,13 +30,7 @@ using ::androidx::xr::openxr::CreateJavaDisplayBlendMode;
 using androidx::xr::openxr::OpenXrInstanceManager;
 
 JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeCreateOpenXrInstanceManager__(
-    JNIEnv* env, jclass /*clazz*/) {
-  return PointerToJLong(new OpenXrInstanceManager());
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeCreateOpenXrInstanceManager___3Ljava_lang_String_2(
+Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeCreateOpenXrInstanceManager(
     JNIEnv* env, jclass /*clazz*/, jobjectArray extension_names) {
   std::vector<std::string> native_extension_names;
   if (extension_names != nullptr) {

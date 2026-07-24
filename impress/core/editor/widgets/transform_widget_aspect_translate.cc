@@ -22,13 +22,41 @@
 #include "core/editor/events.proto.imp.h"
 #include "core/editor/node_value_command.h"
 #include "core/math/almost_equal.h"
+#include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
 
 namespace imp::editor {
 
+void TransformWidgetAspectTranslate::UpdateWidgetTransform() {
+  // If using world space or translating multiple nodes, use the world axis.
+  if (!use_local_space_ || !HasOneNodeSelected()) {
+    GetNode()->GetParent()->SetWorldRotation(kIdentityQuatf);
+    return;
+  }
+
+  // If using world space or translating multiple nodes, use the world axis.
+  GetNode()->GetParent()->SetWorldRotation(
+      selected_nodes_[0]->GetWorldRotation());
+}
+
 float3 TransformWidgetAspectTranslate::GetAxis() const {
+  // If using world space or rotating multiple nodes, use the world axis.
+  if (!use_local_space_ || !HasOneNodeSelected()) {
+    return GetAxisFromState();
+  }
+
+  // If dragging, base the axis on the initial rotation of the node.
+  if (IsDragging() && !initial_node_transform_data_.empty()) {
+    return initial_node_transform_data_[0].rotation_start * GetAxisFromState();
+  }
+
+  // Otherwise, base it on the node's current world rotation.
+  return selected_nodes_[0]->GetWorldRotation() * GetAxisFromState();
+}
+
+float3 TransformWidgetAspectTranslate::GetAxisFromState() const {
   return state_.axis.Value();
 }
 
@@ -42,11 +70,27 @@ void TransformWidgetAspectTranslate::UpdateAspect(
 
   // The projection on the axis is the new position of the centroid.
   const float3 new_centroid = *projection;
-  // Calculate how much the centroid has moved since the drag started.
-  // Multiply by state_.axis to constrain translation to the active axes,
-  // particularly useful for planar translation so we don't accidentally
-  // translate along the normal due to floating point inaccuracies.
-  const float3 delta = (new_centroid - centroid_start_) * state_.axis.Value();
+  // Calculate how much the centroid has moved since the drag started,
+  // projected onto the active axes/plane.
+  float3 delta;
+  const float3 world_delta = new_centroid - centroid_start_;
+  int active_axes = 0;
+  const float3 axis = GetAxisFromState();
+  if (axis.x > 0.0f) active_axes++;
+  if (axis.y > 0.0f) active_axes++;
+  if (axis.z > 0.0f) active_axes++;
+
+  switch (active_axes) {
+    case 1:
+      delta = GetSingleAxisDelta(world_delta);
+      break;
+    case 2:
+      delta = GetDualAxisDelta(world_delta, axis);
+      break;
+    default:
+      delta = world_delta;
+      break;
+  }
 
   // Apply the same translation delta to all selected nodes.
   for (const NodeTransformData& data : initial_node_transform_data_) {
@@ -71,6 +115,33 @@ void TransformWidgetAspectTranslate::UpdateAspect(
           editor->GetDispatcher().Send(event);
         }));
   }
+}
+
+float3 TransformWidgetAspectTranslate::GetSingleAxisDelta(
+    const float3& world_delta) const {
+  const float3 direction = normalize(GetAxis());
+  return dot(world_delta, direction) * direction;
+}
+
+float3 TransformWidgetAspectTranslate::GetDualAxisDelta(
+    const float3& world_delta, const float3& axis) const {
+  float3 plane_normal = kOne3 - axis;
+
+  if (use_local_space_ && HasOneNodeSelected()) {
+    quatf rotation;
+
+    // If dragging, use the initial rotation of the node to compute the delta.
+    // Otherwise, use the current world rotation.
+    if (IsDragging() && !initial_node_transform_data_.empty()) {
+      rotation = initial_node_transform_data_[0].rotation_start;
+    } else {
+      rotation = selected_nodes_[0]->GetWorldRotation();
+    }
+
+    plane_normal = rotation * plane_normal;
+  }
+
+  return world_delta - dot(world_delta, plane_normal) * plane_normal;
 }
 
 }  // namespace imp::editor

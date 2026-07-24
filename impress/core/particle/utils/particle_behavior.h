@@ -27,6 +27,7 @@
 #include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
+#include "core/particle/utils/emission_shape.h"
 
 namespace imp::imp_particle {
 
@@ -42,7 +43,7 @@ class ParticleBehavior {
   // Initializes the object by caching any relevant behavior data, including
   // creating objects, such as curves, needed to update particles over time.
   ParticleBehavior(
-      NodeHandle emitter_node, const ParticleConfig& particle_config,
+      NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
       std::unique_ptr<CustomParticleBehavior> custom_particle_behavior =
           std::unique_ptr<CustomParticleBehavior>());
 
@@ -98,7 +99,7 @@ class ParticleBehavior {
   void UpdateBillboard(const imp::ParticleEmitterInfo& emitter_info,
                        ParticleInstance& particle_instance);
 
- private:
+ protected:
   NodeHandle emitter_node_;
   std::unique_ptr<CustomParticleBehavior> custom_particle_behavior_;
   float default_lifetime_seconds_ = 0.0f;
@@ -107,6 +108,7 @@ class ParticleBehavior {
   float3 default_scale_ = kOne3;
   quatf default_rotation_ = kIdentityQuatf;
   bool billboard_ = false;
+  std::unique_ptr<EmissionShape> emitter_shape_;
 };
 
 }  // namespace imp::imp_particle

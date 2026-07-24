@@ -28,6 +28,9 @@ struct Widget {
   // Returns the name of this Widget (mainly for consistently sorting Widgets).
   virtual absl::string_view GetName() const = 0;
 
+  // Returns true if this widget can be closed (hidden/removed) by the user.
+  virtual bool IsCloseable() const { return true; }
+
   // Call ImGui API functions to draw the widget.
   virtual void DrawImGui() = 0;
 

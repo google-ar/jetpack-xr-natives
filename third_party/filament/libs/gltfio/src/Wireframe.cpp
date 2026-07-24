@@ -15,18 +15,19 @@
  */
 
 #include "Wireframe.h"
+
 #include "FFilamentAsset.h"
 
 #include <filament/Box.h>
 #include <filament/Engine.h>
-#include <filament/VertexBuffer.h>
 #include <filament/RenderableManager.h>
 #include <filament/TransformManager.h>
+#include <filament/VertexBuffer.h>
 
 #include "filament/libs/utils/include/utils/EntityManager.h"
 
-#include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/mat4.h"
+#include "filament/libs/math/include/math/vec3.h"
 
 #include <functional>
 

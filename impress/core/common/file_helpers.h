@@ -54,6 +54,11 @@ OptionalError SaveBinary(absl::string_view filename,
 OptionalError SaveBinary(absl::string_view filename, const uint8_t* data,
                          size_t size);
 
+// Appends the binary payload from `data` w/ `size` into file `filename`.
+// Returns an error Status if `filename` cannot be appended.
+absl::Status AppendBinary(absl::string_view filename, const uint8_t* data,
+                          size_t size);
+
 // Strip leading folders/separators from a filename, leaving just the file.
 // e.g. "/folder/file.ext" --> "file.ext"
 absl::string_view GetLocalFilenameFromFilename(absl::string_view filename);

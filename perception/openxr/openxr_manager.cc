@@ -83,7 +83,7 @@ const std::array<std::string, 13> kRequiredExtensions = {
 
 // Extensions must be listed after their dependencies.
 // LINT.IfChange
-const std::array<OpenXrExtension, 9> kOptionalExtensions = {{
+const std::array<OpenXrExtension, 10> kOptionalExtensions = {{
     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -102,6 +102,7 @@ const std::array<OpenXrExtension, 9> kOptionalExtensions = {{
      {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_ANDROID_TRACKABLES_QR_CODE_EXTENSION_NAME,
      {XR_EXT_FUTURE_EXTENSION_NAME}},
+    {XR_ANDROID_ENUMERATE_SYSTEM_EXTENSION_PROPERTIES_EXTENSION_NAME, {}},
 }};
 // LINT.ThenChange(//depot/google3/third_party/jetpack_xr_natives/openxr_runtime/openxr_instance_manager.cc)
 
@@ -251,8 +252,6 @@ bool OpenXrManager::InitOpenXrFunctions() {
                            (PFN_xrVoidFunction*)(&xr_create_session_)));
   XR_RETURN_IF_FAILED(gipa(instance_, "xrDestroySession",
                            (PFN_xrVoidFunction*)(&xr_destroy_session_)));
-  XR_RETURN_IF_FAILED(gipa(instance_, "xrGetSystemProperties",
-                           (PFN_xrVoidFunction*)(&xr_get_system_properties_)));
   XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateReferenceSpace",
                            (PFN_xrVoidFunction*)(&xr_create_reference_space_)));
   XR_RETURN_IF_FAILED(gipa(instance_, "xrDestroySpace",
@@ -879,46 +878,7 @@ bool OpenXrManager::IsFaceTrackerCalibrated() {
          FaceTrackingCalibrationState::kCalibrated;
 }
 
-bool OpenXrManager::GetDepthImage(XrTime time,
-                                  const float** out_smooth_depth_image,
-                                  int* out_image_width, int* out_image_height) {
-  absl::MutexLock lock(mutex_);
-  if (XR_FAILED(
-          CreateDepthSwapchainIfNecessary(DepthEstimationMode::kSmoothOnly))) {
-    LOG(ERROR) << "Failed to create depth swapchain.";
-    return false;
-  }
 
-  XrDepthAcquireInfoANDROID acquire_info = {
-      .type = XR_TYPE_DEPTH_ACQUIRE_INFO_ANDROID,
-      .space = GetSpaceInDefaultReferenceSpace(),
-      .displayTime = time,
-  };
-  XrDepthAcquireResultANDROID acquire_result = {
-      .type = XR_TYPE_DEPTH_ACQUIRE_RESULT_ANDROID,
-  };
-  XR_RETURN_IF_FAILED(acquire_depth_swapchain_images_(
-      depth_swapchain_handle_, &acquire_info, &acquire_result));
-
-  if (acquire_result.acquiredIndex >= depth_images_.size()) {
-    LOG(ERROR) << "acquiredIndex: " << acquire_result.acquiredIndex
-               << " is greater than swapchain_size_: " << depth_images_.size();
-    return false;
-  }
-  const XrDepthSwapchainImageANDROID& acquired_depth_image =
-      depth_images_[acquire_result.acquiredIndex];
-
-  *out_smooth_depth_image = acquired_depth_image.smoothDepthImage;
-  if (!GetDepthCameraImageWidthAndHeight(supported_depth_resolution_,
-                                         out_image_width, out_image_height)) {
-    LOG(ERROR) << "Failed to get depth image width and height.";
-    return false;
-  }
-
-  LOG(INFO) << "Successfully get depth image with resolution: width = "
-            << *out_image_width << ", height = " << *out_image_height << ".";
-  return true;
-}
 
 bool OpenXrManager::GetAllDepthImages(
     XrTime time, std::vector<DepthImageBuffer>& out_image_buffers) {
@@ -1004,22 +964,6 @@ int OpenXrManager::GetDepthImageWidth() {
 int OpenXrManager::GetDepthImageHeight() {
   absl::MutexLock lock(mutex_);
   return depth_image_height_;
-}
-
-bool OpenXrManager::IsGeospatialSupported() {
-  absl::MutexLock lock(mutex_);
-  if (!geospatial_exts_loaded_) {
-    return false;
-  }
-
-  XrSystemGeospatialPropertiesANDROID geospatialSystemProperties{
-      XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROID};
-  XrSystemProperties systemProperties{.type = XR_TYPE_SYSTEM_PROPERTIES,
-                                      .next = &geospatialSystemProperties};
-  XR_RETURN_IF_FAILED(
-      xr_get_system_properties_(instance_, system_id_, &systemProperties));
-
-  return geospatialSystemProperties.supportsGeospatial;
 }
 
 OpenXrManager::GeospatialState OpenXrManager::GetGeospatialState() {
@@ -2730,63 +2674,7 @@ bool OpenXrManager::GetPlaneState(XrTrackableANDROID plane_id,
   return true;
 }
 
-bool OpenXrManager::ChoosePlane(const PlaneConstraints& plane_constraints,
-                                XrTrackableANDROID* out_trackable,
-                                XrTrackablePlaneANDROID* out_plane) {
-  auto all_plane_trackables = GetPlanes();
-  if (all_plane_trackables.empty()) {
-    return false;
-  }
-  XrTime time = GetXrTimeNow();
-  // Iterate through the trackables to find the first one that fits the
-  // constraint.
-  for (XrTrackableANDROID trackable : all_plane_trackables) {
-    XrTrackableGetInfoANDROID plane_get_info = {
-        .type = XR_TYPE_TRACKABLE_GET_INFO_ANDROID,
-        .trackable = trackable,
-        .baseSpace = GetSpaceInDefaultReferenceSpace(),
-        .time = time,
-    };
 
-    // We are ignoring the vertex count for now but creating it here as it
-    // cannot be null in the XrTrackablePlaneANDROID.
-    uint32_t vertex_count = 0;
-    XrTrackablePlaneANDROID plane = {
-        .type = XR_TYPE_TRACKABLE_PLANE_ANDROID,
-        .vertexCapacityInput = 0,
-        .vertexCountOutput = &vertex_count,
-        .vertices = nullptr,
-    };
-
-    XrResult result;
-    {
-      absl::ReaderMutexLock lock(mutex_);
-      result = get_trackable_plane_(planes_trackable_tracker_, &plane_get_info,
-                                    &plane);
-    }
-    if (XR_FAILED(result)) {
-      LOG(ERROR) << "Failed to get plane with error: " << XrEnumStr(result);
-      continue;
-    }
-    if ((plane.planeType == plane_constraints.type ||
-         plane_constraints.type == XR_PLANE_TYPE_ARBITRARY_ANDROID) &&
-        (plane.planeLabel == plane_constraints.label ||
-         plane_constraints.label == XR_PLANE_LABEL_UNKNOWN_ANDROID) &&
-        plane.extents.height >= plane_constraints.min_height &&
-        plane.extents.width >= plane_constraints.min_width) {
-      LOG(INFO) << "Successfully found plane; type: "
-                << XrPlaneTypeEnumStr(plane.planeType)
-                << ", plane label: " << XrPlaneLabelEnumStr(plane.planeLabel)
-                << ", plane height: " << plane.extents.height
-                << ", plane width: " << plane.extents.width;
-      *out_trackable = trackable;
-      *out_plane = plane;
-      return true;
-    }
-  }
-  LOG(WARNING) << "Failed to locate a suitable plane.";
-  return false;
-}
 
 std::vector<XrTrackableANDROID> OpenXrManager::GetAugmentedImages() {
   {
@@ -3052,52 +2940,7 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorForPlane(
   return MapAnchorCreateResult(xr_result);
 }
 
-OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorForObject(
-    XrTrackableANDROID trackable, XrTrackableObjectANDROID* object, XrTime time,
-    const XrPosef& relative_pose, XrSpace* out_anchor_space) {
-  if (trackable == XR_NULL_TRACKABLE_ANDROID) {
-    LOG(ERROR) << "Cannot create anchor for null trackable.";
-    return CreateAnchorResult::kErrorRuntimeFailure;
-  }
 
-  // If the provided object is null, we will retrieve the object from the
-  // trackable.
-  XrTrackableObjectANDROID retrieved_object = {
-      .type = XR_TYPE_TRACKABLE_OBJECT_ANDROID,
-  };
-  if (object == nullptr &&
-      !GetTrackableObjectState(trackable, default_reference_space_, time,
-                               retrieved_object)) {
-    LOG(ERROR) << "Failed to get object for trackable during anchor creation.";
-    return CreateAnchorResult::kErrorRuntimeFailure;
-  }
-
-  // We are creating the anchor relative to the center pose of the object as we
-  // currently see it. If further tracking on the object shows the center
-  // pose in a different place, the anchor position will NOT update to the
-  // new center pose.
-  XrAnchorSpaceCreateInfoANDROID trackableAnchorCreateInfo = {
-      .type = XR_TYPE_ANCHOR_SPACE_CREATE_INFO_ANDROID,
-      .space = GetSpaceInDefaultReferenceSpace(),
-      .time = time,
-      .pose = MultiplyPoses(
-          object == nullptr ? retrieved_object.centerPose : object->centerPose,
-          relative_pose),
-      .trackable = trackable,
-  };
-
-  XrResult xr_result;
-  {
-    absl::ReaderMutexLock lock(mutex_);
-    xr_result = create_anchor_space_(session_, &trackableAnchorCreateInfo,
-                                     out_anchor_space);
-    if (XR_FAILED(xr_result)) {
-      LOG(ERROR) << "Failed to create anchor for objectwith: "
-                 << XrEnumStr(xr_result);
-    }
-  }
-  return MapAnchorCreateResult(xr_result);
-}
 
 OpenXrManager::CreateAnchorResult OpenXrManager::CreateGeospatialAnchor(
     XrTime time, double latitude, double longitude, double altitude,
@@ -3226,26 +3069,6 @@ bool OpenXrManager::ExportAnchor(XrSpace anchor_space,
     XR_RETURN_IF_FAILED(share_anchor_(session_, &sharingInfo, &token));
   }
   *out_anchor_token = token.token;
-  return true;
-}
-
-bool OpenXrManager::CreateSemanticAnchor(
-    const PlaneConstraints& plane_constraints, AIBinder** out_anchor_token,
-    XrSpace* out_anchor_space) {
-  XrTrackableANDROID selected_trackable;
-  XrTrackablePlaneANDROID selected_plane;
-  if (!ChoosePlane(plane_constraints, &selected_trackable, &selected_plane)) {
-    return false;
-  }
-  if (CreateAnchorForPlane(selected_trackable, &selected_plane, GetXrTimeNow(),
-                           kIdentityPose,
-                           out_anchor_space) != CreateAnchorResult::kSuccess) {
-    return false;
-  }
-  if (!ExportAnchor(*out_anchor_space, out_anchor_token)) {
-    xr_destroy_space_(*out_anchor_space);
-    return false;
-  }
   return true;
 }
 

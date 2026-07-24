@@ -171,7 +171,7 @@ absl::optional<GltfScene::BoneId> GltfScene::GetBoneFromName(
   const model::SkeletonData& skeleton = gltf_asset_->GetModelData().Skeleton();
   auto itr = skeleton.first_bone_from_hash.find(Hash(name));
   if (itr == skeleton.first_bone_from_hash.end()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return itr->second;

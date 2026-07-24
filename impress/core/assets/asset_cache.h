@@ -76,7 +76,7 @@ class AssetCache : public BaseAssetCache {
     }
 
     // This asset isn't loaded or loading, so return nullopt.
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   Future<AssetPtr<T>> Store(absl::string_view asset_url,

@@ -73,6 +73,7 @@ material {
   shadingModel : unlit,
   blending : transparent,
   variantFilter : [ skinning, shadowReceiver ],
+  apiLevel : 2,
 }
 
 vertex {
@@ -90,7 +91,7 @@ vertex {
     // If splat is disabled, discard
     if (color.a == 0.0)
     {
-      material.clipSpaceTransform = mat4(vec4(0), vec4(0), vec4(0), vec4(-2, -2, 0, 1));
+      material.clipSpacePosition = vec4(-2.0, -2.0, 0.0, 1.0);
       return;
     }
     material.color = color;
@@ -114,7 +115,9 @@ vertex {
     // `splatDataPrecomputed` being normalized (i.e., clipPos.w == 1.0).
     clipPos.xy += clipQuadOffset;
     // Override the clip space position with the newly computed position.
-    material.clipSpaceTransform = createClipSpaceTransform(clipPos);
+    // Convert z from DX convention [1, 0] to GL convention [-1, 1] as expected by Filament.
+    clipPos.z = -2.0 * (clipPos.z - 0.5);
+    material.clipSpacePosition = clipPos;
   }
 }
 

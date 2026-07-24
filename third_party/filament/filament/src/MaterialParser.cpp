@@ -267,6 +267,12 @@ bool MaterialParser::getSourceShader(CString* cstring) const noexcept {
     if (ZSTD_isError(decompressBound)) {
         return false;
     }
+    // Reject implausibly large declared sizes to prevent unbounded allocation
+    // from attacker-controlled .filamat files (decompression bomb).
+    static constexpr size_t MAX_ZSTD_DECOMPRESSED_SIZE = 256u * 1024u * 1024u; // 256 MiB
+    if (UTILS_UNLIKELY(decompressBound > MAX_ZSTD_DECOMPRESSED_SIZE)) {
+        return false;
+    }
 
     auto dst_buffer = std::make_unique<char[]>(decompressBound);
     const size_t decompressed =
@@ -844,6 +850,15 @@ bool ChunkMaterialConstants::unflatten(Unflattener& unflattener,
         return false;
     }
 
+    // FixedCapacityVector::size_type is 32 bits, so a count of 2^32 or more is silently
+    // truncated by reserve()/resize() while the loop below iterates the full 64-bit count,
+    // which would write past the allocation. A count larger than the bytes remaining in the
+    // chunk cannot be valid either. Reject both before sizing the container.
+    if (numConstants > std::numeric_limits<decltype(materialConstants->size())>::max() ||
+            unflattener.willOverflow(numConstants)) {
+        return false;
+    }
+
     materialConstants->reserve(numConstants);
     materialConstants->resize(numConstants);
 
@@ -884,6 +899,15 @@ bool ChunkMaterialPushConstants::unflatten(Unflattener& unflattener,
     // Read number of constants.
     uint64_t numConstants = 0;
     if (!unflattener.read(&numConstants)) {
+        return false;
+    }
+
+    // FixedCapacityVector::size_type is 32 bits, so a count of 2^32 or more is silently
+    // truncated by reserve()/resize() while the loop below iterates the full 64-bit count,
+    // which would write past the allocation. A count larger than the bytes remaining in the
+    // chunk cannot be valid either. Reject both before sizing the container.
+    if (numConstants > std::numeric_limits<decltype(materialPushConstants->size())>::max() ||
+            unflattener.willOverflow(numConstants)) {
         return false;
     }
 

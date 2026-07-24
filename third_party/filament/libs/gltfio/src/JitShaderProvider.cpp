@@ -17,6 +17,7 @@
 #include <gltfio/MaterialProvider.h>
 
 #include <filament/MaterialEnums.h>
+
 #include <filamat/MaterialBuilder.h>
 
 #include "filament/libs/utils/include/utils/Hash.h"

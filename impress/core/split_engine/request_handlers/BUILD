@@ -91,6 +91,7 @@ cc_library(
         "//core/async:executor",
         "//core/async:future",
         "//core/common:trace",
+        "//core/materials/compiler:fbs",
         "//core/materials/compiler:material_compiler_config",
         "//core/materials/compiler:runtime_material_compiler",
         "//core/materials/compiler:runtime_material_compiler_creator",

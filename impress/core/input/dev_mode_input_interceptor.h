@@ -69,9 +69,13 @@ class DevModeInputInterceptor : public InputInterceptor {
   bool IsUsingRemoteScreen() const;
   bool IsViewportWidgetActive() const;
   std::optional<Rect> GetViewportRect() const;
+  void SanitizeRemotePointerEvents(std::vector<PointerEvent>& pointer_events);
   // For platforms with soft keyboards, e.g. Android and iOS.
   std::unique_ptr<KeyboardController> soft_keyboard_controller_;
   std::optional<Pointer::Id> captured_id_;
+  // For sanitizing remote pointer events. Private to avoid re-allocation every
+  // frame.
+  std::vector<Pointer> clean_pointers_;
   BaseView* view_;
 };
 

@@ -126,10 +126,10 @@ message ExperimentalFeatureFlags {
   // OWNERS: dsternfeld
   // BUG: b/475595933
   // PLATFORMS: ALL
-  // ACTION: Clean up by 2026-05-31
+  // ACTION: Clean up by 2026-08-31
   // DESCRIPTION: If true, use imp::PoolAllocator instead of raw new/delete for
   // nodes and components.
-  bool enable_pool_allocator = 10 [default = false];
+  bool enable_pool_allocator = 10 [default = true];
 
   // If true, whenever a TextRenderer component is created, its meshes will be
   // created with the deinterleaved vertex format. The theory is that by

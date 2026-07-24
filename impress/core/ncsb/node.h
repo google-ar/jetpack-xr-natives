@@ -19,8 +19,12 @@
 
 #include <utility>
 
+#include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/TransformManager.h"
+#include "core/config.h"
+#include "core/math/quat.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_manager.h"
 #include "core/ncsb/component_traits.h"
@@ -42,6 +46,10 @@ namespace imp {
 
 inline absl::string_view Node::GetName() const {
   return node_controller_->GetName();
+}
+
+inline const char* Node::GetNameCStr() const {
+  return node_controller_->GetNameCStr();
 }
 
 inline bool Node::IsEnabled() const { return node_controller_->IsEnabled(); }

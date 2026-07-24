@@ -29,7 +29,9 @@
 #include "absl/types/optional.h"
 #include "core/actions/action_config.h"
 #include "core/actions/controller_events.h"
+#include "core/async/executor.h"
 #include "core/async/future.h"
+#include "core/async/future_common.h"
 #include "core/collision/ray.h"
 #include "core/common/jni_helpers.h"
 #include "core/geometry/shapes/box.h"
@@ -120,7 +122,8 @@ JNI_METHOD(void, nSetRenderViewSurfaceDimensions)
 
 RenderViewToSurfaceTextureWrapper::RenderViewToSurfaceTextureWrapper(
     NodeHandle node, jobject android_view, ViewSize view_size,
-    float corner_radius, AndroidExternalTextureSurface& surface)
+    float corner_radius, AndroidExternalTextureSurface& surface,
+    Executor* foreground_executor, Component* owner_component)
     : JavaWrapper(node->GetView().GetContext().GetJniEnv(),
                   "com/google/ar/imp/core/scripting/viewtexture/"
                   "RenderViewToSurfaceTexture",
@@ -132,6 +135,8 @@ RenderViewToSurfaceTextureWrapper::RenderViewToSurfaceTextureWrapper(
                   ToJava(this)),
       node_(node),
       surface_(surface),
+      foreground_executor_(foreground_executor),
+      owner_component_(owner_component),
       view_size_(view_size) {
   CallVoidMethod(GetMethodHandle("initialize", "()V"));
   release_ = GetMethodHandle("release", "()V");
@@ -154,25 +159,35 @@ int2 RenderViewToSurfaceTextureWrapper::GetSize() const {
 }
 
 void RenderViewToSurfaceTextureWrapper::SetSize(int2 size) {
-  view_size_.width = size.x;
-  view_size_.height = size.y;
+  Future<absl::Status>::Schedule(
+      [this, size]() {
+        view_size_.width = size.x;
+        view_size_.height = size.y;
 
-  if (absl::Status status = surface_.SetDefaultBufferSize(size); !status.ok()) {
-    IMP_LOG(imp::ERROR) << "Failed to set default buffer size: " << status.ToString();
-  }
+        if (absl::Status status = surface_.SetDefaultBufferSize(size);
+            !status.ok()) {
+          IMP_LOG(imp::ERROR) << "Failed to set default buffer size: "
+                     << status.ToString();
+        }
 
-  // Set the scale to correct for aspect ratio.
-  float aspect = static_cast<float>(size.x) / static_cast<float>(size.y);
-  float3 scale;
-  if (view_size_.meters_per_pixel.has_value()) {
-    float meters_per_pixel = *view_size_.meters_per_pixel;
-    scale = {size.x * meters_per_pixel, size.y * meters_per_pixel, 1};
-  } else if (aspect > 1) {
-    scale = {1, 1.f / aspect, 1};
-  } else {
-    scale = {aspect, 1, 1};
-  }
-  node_->SetLocalScale(scale);
+        // Set the scale to correct for aspect ratio.
+        float aspect = static_cast<float>(size.x) / static_cast<float>(size.y);
+        float3 scale;
+        if (view_size_.meters_per_pixel.has_value()) {
+          float meters_per_pixel = *view_size_.meters_per_pixel;
+          scale = {size.x * meters_per_pixel, size.y * meters_per_pixel, 1};
+        } else if (aspect > 1) {
+          scale = {1, 1.f / aspect, 1};
+        } else {
+          scale = {aspect, 1, 1};
+        }
+        node_->SetLocalScale(scale);
+        return absl::OkStatus();
+      },
+      imp::FutureScheduleOptions{
+          .executor = foreground_executor_,
+          .executor_mode = FutureExecutorMode::kScheduleIfNotOnExecutorThread})
+      .KeptBy(owner_component_);
 }
 
 void RenderViewToSurfaceTextureWrapper::DispatchGenericMotionEvent(
@@ -207,7 +222,8 @@ Future<absl::Status> AndroidViewRenderer::Setup(
         surface_ = std::move(surface);
         renderer_wrapper_ = std::make_unique<RenderViewToSurfaceTextureWrapper>(
             renderer_node_, android_view_, view_size,
-            corner_radius.value_or(0.0f), *surface_);
+            corner_radius.value_or(0.0f), *surface_,
+            Executor::ForegroundExecutor(), this);
 
         // Add a collider so we get hit events.
         renderer_node_->AddComponent<BoxCollider>(kBaseBoxBounds);

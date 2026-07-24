@@ -144,8 +144,24 @@ public final class ImpSplitEngineApi {
     rendererConnection.onBridgeReady(
         (bridge) -> {
           connection = bridge;
-          int apiLevel = xrExtensions == null ? 1 : xrExtensions.getApiVersion();
-          nSetup(this.view.getViewHostHandle(), connection, 1024 * bridgeBufferSizeKb, apiLevel);
+          int apiLevel = 0;
+          // Default to experimental API level if XrExtensions is not available.
+          // This supports integrations that don't have access to XrExtensions.
+          // See (broken link) for implementation details.
+          int previewApiLevel = Integer.MAX_VALUE;
+          if (xrExtensions != null) {
+            apiLevel = xrExtensions.getApiVersion();
+            if (apiLevel >= 3) {
+              // getPreviewApiVersion() didn't exist before apiLevel 3.
+              previewApiLevel = android.extensions.xr.XrExtensions.getPreviewApiVersion();
+            }
+          }
+          nSetup(
+              this.view.getViewHostHandle(),
+              connection,
+              1024 * bridgeBufferSizeKb,
+              apiLevel,
+              previewApiLevel);
           isViewSetup = true;
         });
   }
@@ -193,7 +209,11 @@ public final class ImpSplitEngineApi {
 
   // LINT.IfChange(api)
   private static native void nSetup(
-      long viewHandle, IRendererConnection bridge, int bridgeBufferSizeBytes, int apiLevel);
+      long viewHandle,
+      IRendererConnection bridge,
+      int bridgeBufferSizeBytes,
+      int apiLevel,
+      int previewApiLevel);
 
   private static native long nRenderNextFrame(
       long viewHandle, long lastFrameTimeNanos, long frameTimeNanos, long cameraUpdateParamsHandle);

@@ -143,6 +143,8 @@ class GlyphEmulator {
     // If set, when rendering the text the precomputed text metrics will be used
     // instead of having the GlyphEmulator do the computation.
     std::optional<TextAndFontMetrics> precomputed_metrics = std::nullopt;
+    // The locale of the text to render.
+    std::optional<std::string> locale = std::nullopt;
   };
 
   explicit GlyphEmulator(Context context);

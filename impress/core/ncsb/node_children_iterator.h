@@ -44,26 +44,8 @@ class NodeChildrenIterator {
   using iterator_category = std::input_iterator_tag;
 
   NodeChildrenIterator() = default;
-
   NodeChildrenIterator(const NodeChildrenIterator&) = default;
-
-  NodeChildrenIterator& operator=(const NodeChildrenIterator& other) {
-    if (this != &other) {
-      // filament::TransformManager::children_iterator contains a reference
-      // member. In standard C++, this implicitly deletes the copy-assignment
-      // operator. To fulfill CopyAssignable requirements (so it works in
-      // standard algorithms and containers like std::vector), we explicitly
-      // destroy and reconstruct the object in-place via placement new. This
-      // leverages the existing copy-constructor and matches exactly how
-      // std::optional and std::variant reseat non-assignable member variations.
-      // TODO: Simplify this once
-      // filament::TransformManager::children_iterator has a copy-assignment
-      // operator.
-      this->~NodeChildrenIterator();
-      new (this) NodeChildrenIterator(other);
-    }
-    return *this;
-  }
+  NodeChildrenIterator& operator=(const NodeChildrenIterator& other) = default;
 
   NodeChildrenIterator& operator++() {
     ++filament_iterator_;
@@ -106,15 +88,8 @@ class NodeChildrenIterator {
 
   void AssignNextValid() {
     // Iterate through the filament entities until we find one that is a node
-    // or we reach the end of the list. This takes advantage of the fact that
-    // the end iterator dereferences to a null instance to check for the end
-    // without having to store an additional end iterator. This in benchmarks is
-    // about 20% faster than storing an end iterator.
-    // TODO: This relies on undocumented behavior of
-    // filament::TransformManager::children_iterator. Replace with
-    // filament::TransformManager::children_iterator::isEnd once that is
-    // available.
-    while (*filament_iterator_) {
+    // or we reach the end of the list.
+    while (!filament_iterator_.isAtEnd()) {
       // Look up the node controller associated with the filament entity.
       // This will return nullptr if the filament entity is not a node.
       current_ = imp_internal::NodeAttachmentManager::Get(

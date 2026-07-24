@@ -62,6 +62,7 @@ cc_library(
         "//core/render_passes:texture_pipeline_renderer_proto_cc_imp",
         "//core/view/utils:frame_time",
         "//core/view/utils:render_settings_proto_cc_imp",
+        "//core/window:filament_host",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

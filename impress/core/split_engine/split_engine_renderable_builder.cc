@@ -63,7 +63,8 @@ SplitEngineRenderableBuilder& SplitEngineRenderableBuilder::Geometry(
   SerializerDataTypes::GeometryUpdateInfo geometry_update_info;
   geometry_update_info.vertex_buffer_id =
       SplitEngineSerializer::GetId(vertices);
-  geometry_update_info.index_buffer_id = SplitEngineSerializer::GetId(indices);
+  geometry_update_info.index_buffer_id =
+      indices ? SplitEngineSerializer::GetId(indices) : 0;
   geometry_update_info.offset = offset;
   geometry_update_info.count = count;
   geometry_update_info.primitive_type = static_cast<uint8_t>(type);
@@ -75,7 +76,13 @@ SplitEngineRenderableBuilder& SplitEngineRenderableBuilder::Geometry(
 SplitEngineRenderableBuilder& SplitEngineRenderableBuilder::Geometry(
     size_t index, filament::backend::PrimitiveType type,
     filament::VertexBuffer* vertices, filament::IndexBuffer* indices) noexcept {
-  return Geometry(index, type, vertices, indices, 0, indices->getIndexCount());
+  if (indices) {
+    return Geometry(index, type, vertices, indices, 0,
+                    indices->getIndexCount());
+  } else {
+    return Geometry(index, type, vertices, nullptr, 0,
+                    vertices->getVertexCount());
+  }
 }
 
 SplitEngineRenderableBuilder& SplitEngineRenderableBuilder::Material(

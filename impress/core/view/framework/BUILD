@@ -158,6 +158,7 @@ cc_library(
         "//core/scene_handles:material_handle",
         "//core/scene_handles:scene_handle_interface",
         "//core/split_engine:material_requester",
+        "//core/split_engine:skinning_helpers",
         "//core/split_engine:split_engine_serializer",
         "//core/view:base_view",
         "//core/view:view_events",

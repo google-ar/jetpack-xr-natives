@@ -23,7 +23,6 @@
 #include "absl/log/log.h"
 #include "common/pointer_util.h"
 #include "openxr/jobject_converter.h"
-#include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
 
 namespace {
@@ -45,15 +44,6 @@ void HandleAuthCompletion(const XrFutureCompletionEXT& completion) {
 }  // namespace
 
 extern "C" {
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeGetXrSessionHandle(
-    JNIEnv* env, jclass /*clazz*/) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  XrSession xr_session = xr_manager.GetXrSession();
-  return androidx::xr::common::PointerToJLong(
-      reinterpret_cast<void*>(xr_session));
-}
 
 JNIEXPORT jlong JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetXrSessionHandle(
@@ -66,51 +56,13 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetXrSessionHandle(
 }
 
 JNIEXPORT jlong JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeGetXrInstanceHandle(
-    JNIEnv* env, jclass /*clazz*/) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  XrInstance xr_instance = xr_manager.GetXrInstance();
-  return androidx::xr::common::PointerToJLong(
-      reinterpret_cast<void*>(xr_instance));
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetXrInstanceHandle(
-    JNIEnv* env, jclass /*clazz*/) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  XrInstance xr_instance = xr_manager.GetXrInstance();
-  return androidx::xr::common::PointerToJLong(
-      reinterpret_cast<void*>(xr_instance));
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeGetPointer(
-    JNIEnv* env, jclass /*clazz*/) {
-  return androidx::xr::common::PointerToJLong(
-      &androidx::xr::openxr::OpenXrManager::GetOpenXrManager());
-}
-
-JNIEXPORT jlong JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetPointer(
     JNIEnv* env, jclass /*clazz*/) {
   return androidx::xr::common::PointerToJLong(
       &androidx::xr::openxr::OpenXrManager::GetOpenXrManager());
 }
 
-JNIEXPORT jboolean JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeInit(
-    JNIEnv* env, jclass /*clazz*/, jobject context,
-    jboolean start_polling_thread, jlong instance, jlong gipa_ptr) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  XrInstance xr_instance = (XrInstance)instance;
 
-  return xr_manager.Init(env, context, xr_instance,
-                         XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
-                         start_polling_thread, gipa_ptr);
-}
 
 JNIEXPORT jboolean JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeInit(
@@ -126,27 +78,11 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeInit(
 }
 
 JNIEXPORT void JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeDeInit(JNIEnv* env,
-                                                          jclass /*clazz*/) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  xr_manager.DeInit(/*stop_polling_thread=*/true);
-}
-
-JNIEXPORT void JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeDeInit(JNIEnv* env,
                                                           jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   xr_manager.DeInit(/*stop_polling_thread=*/true);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativePause(JNIEnv* env,
-                                                         jclass /*clazz*/) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  return xr_manager.PauseSession();
 }
 
 JNIEXPORT jboolean JNICALL
@@ -157,88 +93,7 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativePause(JNIEnv* env,
   return xr_manager.PauseSession();
 }
 
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeConfigureSession__IIIIIIII_3JILandroidx_xr_arcore_openxr_OpenXrAugmentedImageDatabase_2(
-    JNIEnv* env, jclass /*clazz*/, jint plane_tracking, jint hand_tracking,
-    jint head_tracking, jint depth_estimation, jint anchor_persistence,
-    jint face_tracking, jint eye_tracking, jint object_tracking,
-    jlongArray object_tracking_labels, jint geospatial_tracking,
-    jobject augmented_image_database) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
-  bool image_tracking_enabled =
-      !env->IsSameObject(augmented_image_database, nullptr);
-  if (image_tracking_enabled) {
-    auto db_buffers =
-        androidx::xr::openxr::ConvertToAugmentedImageDatabaseEntryBufferPair(
-            env, augmented_image_database);
-    image_tracking_enabled = !db_buffers.entries.empty();
-    if (XR_FAILED(xr_manager.StageAugmentedImageDatabase(
-            std::move(db_buffers.entries), std::move(db_buffers.buffers)))) {
-      image_tracking_enabled = false;
-    }
-  }
-
-  androidx::xr::openxr::OpenXrManager::ConfigSettings xr_config = {
-      .plane_tracking_mode =
-          static_cast<androidx::xr::openxr::OpenXrManager::PlaneTrackingMode>(
-              plane_tracking),
-      .hand_tracking_mode =
-          static_cast<androidx::xr::openxr::OpenXrManager::HandTrackingMode>(
-              hand_tracking),
-      .head_tracking_mode =
-          static_cast<androidx::xr::openxr::OpenXrManager::HeadTrackingMode>(
-              head_tracking),
-      .depth_estimation_mode =
-          static_cast<androidx::xr::openxr::OpenXrManager::DepthEstimationMode>(
-              depth_estimation),
-      .anchor_persistence_mode = static_cast<
-          androidx::xr::openxr::OpenXrManager::AnchorPersistenceMode>(
-          anchor_persistence),
-      .face_tracking_mode =
-          static_cast<androidx::xr::openxr::OpenXrManager::FaceTrackingMode>(
-              face_tracking),
-      .object_tracking_mode =
-          static_cast<androidx::xr::openxr::OpenXrManager::ObjectTrackingMode>(
-              object_tracking),
-      .eye_tracking_mode =
-          static_cast<androidx::xr::openxr::OpenXrManager::EyeTrackingMode>(
-              eye_tracking),
-      .object_tracking_labels = {},
-      .geospatial_mode =
-          static_cast<androidx::xr::openxr::OpenXrManager::GeospatialMode>(
-              geospatial_tracking),
-      .augmented_image_tracking_mode = static_cast<
-          androidx::xr::openxr::OpenXrManager::AugmentedImageTrackingMode>(
-          image_tracking_enabled),
-      .qr_code_tracking_mode =
-        androidx::xr::openxr::OpenXrManager::QrCodeTrackingMode::kDisabled,
-      .qr_code_size_meters = 0.0f,
-  };
-
-  if (object_tracking_labels == nullptr) {
-    xr_config.object_tracking_mode =
-        androidx::xr::openxr::OpenXrManager::ObjectTrackingMode::kDisabled;
-  } else {
-    const auto labels_length = env->GetArrayLength(object_tracking_labels);
-    if (labels_length > 0) {
-      xr_config.object_tracking_labels.reserve(labels_length);
-      const auto labels = env->GetLongArrayElements(object_tracking_labels,
-                                                    /*isCopy=*/nullptr);
-      for (auto i = 0u; i < labels_length; ++i) {
-        xr_config.object_tracking_labels.push_back(
-            static_cast<XrObjectLabelANDROID>(labels[i]));
-      }
-      env->ReleaseLongArrayElements(object_tracking_labels, labels, JNI_ABORT);
-    } else {
-      xr_config.object_tracking_mode =
-          androidx::xr::openxr::OpenXrManager::ObjectTrackingMode::kDisabled;
-    }
-  }
-
-  return xr_manager.ConfigureSession(xr_config);
-}
 
 JNIEXPORT jlong JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeConfigureSession__IIIIIIII_3JILandroidx_xr_arcore_openxr_OpenXrAugmentedImageDatabase_2IF(
@@ -326,14 +181,6 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeConfigureSession__IIIIIIII_3J
 }
 
 JNIEXPORT jboolean JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeGetFaceTrackerCalibration(
-    JNIEnv* env, jclass /*clazz*/) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  return xr_manager.IsFaceTrackerCalibrated();
-}
-
-JNIEXPORT jboolean JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetFaceTrackerCalibration(
     JNIEnv* env, jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
@@ -341,31 +188,7 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetFaceTrackerCalibration(
   return xr_manager.IsFaceTrackerCalibrated();
 }
 
-JNIEXPORT void JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetApiKeyAuth(
-    JNIEnv* env, jclass /*clazz*/, jstring api_key) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
-  const char* api_key_chars = env->GetStringUTFChars(api_key, nullptr);
-  XrGoogleCloudAuthInfoApiKeyANDROID auth_info = {
-      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_INFO_API_KEY_ANDROID,
-      .next = nullptr,
-      .apiKey = api_key_chars,
-  };
-
-  XrResult result = xr_manager.SetGoogleCloudAuthAsync(
-      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROID*>(&auth_info),
-      HandleAuthCompletion, /*on_cancel=*/nullptr);
-  if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
-    if (result == XR_ERROR_VALIDATION_FAILURE) {
-      LOG(ERROR) << "Failed to set API key auth: API key is invalid.";
-    } else {
-      LOG(ERROR) << "Failed to set API key auth: " << result;
-    }
-  }
-  env->ReleaseStringUTFChars(api_key, api_key_chars);
-}
 
 JNIEXPORT void JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeSetApiKeyAuth(
@@ -393,77 +216,9 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeSetApiKeyAuth(
   env->ReleaseStringUTFChars(api_key, api_key_chars);
 }
 
-JNIEXPORT void JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetAuthTokenAuth(
-    JNIEnv* env, jclass /*clazz*/, jstring auth_token) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
-  const char* auth_token_chars = env->GetStringUTFChars(auth_token, nullptr);
-  XrGoogleCloudAuthInfoTokenANDROID auth_info = {
-      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_INFO_TOKEN_ANDROID,
-      .next = nullptr,
-      .authToken = auth_token_chars,
-  };
 
-  XrResult result = xr_manager.SetGoogleCloudAuthAsync(
-      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROID*>(&auth_info),
-      HandleAuthCompletion, /*on_cancel=*/nullptr);
-  if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
-    if (result == XR_ERROR_VALIDATION_FAILURE) {
-      LOG(ERROR) << "Failed to set auth token auth: Auth token is invalid.";
-    } else {
-      LOG(ERROR) << "Failed to set auth token auth: " << result;
-    }
-  }
-  env->ReleaseStringUTFChars(auth_token, auth_token_chars);
-}
 
-JNIEXPORT void JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeSetAuthTokenAuth(
-    JNIEnv* env, jclass /*clazz*/, jstring auth_token) {
-  LOG(INFO) << "Using API key authentication to Google Cloud Services.";
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-
-  const char* auth_token_chars = env->GetStringUTFChars(auth_token, nullptr);
-  XrGoogleCloudAuthInfoTokenANDROID auth_info = {
-      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_INFO_TOKEN_ANDROID,
-      .next = nullptr,
-      .authToken = auth_token_chars,
-  };
-
-  XrResult result = xr_manager.SetGoogleCloudAuthAsync(
-      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROID*>(&auth_info),
-      HandleAuthCompletion, /*on_cancel=*/nullptr);
-  if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
-    if (result == XR_ERROR_VALIDATION_FAILURE) {
-      LOG(ERROR) << "Failed to set auth token auth: Auth token is invalid.";
-    } else {
-      LOG(ERROR) << "Failed to set auth token auth: " << result;
-    }
-  }
-  env->ReleaseStringUTFChars(auth_token, auth_token_chars);
-}
-
-JNIEXPORT void JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetKeylessAuth(
-    JNIEnv* env, jclass /*clazz*/) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-
-  XrGoogleCloudAuthInfoKeylessANDROID auth_info = {
-      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_INFO_KEYLESS_ANDROID,
-      .next = nullptr,
-  };
-
-  XrResult result = xr_manager.SetGoogleCloudAuthAsync(
-      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROID*>(&auth_info),
-      HandleAuthCompletion, /*on_cancel=*/nullptr);
-  if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
-    LOG(ERROR) << "Failed to set keyless auth: " << result;
-  }
-}
 
 JNIEXPORT void JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeSetKeylessAuth(

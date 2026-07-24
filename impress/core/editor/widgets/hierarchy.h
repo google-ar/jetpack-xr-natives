@@ -40,6 +40,7 @@ class Hierarchy : public Widget, public imp::Rememberer {
   Hierarchy(BaseView& view, absl::string_view filter = "");
   // Do not show a header for this widget.
   absl::string_view GetName() const override { return "Nodes"; }
+  bool IsCloseable() const override { return false; }
   void DrawImGui() override;
   ImGuiTreeNodeFlags GetTreeNodeFlags() const override;
 

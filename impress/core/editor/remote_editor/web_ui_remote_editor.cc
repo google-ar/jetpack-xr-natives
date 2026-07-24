@@ -21,10 +21,25 @@
 #include "core/editor/remote_editor/remote_editor.h"
 #include "core/editor/remote_editor/remote_editor_info.h"
 #include "core/view/base_view.h"
+#include "core/view/view_events.h"
 
 namespace imp::editor {
 
-WebUiRemoteEditor::WebUiRemoteEditor(BaseView& view) : RemoteEditor(view) {}
+WebUiRemoteEditor::WebUiRemoteEditor(BaseView& view) : RemoteEditor(view) {
+  view_paused_connection_ =
+      view_.GetDispatcher().Connect([this](const imp::ViewPausedEvent& event) {
+        if (running_) {
+          OnWebUiStop();
+        }
+      });
+
+  view_resumed_connection_ =
+      view_.GetDispatcher().Connect([this](const imp::ViewResumedEvent& event) {
+        if (running_) {
+          OnWebUiStart();
+        }
+      });
+}
 
 bool WebUiRemoteEditor::HasConfigChanged(
     const RemoteEditorInfo::RemoteUiConfig& config) const {

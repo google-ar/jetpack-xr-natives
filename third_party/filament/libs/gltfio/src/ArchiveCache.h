@@ -17,17 +17,17 @@
 #ifndef GLTFIO_ARCHIVE_CACHE_H
 #define GLTFIO_ARCHIVE_CACHE_H
 
+#include <uberz/ReadableArchive.h>
+
 #include <filament/Engine.h>
 #include <filament/Material.h>
+
+#include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 
 #include "robin_map/include/tsl/robin_map.h"
 
 #include <string_view>
-
-#include <uberz/ReadableArchive.h>
-
-#include "filament/libs/utils/include/utils/CString.h"
-#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 
 namespace filament::gltfio {
 

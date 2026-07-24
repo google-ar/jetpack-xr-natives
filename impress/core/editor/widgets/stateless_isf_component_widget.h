@@ -38,6 +38,9 @@ class StatelessIsfComponentWidget : public FallbackComponentWidget {
   explicit StatelessIsfComponentWidget(ComponentHandle<T> component);
 
   Invocable<void()> OnCloseButton() override;
+  bool IsCloseable() const override {
+    return GetBaseComponentSource() == nullptr;
+  }
 
  protected:
   ComponentHandle<T> GetComponent() const;

@@ -235,6 +235,17 @@ cc_library(
 )
 
 cc_library(
+    name = "platform_wasm_fl0",
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        ":api",
+        "//core/view/platforms/wasm:wasm_fl0",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "impress_lib_xr",
     testonly = True,
     copts = imp_google3_copts(),

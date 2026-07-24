@@ -801,6 +801,10 @@ absl::StatusOr<DenseDataAndType> CreateBufferForAttribute(
                    reader.GetAttributeType());
   absl::StatusOr<DenseDataAccess> data;
 
+  size_t packed_stride = AccessorReader::GetAccessorTypeSize(
+      reader.GetType(), reader.GetComponentType());
+  bool needs_float_conversion = (packed_stride % 4) != 0;
+
   switch (attribute) {
     case Gltf2Attribute::TANGENT: {
       // We don't use tangent data as is, but rather recompute tangent
@@ -841,8 +845,21 @@ absl::StatusOr<DenseDataAndType> CreateBufferForAttribute(
       break;
     }
     default: {
-      // Must create a copy as the data should outlive the loader.
-      data = reader.GetPackedData(AccessorReader::CopyOption::kForceCopy);
+      if (needs_float_conversion) {
+        data = reader.GetPackedFloatData(AccessorReader::CopyOption::kForceCopy,
+                                         reader.IsNormalized());
+        if (data.ok()) {
+          // Update the attribute metadata to FLOAT to match the transcoded
+          // buffer format.
+          MP_RETURN_IF_ERROR(GetAttributeType(
+              reader.GetType(),
+              static_cast<int>(imp::gltf::imp_proto::ComponentType::FLOAT),
+              &attribute_type));
+        }
+      } else {
+        // Must create a copy as the data should outlive the loader.
+        data = reader.GetPackedData(AccessorReader::CopyOption::kForceCopy);
+      }
     }
   }
   if (!data.ok()) return data.status();
@@ -877,6 +894,21 @@ OptionalError GetVertexBufferInfoFromAttributeLookup(
       MP_ASSIGN_OR_RETURN(
           DenseDataAndType data_with_type,
           CreateBufferForAttribute(gltf, attribute, attribute_accessor));
+
+      if (pending_attribute.has_value()) {
+        // If the attribute was transcoded to a float format, disable
+        // normalization in the metadata.
+        bool new_normalized = pending_attribute->normalized();
+        if (data_with_type.type == schemas::AttributeType::FLOAT ||
+            data_with_type.type == schemas::AttributeType::FLOAT2 ||
+            data_with_type.type == schemas::AttributeType::FLOAT3 ||
+            data_with_type.type == schemas::AttributeType::FLOAT4) {
+          new_normalized = false;
+        }
+        pending_attribute.emplace(schemas::VertexAttributeInfo(
+            pending_attribute->attribute(), data_with_type.type,
+            pending_attribute->offset(), new_normalized));
+      }
 
       if (attribute == Gltf2Attribute::TANGENT) {
         // Process our tangents into orientations.

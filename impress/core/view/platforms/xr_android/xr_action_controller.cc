@@ -689,7 +689,7 @@ absl::Status XrActionController::SyncXrActionSetState(
        xr_action_set_reference.xr_action_to_xr_action_reference) {
     for (const auto& [xr_subaction_path, subaction_path] :
          xr_action_reference.xr_subaction_path_to_subaction_path) {
-      std::optional<InputActionStateVariant> input_action_state = absl::nullopt;
+      std::optional<InputActionStateVariant> input_action_state = std::nullopt;
       switch (xr_action_reference.xr_action_params.action_type) {
         case XrActionParams::ActionType::BOOLEAN_INPUT: {
           MP_ASSIGN_OR_RETURN(input_action_state,

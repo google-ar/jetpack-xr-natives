@@ -933,6 +933,8 @@ FColorGrading::FColorGrading(FEngine& engine, const Builder& builder) {
         uint32_t const dim = config.lutDimension;
 
         for (uint32_t b = 0; b < dim; b++) {
+            // TOOD: The type=type is due to a c++17 limitation. Can be cleaned up when our
+            // clients fully support c++20.
             auto work = [data, b, type = type, &config, &builder](JobSystem&, JobSystem::Job*) {
                 FILAMENT_TRACING_NAME(FILAMENT_TRACING_CATEGORY_FILAMENT, "ColorGrading::job");
                 uint32_t const dim = config.lutDimension;

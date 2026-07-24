@@ -55,39 +55,226 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
 
   private boolean isActive = false;
 
-  /** Initialize Impress for Split Engine. */
+  /** Builder for creating ImpSplitEngineRenderer. */
+  public static class Builder {
+    private final Context context;
+    @Nullable private ImpSplitEngine.SplitEngineSetupParams setupParams = null;
+    @Nullable private ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider = null;
+    @Nullable private IBinder serviceBinder = null;
+    @Nullable private XrExtensions xrExtensions = null;
+    @Nullable private RendererConnectionServiceProvider rendererConnection = null;
+    @Nullable private FrameScheduler.Factory frameSchedulerFactory = null;
+
+    public Builder(Context context) {
+      this.context = context;
+    }
+
+    public Builder setSetupParams(@Nullable ImpSplitEngine.SplitEngineSetupParams setupParams) {
+      this.setupParams = setupParams;
+      return this;
+    }
+
+    public Builder setViewParamsProvider(
+        @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider) {
+      this.viewParamsProvider = viewParamsProvider;
+      return this;
+    }
+
+    public Builder setServiceBinder(@Nullable IBinder serviceBinder) {
+      this.serviceBinder = serviceBinder;
+      return this;
+    }
+
+    public Builder setXrExtensions(@Nullable XrExtensions xrExtensions) {
+      this.xrExtensions = xrExtensions;
+      return this;
+    }
+
+    public Builder setRendererConnection(
+        @Nullable RendererConnectionServiceProvider rendererConnection) {
+      this.rendererConnection = rendererConnection;
+      return this;
+    }
+
+    public Builder setFrameSchedulerFactory(
+        @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+      this.frameSchedulerFactory = frameSchedulerFactory;
+      return this;
+    }
+
+    public ImpSplitEngineRenderer create() {
+      FrameScheduler.Factory factory =
+          frameSchedulerFactory != null
+              ? frameSchedulerFactory
+              : new ChoreographerFrameScheduler.Factory();
+      FrameScheduler.ThreadMode threadMode =
+          (setupParams != null && setupParams.threadMode != null)
+              ? setupParams.threadMode
+              : FrameScheduler.ThreadMode.MAIN_DEFAULT;
+      FrameScheduler frameScheduler = factory.create(threadMode);
+      // ImpSplitEngineApi creates the View internally, and also provides Xr specific Jni calls.
+      ImpSplitEngineApi splitEngineApi;
+      final ImpSplitEngine.ScreenSize finalScreenSize =
+          viewParamsProvider != null ? viewParamsProvider.getScreenSize() : null;
+      ListenableFuture<ImpSplitEngineApi> apiFuture =
+          frameScheduler.submitOnFrameThread(
+              () ->
+                  ImpSplitEngineApi.create(
+                      context,
+                      setupParams,
+                      finalScreenSize,
+                      frameScheduler.getExecutor(),
+                      serviceBinder,
+                      xrExtensions,
+                      rendererConnection));
+      try {
+        // Block until ImpSplitEngineApi has been created.
+        splitEngineApi = apiFuture.get();
+      } catch (InterruptedException | ExecutionException e) {
+        Log.e(TAG, "Failed to create ImpXrApi. Exception: ", e);
+        throw new IllegalStateException("Unable to initialize Impress API", e);
+      }
+      return new ImpSplitEngineRenderer(splitEngineApi, frameScheduler, viewParamsProvider);
+    }
+  }
+
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
   public static ImpSplitEngineRenderer create(
       Context context,
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
       @Nullable XrExtensions xrExtensions) {
-    return create(context, setupParams, null, null, xrExtensions, null);
+    return new Builder(context).setSetupParams(setupParams).setXrExtensions(xrExtensions).create();
   }
 
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
+  public static ImpSplitEngineRenderer create(
+      Context context,
+      @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
+      @Nullable XrExtensions xrExtensions,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+    return new Builder(context)
+        .setSetupParams(setupParams)
+        .setXrExtensions(xrExtensions)
+        .setFrameSchedulerFactory(frameSchedulerFactory)
+        .create();
+  }
+
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
   public static ImpSplitEngineRenderer create(
       Context context,
       RendererConnectionServiceProvider rendererConnection,
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
       @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider,
       @Nullable IBinder binder) {
-    return create(context, setupParams, viewParamsProvider, binder, null, rendererConnection);
+    return new Builder(context)
+        .setRendererConnection(rendererConnection)
+        .setSetupParams(setupParams)
+        .setViewParamsProvider(viewParamsProvider)
+        .setServiceBinder(binder)
+        .create();
   }
 
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
+  public static ImpSplitEngineRenderer create(
+      Context context,
+      RendererConnectionServiceProvider rendererConnection,
+      @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
+      @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider,
+      @Nullable IBinder binder,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+    return new Builder(context)
+        .setRendererConnection(rendererConnection)
+        .setSetupParams(setupParams)
+        .setViewParamsProvider(viewParamsProvider)
+        .setServiceBinder(binder)
+        .setFrameSchedulerFactory(frameSchedulerFactory)
+        .create();
+  }
+
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
   public static ImpSplitEngineRenderer create(
       Context context,
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
       @Nullable IBinder binder,
       @Nullable XrExtensions xrExtensions) {
-    return create(context, setupParams, null, binder, xrExtensions, null);
+    return new Builder(context)
+        .setSetupParams(setupParams)
+        .setServiceBinder(binder)
+        .setXrExtensions(xrExtensions)
+        .create();
   }
 
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
+  public static ImpSplitEngineRenderer create(
+      Context context,
+      @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
+      @Nullable IBinder binder,
+      @Nullable XrExtensions xrExtensions,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+    return new Builder(context)
+        .setSetupParams(setupParams)
+        .setServiceBinder(binder)
+        .setXrExtensions(xrExtensions)
+        .setFrameSchedulerFactory(frameSchedulerFactory)
+        .create();
+  }
+
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
   public static ImpSplitEngineRenderer create(
       Context context,
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
       @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider,
       @Nullable XrExtensions xrExtensions) {
-    return create(context, setupParams, viewParamsProvider, null, xrExtensions, null);
+    return new Builder(context)
+        .setSetupParams(setupParams)
+        .setViewParamsProvider(viewParamsProvider)
+        .setXrExtensions(xrExtensions)
+        .create();
   }
 
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
+  public static ImpSplitEngineRenderer create(
+      Context context,
+      @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
+      @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider,
+      @Nullable XrExtensions xrExtensions,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+    return new Builder(context)
+        .setSetupParams(setupParams)
+        .setViewParamsProvider(viewParamsProvider)
+        .setXrExtensions(xrExtensions)
+        .setFrameSchedulerFactory(frameSchedulerFactory)
+        .create();
+  }
+
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
   public static ImpSplitEngineRenderer create(
       Context context,
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
@@ -95,32 +282,35 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
       @Nullable IBinder serviceBinder,
       @Nullable XrExtensions xrExtensions,
       @Nullable RendererConnectionServiceProvider rendererConnection) {
+    return new Builder(context)
+        .setSetupParams(setupParams)
+        .setViewParamsProvider(viewParamsProvider)
+        .setServiceBinder(serviceBinder)
+        .setXrExtensions(xrExtensions)
+        .setRendererConnection(rendererConnection)
+        .create();
+  }
 
-    FrameScheduler frameScheduler =
-        new ChoreographerFrameScheduler.Factory().create(FrameScheduler.ThreadMode.MAIN_DEFAULT);
-    // ImpSplitEngineApi creates the View internally, and also provides Xr specific Jni calls.
-    ImpSplitEngineApi splitEngineApi;
-    final ImpSplitEngine.ScreenSize finalScreenSize =
-        viewParamsProvider != null ? viewParamsProvider.getScreenSize() : null;
-    ListenableFuture<ImpSplitEngineApi> apiFuture =
-        frameScheduler.submitOnFrameThread(
-            () ->
-                ImpSplitEngineApi.create(
-                    context,
-                    setupParams,
-                    finalScreenSize,
-                    frameScheduler.getExecutor(),
-                    serviceBinder,
-                    xrExtensions,
-                    rendererConnection));
-    try {
-      // Block until ImpSplitEngineApi has been created.
-      splitEngineApi = apiFuture.get();
-    } catch (InterruptedException | ExecutionException e) {
-      Log.e(TAG, "Failed to create ImpXrApi. Exception: ", e);
-      throw new IllegalStateException("Unable to initialize Impress API", e);
-    }
-    return new ImpSplitEngineRenderer(splitEngineApi, frameScheduler, viewParamsProvider);
+  /**
+   * @deprecated Use {@link Builder} instead.
+   */
+  @Deprecated // Use the Builder instead.
+  public static ImpSplitEngineRenderer create(
+      Context context,
+      @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
+      @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider,
+      @Nullable IBinder serviceBinder,
+      @Nullable XrExtensions xrExtensions,
+      @Nullable RendererConnectionServiceProvider rendererConnection,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+    return new Builder(context)
+        .setSetupParams(setupParams)
+        .setViewParamsProvider(viewParamsProvider)
+        .setServiceBinder(serviceBinder)
+        .setXrExtensions(xrExtensions)
+        .setRendererConnection(rendererConnection)
+        .setFrameSchedulerFactory(frameSchedulerFactory)
+        .create();
   }
 
   private ImpSplitEngineRenderer(

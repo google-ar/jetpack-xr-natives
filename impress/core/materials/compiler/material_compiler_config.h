@@ -24,6 +24,7 @@ namespace imp {
 struct MaterialCompilerConfig {
   schemas::Platform platform = schemas::Platform::All;
   schemas::TargetApi target_api = schemas::TargetApi::ANY;
+  schemas::VariantFilter variant_filter = schemas::VariantFilter::NONE;
 };
 
 }  // namespace imp

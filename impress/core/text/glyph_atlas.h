@@ -252,6 +252,11 @@ class GlyphAtlas : public Rememberer {
       const;
 #endif
 
+  // Clears all the glyphs in the atlas that are currently unused.
+  //
+  // The glyphs are tracked via reference counting.
+  void ClearUnusedGlyphs() ABSL_LOCKS_EXCLUDED(glyph_map_mutex_, canvas_mutex_);
+
  private:
   // Type that can be used as the key for a map and contains the
   // CanvasSource options for drawing glyphs derived from a particular
@@ -277,7 +282,8 @@ class GlyphAtlas : public Rememberer {
            canvas_options.size_pixels == other.canvas_options.size_pixels &&
            // text_tracking can affect the width of cursive glyphs.
            AlmostEqual(canvas_options.text_tracking,
-                       other.canvas_options.text_tracking));
+                       other.canvas_options.text_tracking) &&
+           canvas_options.locale == other.canvas_options.locale);
       if (requires_color_key) {
         return eq && canvas_options.color == other.canvas_options.color &&
                canvas_options.stroke_color == other.canvas_options.stroke_color;
@@ -295,6 +301,7 @@ class GlyphAtlas : public Rememberer {
                           canvas_options_key.canvas_options.font_holder,
                           canvas_options_key.canvas_options.size_pixels,
                           canvas_options_key.canvas_options.text_tracking,
+                          canvas_options_key.canvas_options.locale,
                           canvas_options_key.canvas_options.color.x,
                           canvas_options_key.canvas_options.color.y,
                           canvas_options_key.canvas_options.color.z,
@@ -308,7 +315,8 @@ class GlyphAtlas : public Rememberer {
                         canvas_options_key.canvas_options.stroke_width_pixels,
                         canvas_options_key.canvas_options.font_holder,
                         canvas_options_key.canvas_options.size_pixels,
-                        canvas_options_key.canvas_options.text_tracking);
+                        canvas_options_key.canvas_options.text_tracking,
+                        canvas_options_key.canvas_options.locale);
     }
   };
 
@@ -418,11 +426,6 @@ class GlyphAtlas : public Rememberer {
   // completed.
   void UpdateTextureSync() ABSL_EXCLUSIVE_LOCKS_REQUIRED(canvas_mutex_);
 
-  // Clears all the glyphs in the atlas that are currently unused.
-  //
-  // The glyphs are tracked via reference counting.
-  void ClearUnusedGlyphs() ABSL_LOCKS_EXCLUDED(glyph_map_mutex_, canvas_mutex_);
-
   BaseView& view_;
 
   // The size of the texture used for the glyph atlas in pixels.
@@ -493,10 +496,6 @@ class GlyphAtlas : public Rememberer {
 
   std::shared_ptr<CompletionGate> completion_gate_ =
       std::make_shared<CompletionGate>();
-
-#if IMP_RUNTIME(DEV)
-  friend class TextStressTestView;
-#endif
 };
 
 }  // namespace imp

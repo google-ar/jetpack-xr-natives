@@ -32,34 +32,35 @@
 namespace imp::editor {
 
 void TransformWidgetAspectScale::UpdateWidgetTransform() {
-  if (IsDragging()) return;  // Don't flip orientation while dragging.
+  // If multiple nodes are selected, use an identity rotation.
+  if (!HasOneNodeSelected()) {
+    GetNode()->GetParent()->SetWorldRotation(kIdentityQuatf);
+    return;
+  }
 
   // If we're in scale mode with only a single node selected, align the
   // transform widget to the node's world rotation.
-  if (selected_nodes_.size() == 1 && selected_nodes_[0].IsValid()) {
-    GetNode()->GetParent()->SetWorldRotation(
-        selected_nodes_[0]->GetWorldRotation());
-  } else {
-    // If multiple nodes are selected, use an identity rotation.
-    GetNode()->GetParent()->SetWorldRotation(kIdentityQuatf);
-  }
+  GetNode()->GetParent()->SetWorldRotation(
+      selected_nodes_[0]->GetWorldRotation());
 }
 
 float3 TransformWidgetAspectScale::GetAxis() const {
-  if (selected_nodes_.size() > 1) {
-    return state_.axis.Value();
+  // If multiple nodes are selected, use the world axis.
+  if (!HasOneNodeSelected()) {
+    return GetAxisFromState();
   }
 
-  if (!selected_nodes_.empty() && selected_nodes_[0].IsValid()) {
-    // If dragging, use the initial rotation of the node to compute the axis.
-    // Otherwise, use the current world rotation.
-    if (IsDragging() && !initial_node_transform_data_.empty()) {
-      return initial_node_transform_data_[0].rotation_start *
-             state_.axis.Value();
-    }
-    return selected_nodes_[0]->GetWorldRotation() * state_.axis.Value();
+  // If dragging, use the initial rotation of the node to compute the axis.
+  // Otherwise, use the current world rotation.
+  if (IsDragging() && !initial_node_transform_data_.empty()) {
+    return initial_node_transform_data_[0].rotation_start * GetAxisFromState();
   }
 
+  // Otherwise, base it on the node's current world rotation.
+  return selected_nodes_[0]->GetWorldRotation() * GetAxisFromState();
+}
+
+float3 TransformWidgetAspectScale::GetAxisFromState() const {
   return state_.axis.Value();
 }
 
@@ -76,9 +77,10 @@ void TransformWidgetAspectScale::UpdateAspect(
   const float3 delta_vec = *projection - pointer_start_closest_point_to_axis_;
 
   int active_axes = 0;
-  if (state_.axis.Value().x > 0.0f) active_axes++;
-  if (state_.axis.Value().y > 0.0f) active_axes++;
-  if (state_.axis.Value().z > 0.0f) active_axes++;
+  const float3 axis = GetAxisFromState();
+  if (axis.x > 0.0f) active_axes++;
+  if (axis.y > 0.0f) active_axes++;
+  if (axis.z > 0.0f) active_axes++;
 
   float3 s_vec;
   if (active_axes >= 2) {
@@ -102,7 +104,7 @@ void TransformWidgetAspectScale::UpdateAspect(
     if (active_axes == 3 || selected_nodes_.size() > 1) {
       s_vec = float3(1.0f + scale_1D);
     } else {
-      s_vec = float3(1.0f) + state_.axis.Value() * scale_1D;
+      s_vec = float3(1.0f) + axis * scale_1D;
     }
   } else {
     // Project the delta vector onto the axis with dot to get a 1D scale factor.
@@ -110,7 +112,7 @@ void TransformWidgetAspectScale::UpdateAspect(
     const float scale_1D = dot(delta_vec, GetAxis());
 
     // Non-uniform scale along this axis as the default.
-    s_vec = float3(1.0f, 1.0f, 1.0f) + state_.axis.Value() * scale_1D;
+    s_vec = float3(1.0f, 1.0f, 1.0f) + axis * scale_1D;
 
     // Scale uniformly if multiple nodes are selected to prevent skew/shear.
     if (selected_nodes_.size() > 1) {

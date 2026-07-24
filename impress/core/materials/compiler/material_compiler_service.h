@@ -28,6 +28,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/synchronization/notification.h"
+#include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 #include "filament/libs/filamat/include/filamat/MaterialBuilder.h"
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -61,6 +62,7 @@ class MaterialCompilerService {
       absl::string_view source_material_string,
       filamat::MaterialBuilder::Platform platform,
       filamat::MaterialBuilder::TargetApi target_api,
+      filament::UserVariantFilterMask variant_filter,
       std::shared_ptr<absl::Notification> canceled);
 
   absl::Status SendResponse(const flatbuffers::FlatBufferBuilder& builder);

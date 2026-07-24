@@ -53,6 +53,7 @@
 #include "core/ncsb/node.h"
 #include "core/render/base_renderable_manager.h"
 #include "core/render/render_order_constants.h"
+#include "core/split_engine/skinning_helpers.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/utils/frame_time.h"
@@ -469,8 +470,6 @@ const MeshCollisionAccelerator* GltfMesh::GetMeshCollisionAccelerator() const {
   return owner_->GetGltfAsset()->GetMeshCollisionAccelerator(self_);
 }
 
-// TODO: This method should use skinning_helpers.h so that we can
-// deduplicate the code.
 void GltfMesh::UpdateSkinnedMesh() {
   // TODO: Make skinning update on the split engine app side
   // configurable. If this is a split engine app, the skinning is done in the
@@ -497,65 +496,13 @@ void GltfMesh::UpdateSkinnedMesh() {
       sampled_xforms = owner_->GetSampledTransforms(skin_id, entity_id);
 
   for (auto& runtime_mesh : runtime_meshes_) {
-    MeshVertexData* vertices = runtime_mesh.mesh_vertex_data;
-    MeshVertexData* vertices_on_skin =
-        runtime_mesh.skinned_mesh_vertex_data.get();
-
-    const VertexFormat& vertex_format =
-        vertices->GetDescription().vertex_format;
-    absl::optional<size_t> bone_indices_attr_id =
-        vertex_format.GetIndexForAttribute(
-            VertexFormat::VertexAttribute::BONE_INDICES);
-    // In case, a primitive has no bone indices/weights.
-    if (!bone_indices_attr_id.has_value()) {
-      vertices_on_skin = vertices;
+    if (!runtime_mesh.mesh_vertex_data ||
+        !runtime_mesh.skinned_mesh_vertex_data) {
       continue;
     }
-
-    size_t bone_indicies_attribute_offset = vertex_format.GetAttributeOffsetAt(
-        vertex_format
-            .GetIndexForAttribute(VertexFormat::VertexAttribute::BONE_INDICES)
-            .value());
-    size_t bone_weights_attribute_offset = vertex_format.GetAttributeOffsetAt(
-        vertex_format
-            .GetIndexForAttribute(VertexFormat::VertexAttribute::BONE_WEIGHTS)
-            .value());
-    size_t position_attribute_offset = vertex_format.GetAttributeOffsetAt(
-        vertex_format
-            .GetIndexForAttribute(VertexFormat::VertexAttribute::POSITION)
-            .value());
-
-    for (size_t i = 0; i < vertices->GetDescription().vertex_count; i++) {
-      ushort4 bone_indices;
-      if (vertex_format.GetAttributeAt(bone_indices_attr_id.value()).type ==
-          VertexFormat::AttributeType::USHORT4) {
-        bone_indices = vertices->VertexAttributeAt<ushort4>(
-            i, bone_indicies_attribute_offset);
-      } else {
-        bone_indices = static_cast<ushort4>(vertices->VertexAttributeAt<ubyte4>(
-            i, bone_indicies_attribute_offset));
-      }
-      float4& bone_weight =
-          vertices->VertexAttributeAt<float4>(i, bone_weights_attribute_offset);
-
-      SampledJointId i1 = SampledJointId::At(bone_indices.x);
-      SampledJointId i2 = SampledJointId::At(bone_indices.y);
-      SampledJointId i3 = SampledJointId::At(bone_indices.z);
-      SampledJointId i4 = SampledJointId::At(bone_indices.w);
-
-      if (sampled_xforms.IsValid(i1) && sampled_xforms.IsValid(i2) &&
-          sampled_xforms.IsValid(i3) && sampled_xforms.IsValid(i4)) {
-        mat4f transform = bone_weight.x * sampled_xforms[i1] +
-                          bone_weight.y * sampled_xforms[i2] +
-                          bone_weight.z * sampled_xforms[i3] +
-                          bone_weight.w * sampled_xforms[i4];
-        float3& posi =
-            vertices->VertexAttributeAt<float3>(i, position_attribute_offset);
-        float4 new_posi = transform * float4(posi, 1.0f);
-        vertices_on_skin->VertexAttributeAt<float3>(
-            i, position_attribute_offset) = new_posi.xyz;
-      }
-    }
+    split_engine::UpdateSkinning(
+        {runtime_mesh.mesh_vertex_data, runtime_mesh.mesh_index_data},
+        *runtime_mesh.skinned_mesh_vertex_data, sampled_xforms);
   }
 }
 

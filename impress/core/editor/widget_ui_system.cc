@@ -35,6 +35,7 @@
 #include "core/editor/widget.h"
 #include "core/editor/widget_layout_info.h"
 #include "core/editor/widgets/window/window_configuration.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/path_manager.h"
 #include "core/ncsb/system.h"
@@ -111,7 +112,7 @@ std::unique_ptr<LayoutComposer> WidgetUiSystem::ReleaseLayoutComposer() {
 
 void WidgetUiSystem::AddWidget(const WidgetLayoutInfo& layout_info,
                                std::unique_ptr<Widget> widget) {
-  AddWindowConfiguration(widget->GetName(), layout_info);
+  AddWindowConfiguration(widget.get(), layout_info);
   widgets_.push_back({std::move(widget), layout_info});
   type_hashes_.push_back(type_traits::kTypeHash<Widget>);
 }
@@ -137,12 +138,14 @@ void WidgetUiSystem::ProcessPendingRemoves() {
 }
 
 void WidgetUiSystem::AddWindowConfiguration(
-    absl::string_view name, const WidgetLayoutInfo& layout_info) {
+    Widget* widget, const WidgetLayoutInfo& layout_info) {
+  absl::string_view name = widget->GetName();
   // Windows in other locations are not managed by the WindowConfiguration.
-  if (!name.empty() && !absl::StartsWith(name, "##") &&
+  if (!name.empty() && !absl::StartsWith(name, "##") && widget->IsCloseable() &&
       (layout_info.panel_id == PanelId::kTabBar ||
        layout_info.panel_id == PanelId::kLeftPanel ||
        layout_info.panel_id == PanelId::kRightPanel ||
+       layout_info.panel_id == PanelId::kDetailsWindow ||
        layout_info.panel_id == PanelId::kFreeform)) {
     window_configuration_.AddWindow(
         name, layout_info.visibility == WidgetVisibility::kVisible
@@ -188,9 +191,15 @@ bool WidgetUiSystem::ShouldDrawWidget(const WidgetLayoutInfo& layout_info,
 void WidgetUiSystem::UpdateSpatialUiCanvas() {
   NodeHandle world_ui = GetView().GetPathManager().Find(
       absl::StrCat("//", WorldSpaceEditorUi::kWorldUiName));
-  if (!world_ui || !world_ui->GetComponent<WorldSpaceEditorUi>()) {
+  if (!world_ui) {
     return;
   }
+  ComponentHandle<WorldSpaceEditorUi> world_space_editor_ui =
+      world_ui->GetComponent<WorldSpaceEditorUi>();
+  if (!world_space_editor_ui || !world_space_editor_ui->IsActive()) {
+    return;
+  }
+
   absl::Span<const LayoutComposer::SubWindowInfo> window_info =
       layout_composer_->GetSubWindowInfo();
   uint8_t window_count = 0;

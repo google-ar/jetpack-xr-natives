@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #include <utility>
 
 #include "absl/log/check.h"
@@ -63,6 +64,23 @@ absl::StatusOr<const uint8_t*> GetDataFromBufferView(
     return absl::OutOfRangeError("AttributeLayout base was out of range");
 
   return reinterpret_cast<const uint8_t*>(&buffer.access.at(base_offset));
+}
+
+template <typename T>
+auto GetUnpackFunction(bool normalized) -> float (*)(T) {
+  if (normalized) {
+    if constexpr (std::is_same_v<T, int8_t>) {
+      return filament::math::unpackSnorm8;
+    } else if constexpr (std::is_same_v<T, uint8_t>) {
+      return filament::math::unpackUnorm8;
+    } else if constexpr (std::is_same_v<T, int16_t>) {
+      return filament::math::unpackSnorm16;
+    } else if constexpr (std::is_same_v<T, uint16_t>) {
+      return filament::math::unpackUnorm16;
+    }
+  } else {
+    return [](T val) { return static_cast<float>(val); };
+  }
 }
 
 }  // namespace
@@ -176,6 +194,7 @@ absl::StatusOr<AccessorReader> AccessorReader::Create(const Gltf& gltf,
   reader.component_type_ = accessor.component_type;
   reader.type_ = accessor.type;
   reader.count_ = accessor.count;
+  reader.normalized_ = accessor.normalized;
 
   if (accessor.sparse.has_value()) {
     reader.sparse_accessor_ = SparseAccessorReader();
@@ -311,24 +330,24 @@ DenseDataAccess AccessorReader::GetPackedData(
 }
 
 absl::StatusOr<DenseDataAccess> AccessorReader::GetPackedFloatData(
-    AccessorReader::CopyOption copy_option) const {
+    AccessorReader::CopyOption copy_option, bool normalized) const {
   if (component_type_ == gltf::imp_proto::FLOAT) {
     return GetPackedData(copy_option);
   } else {
     BufferAccess result;
-    // Picks an unpack method to transcode with.
     switch (component_type_) {
       case gltf::imp_proto::BYTE:
-        result = GetFloatBufferFromType(filament::math::unpackSnorm8);
+        result = GetFloatBufferFromType(GetUnpackFunction<int8_t>(normalized));
         break;
       case gltf::imp_proto::UNSIGNED_BYTE:
-        result = GetFloatBufferFromType(filament::math::unpackUnorm8);
+        result = GetFloatBufferFromType(GetUnpackFunction<uint8_t>(normalized));
         break;
       case gltf::imp_proto::SHORT:
-        result = GetFloatBufferFromType(filament::math::unpackSnorm16);
+        result = GetFloatBufferFromType(GetUnpackFunction<int16_t>(normalized));
         break;
       case gltf::imp_proto::UNSIGNED_SHORT:
-        result = GetFloatBufferFromType(filament::math::unpackUnorm16);
+        result =
+            GetFloatBufferFromType(GetUnpackFunction<uint16_t>(normalized));
         break;
       default:
         return absl::FailedPreconditionError(

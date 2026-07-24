@@ -19,6 +19,7 @@
 #include <memory>
 #include <utility>
 
+#include "core/common/log.h"
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/transform.h"
@@ -30,24 +31,55 @@
 #include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
+#include "core/particle/utils/emission_shape.h"
 
 namespace imp::imp_particle {
 
 ParticleBehavior::ParticleBehavior(
-    NodeHandle emitter_node, const ParticleConfig& particle_config,
+    NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
     std::unique_ptr<CustomParticleBehavior> custom_particle_behavior)
     : emitter_node_(emitter_node),
       custom_particle_behavior_(std::move(custom_particle_behavior)),
-      default_lifetime_seconds_(particle_config.lifetime_in_seconds.Value()),
-      default_velocity_(particle_config.initial_velocity.Value()),
-      default_acceleration_(particle_config.acceleration.Value()),
-      default_scale_(particle_config.initial_scale.Value()),
-      default_rotation_(particle_config.initial_rotation.Value()),
-      billboard_(particle_config.billboard.Value()) {}
+      default_lifetime_seconds_(
+          *(emitter_state.particle_config->lifetime_in_seconds)),
+      default_velocity_(*(emitter_state.particle_config->initial_velocity)),
+      default_acceleration_(*(emitter_state.particle_config->acceleration)),
+      default_scale_(*(emitter_state.particle_config->initial_scale)),
+      default_rotation_(*(emitter_state.particle_config->initial_rotation)),
+      billboard_(*(emitter_state.particle_config->billboard)) {
+  // Initialize the emitter shape based on the defined state.
+  if (!emitter_state.emitter_config.HasValue() ||
+      !emitter_state.emitter_config->shape.HasValue()) {
+    emitter_shape_ = std::make_unique<PointEmissionShape>(emitter_node);
+  } else {
+    if (emitter_state.emitter_config->shape->shape
+            .Holds<EmitterShape::Point>()) {
+      // Point Shape.
+      emitter_shape_ = std::make_unique<PointEmissionShape>(emitter_node);
+    } else if (emitter_state.emitter_config->shape->shape
+                   .Holds<EmitterShape::Plane>()) {
+      // Plane Shape.
+      const EmitterShape::PlaneShape& plane_shape =
+          emitter_state.emitter_config->shape->shape
+              .Value<EmitterShape::Plane>();
+      emitter_shape_ = std::make_unique<PlaneEmissionShape>(
+          emitter_node, *plane_shape.extents, *plane_shape.normal);
+    } else {
+      // Shape not supported.
+      IMP_LOG(imp::ERROR) << "Unsupported emitter shape, using default point shape.";
+      emitter_shape_ = std::make_unique<PointEmissionShape>(emitter_node);
+    }
+  }
+}
 
 void ParticleBehavior::SetDefaultValues(ParticleInstance& particle_instance) {
-  // Default position of a particle is the emitter node position.
-  particle_instance.SetPosition(emitter_node_->GetWorldPosition());
+  // Use the EmitterShape to determine the position of the new particle.
+  if (emitter_shape_) {
+    particle_instance.SetPosition(emitter_shape_->GetNextParticlePosition());
+  } else {
+    IMP_LOG(imp::ERROR) << "No emitter shape found, using default position.";
+    particle_instance.SetPosition(emitter_node_->GetWorldPosition());
+  }
 
   // Set particle lifetime.
   if (particle_instance.HasRemainingLifetimeSeconds()) {

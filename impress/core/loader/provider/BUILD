@@ -98,11 +98,7 @@ cc_library(
     testonly = 1,
     srcs = ["provider_gltf_test_helpers.cc"],
     hdrs = ["provider_gltf_test_helpers.h"],
-    copts = imp_google3_copts() + [
-        # Gmock include order produces fatal error
-        # -Wmacro-redefined. For now, emit as warning.
-        "-Wno-macro-redefined",
-    ],
+    copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
         ":fbs",
@@ -115,6 +111,7 @@ cc_library(
         "//core/loader/data:embedded_imp_default_gltf_materials",
         "//core/loader/data:embedded_placeholder_textures",
         "//devtools/build/runtime:get_runfiles_dir",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@mediapipe//mediapipe/framework/port:gtest",
         "@mediapipe//mediapipe/framework/port:status",
@@ -127,11 +124,7 @@ cc_library(
     testonly = 1,
     srcs = ["provider_usdz_test_helpers.cc"],
     hdrs = ["provider_usdz_test_helpers.h"],
-    copts = imp_google3_copts() + [
-        # Gmock include order produces fatal error
-        # -Wmacro-redefined. For now, emit as warning.
-        "-Wno-macro-redefined",
-    ],
+    copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
         ":fbs",

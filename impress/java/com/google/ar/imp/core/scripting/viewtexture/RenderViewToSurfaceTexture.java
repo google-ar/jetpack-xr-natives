@@ -55,10 +55,11 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
   private final Context context;
   private final View view;
   private final Surface surface;
-  private final long nativeAndroidViewRenderer;
 
+  private long nativeAndroidViewRenderer;
   private VirtualDisplay virtualDisplay;
   private Presentation presentation;
+  private DisplayManager.DisplayListener displayListener;
 
   // Track the size of the virtual display to ensure that we only resize it when we actually need
   // to since onLayout events can occur without the size actually changing, especially when the view
@@ -68,6 +69,17 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
   private int virtualDisplayHeight;
   private float virtualDisplayCornerRadius;
 
+  /**
+   * Constructs a new RenderViewToSurfaceTexture instance.
+   *
+   * @param context The Android context.
+   * @param view The Android view to render.
+   * @param surface The surface to render the view into.
+   * @param width The initial width of the virtual display.
+   * @param height The initial height of the virtual display.
+   * @param cornerRadius The corner radius of the view.
+   * @param nativeAndroidViewRenderer The pointer to the native AndroidViewRenderer.
+   */
   @UsedByNative("android_view_renderer.cc")
   public RenderViewToSurfaceTexture(
       Context context,
@@ -86,8 +98,39 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
     virtualDisplayCornerRadius = cornerRadius;
   }
 
+  private static final Handler MAIN_THREAD_HANDLER = new Handler(Looper.getMainLooper());
+
+  // When Impress is using a background thread as the foreground/frame thread, the JNI calls into
+  // this class will be from that thread. However, UI operations must be performed on
+  // the Android UI thread (Looper.getMainLooper()).
+  //
+  // This method schedules the runnable on the Android UI thread using the MAIN_THREAD_HANDLER.
+  // If the current thread is already the Android UI thread, the runnable is executed immediately.
+  private static void runOnUiThread(Runnable runnable) {
+    if (Looper.myLooper() == Looper.getMainLooper()) {
+      runnable.run();
+    } else {
+      MAIN_THREAD_HANDLER.post(runnable);
+    }
+  }
+
+  /**
+   * Initializes the virtual display and sets up the presentation of the view on the main thread.
+   */
   @UsedByNative("android_view_renderer.cc")
   public void initialize() {
+    runOnUiThread(
+        () -> {
+          synchronized (RenderViewToSurfaceTexture.this) {
+            if (nativeAndroidViewRenderer == 0) {
+              return;
+            }
+            initializeOnMainThread();
+          }
+        });
+  }
+
+  private void initializeOnMainThread() {
     view.addOnLayoutChangeListener(this);
 
     if (virtualDisplayWidth == 0 || virtualDisplayHeight == 0) {
@@ -97,7 +140,7 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
       virtualDisplayHeight = view.getMeasuredHeight();
     }
 
-    setCornerRadius(virtualDisplayCornerRadius);
+    setCornerRadiusOnMainThread(virtualDisplayCornerRadius);
 
     nSetRenderViewSurfaceDimensions(
         nativeAndroidViewRenderer, virtualDisplayWidth, virtualDisplayHeight);
@@ -124,14 +167,20 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
     // Don't create a displayListener if we are immediately calling startPresentations()
     if (!needsImmediatePresentation) {
       // Start the presentation when the virtualDisplay is added.
-      DisplayManager.DisplayListener displayListener =
+      displayListener =
           new DisplayManager.DisplayListener() {
             @Override
             public void onDisplayAdded(int displayId) {
-              if (virtualDisplay != null
-                  && displayId == virtualDisplay.getDisplay().getDisplayId()) {
-                dm.unregisterDisplayListener(this);
-                startPresentation();
+              synchronized (RenderViewToSurfaceTexture.this) {
+                if (nativeAndroidViewRenderer == 0) {
+                  return;
+                }
+                if (virtualDisplay != null
+                    && displayId == virtualDisplay.getDisplay().getDisplayId()) {
+                  dm.unregisterDisplayListener(this);
+                  displayListener = null;
+                  startPresentation();
+                }
               }
             }
 
@@ -141,7 +190,7 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
             @Override
             public void onDisplayChanged(int displayId) {}
           };
-    dm.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
+      dm.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
     }
 
     virtualDisplay =
@@ -186,6 +235,9 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
     return params;
   }
 
+  /**
+   * Called when the layout bounds of the view change, triggering a resize of the virtual display.
+   */
   @Override
   public void onLayoutChange(
       View v,
@@ -205,15 +257,38 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
       return;
     }
     final DisplayMetrics metrics = context.getResources().getDisplayMetrics();
-    virtualDisplay.resize(view.getWidth(), view.getHeight(), metrics.densityDpi);
+    if (virtualDisplay != null) {
+      virtualDisplay.resize(view.getWidth(), view.getHeight(), metrics.densityDpi);
+    }
     virtualDisplayWidth = view.getWidth();
     virtualDisplayHeight = view.getHeight();
-    nSetRenderViewSurfaceDimensions(
-        nativeAndroidViewRenderer, virtualDisplayWidth, virtualDisplayHeight);
+    synchronized (this) {
+      if (nativeAndroidViewRenderer != 0) {
+        nSetRenderViewSurfaceDimensions(
+            nativeAndroidViewRenderer, virtualDisplayWidth, virtualDisplayHeight);
+      }
+    }
   }
 
+  /**
+   * Sets the corner radius of the view on the main thread.
+   *
+   * @param cornerRadius The new corner radius.
+   */
   @UsedByNative("android_view_renderer.cc")
-  public void setCornerRadius(float cornerRadius) {
+  public void setCornerRadius(final float cornerRadius) {
+    runOnUiThread(
+        () -> {
+          synchronized (RenderViewToSurfaceTexture.this) {
+            if (nativeAndroidViewRenderer == 0) {
+              return;
+            }
+            setCornerRadiusOnMainThread(cornerRadius);
+          }
+        });
+  }
+
+  private void setCornerRadiusOnMainThread(float cornerRadius) {
     this.virtualDisplayCornerRadius = cornerRadius;
     if (this.virtualDisplayCornerRadius > 0) {
       view.setOutlineProvider(
@@ -231,27 +306,73 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
     }
   }
 
+  /** Releases and cleans up resources, including the presentation and the virtual display. */
   @UsedByNative("android_view_renderer.cc")
   public void release() {
-    if (presentation != null) {
-      presentation.cancel();
-      presentation = null;
+    synchronized (this) {
+      nativeAndroidViewRenderer = 0;
     }
-    virtualDisplay.release();
+    runOnUiThread(
+        () -> {
+          if (presentation != null) {
+            presentation.cancel();
+            presentation = null;
+          }
+          if (virtualDisplay != null) {
+            virtualDisplay.release();
+            virtualDisplay = null;
+          }
+
+          view.removeOnLayoutChangeListener(RenderViewToSurfaceTexture.this);
+
+          if (displayListener != null) {
+            final DisplayManager dm = context.getSystemService(DisplayManager.class);
+            dm.unregisterDisplayListener(displayListener);
+            displayListener = null;
+          }
+        });
   }
 
+  /**
+   * Dispatches a clone of a generic motion event to the view on the main thread.
+   *
+   * @param originalMotionEvent The motion event to dispatch.
+   */
   @UsedByNative("android_view_renderer.cc")
   public void dispatchGenericMotionEventToView(MotionEvent originalMotionEvent) {
-    MotionEvent motionEvent = createMouseEventWith(originalMotionEvent);
-    view.dispatchGenericMotionEvent(motionEvent);
-    motionEvent.recycle();
+    final MotionEvent motionEvent = createMouseEventWith(originalMotionEvent);
+    runOnUiThread(
+        () -> {
+          synchronized (RenderViewToSurfaceTexture.this) {
+            if (nativeAndroidViewRenderer == 0) {
+              motionEvent.recycle();
+              return;
+            }
+            view.dispatchGenericMotionEvent(motionEvent);
+          }
+          motionEvent.recycle();
+        });
   }
 
+  /**
+   * Dispatches a clone of a touch event to the view on the main thread.
+   *
+   * @param originalMotionEvent The touch event to dispatch.
+   */
   @UsedByNative("android_view_renderer.cc")
   public void dispatchTouchEventToView(MotionEvent originalMotionEvent) {
-    MotionEvent motionEvent = createMouseEventWith(originalMotionEvent);
-    view.dispatchTouchEvent(motionEvent);
-    motionEvent.recycle();
+    final MotionEvent motionEvent = createMouseEventWith(originalMotionEvent);
+    runOnUiThread(
+        () -> {
+          synchronized (RenderViewToSurfaceTexture.this) {
+            if (nativeAndroidViewRenderer == 0) {
+              motionEvent.recycle();
+              return;
+            }
+            view.dispatchTouchEvent(motionEvent);
+          }
+          motionEvent.recycle();
+        });
   }
 
   private MotionEvent createMouseEventWith(MotionEvent motionEvent) {

@@ -16,10 +16,12 @@
 
 #include "filament/libs/utils/include/utils/AsyncJobQueue.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/CountDownLatch.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 
+#include <memory>
 #include <mutex>
 #include <utility>
 
@@ -37,6 +39,7 @@ void AsyncJobQueue::workerThreadLoop(const char* name, Priority priority) {
     JobSystem::setThreadName(name);
     JobSystem::setThreadPriority(priority);
     bool exitRequested;
+    decltype(mQueue) tempQueue;
     do {
         UniqueLock lock(mLock);
         // wait until we get a job, or we're asked to exit
@@ -44,16 +47,18 @@ void AsyncJobQueue::workerThreadLoop(const char* name, Priority priority) {
             mCondition.wait(lock);
         }
         exitRequested = mExitRequested;
-        auto const queue = std::move(mQueue);
+        tempQueue.swap(mQueue);
         // here we have drained the whole queue, and if exitRequested is set, we're guaranteed
         // no more job will be added after we unlock.
         lock.unlock();
 
         // execute the jobs without holding a lock. These jobs must be executed in order,
         // front to back, and are allowed to be long-running (like waiting on a fence).
-        for (auto& job : queue) {
+        for (auto& job: tempQueue) {
             job();
         }
+
+        tempQueue.clear();
     } while (!exitRequested);
 }
 #endif
@@ -115,6 +120,37 @@ void AsyncJobQueue::drainAndExit() {
     mCondition.notify_one();
     if (mThread.joinable()) {
         mThread.join();
+    }
+#endif
+}
+
+void AsyncJobQueue::drain() {
+#if !defined(__EMSCRIPTEN__)
+    CountDownLatch latch(1);
+    bool pushed = false;
+    {
+        LockGuard const lock(mLock);
+
+        // If the service thread is already asked to exit, we shouldn't push new jobs or wait,
+        // as doing so will cause a deadlock.
+        if (!mExitRequested) {
+            // We use a shared_ptr's custom deleter to guarantee the latch is signaled EXACTLY once.
+            // This elegantly handles edge cases:
+            // 1. cancelAll(): If cancelAll() is called, the queue is cleared and the job is destroyed
+            //    without being executed. The shared_ptr drops to 0 refs and signals the latch.
+            // 2. Normal execution: The worker thread executes the empty lambda, then destroys the job.
+            //    The shared_ptr drops to 0 refs and signals the latch.
+            std::shared_ptr<CountDownLatch> sp(&latch, [](CountDownLatch* l) {
+                l->latch();
+            });
+            mQueue.push_back([sp]() {});
+            pushed = true;
+        }
+    }
+
+    if (pushed) {
+        mCondition.notify_one();
+        latch.await();
     }
 #endif
 }

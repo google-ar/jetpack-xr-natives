@@ -76,6 +76,7 @@ cc_library(
 filegroup(
     name = "dev_fonts",
     srcs = [
+        "//core/fonts:MaterialSymbolsOutlined-Regular.ttf",
         "//core/fonts:googlesans_medium.ttf",
     ],
 )
@@ -128,17 +129,21 @@ cc_library(
         "//core/common",
         "//core/common:debug_draw",
         "//core/common:registry",
+        "//core/common:rememberer",
         "//core/common:trace",
         "//core/common:typed_ids",
         "//core/editor",
         "//core/editor:editor_info",
         "//core/editor:events",
+        "//core/fonts:icon_font",
         "//core/input",
         "//core/math",
         "//core/ncsb",
+        "//core/render:blitter",
         "//core/split_engine:split_engine_serializer",
         "//core/video:video_writer",
         "//core/view:base_view",
+        "//core/view:view_events",
         "//core/window/clipboard:clipboard_handler",
         "@com_google_absl//absl/log:log_sink",
         "@com_google_absl//absl/log:log_sink_registry",
@@ -155,7 +160,7 @@ cc_library(
     ] + if_android([
         ":open_gl_imgui_renderer",
     ]) + if_ios([
-        "//core/editor/remote_editor:ios_web_ui_remote_editor",
+        "//core/editor/remote_editor/ios:ios_web_ui_remote_editor",
     ]),
     alwayslink = 1,
 )
@@ -212,6 +217,7 @@ cc_library(
         [
             ":imgui_renderer",
             "//core/async:future",
+            "//core/common:rememberer",
             "//core/math",
             "//core/model/mesh",
             "//core/ncsb",
@@ -226,7 +232,6 @@ cc_library(
             "@com_google_impress//core/common:log",
             "@dear_imgui",
             "@third_party//filament/libs:utils_hdrs",
-            "@third_party//split_engine/materials:texture_external_material",
         ] + select({
             ":xr_opengl_platform": [
                 "//third_party/dear_imgui:imgui_impl_opengl3_android",

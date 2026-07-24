@@ -305,7 +305,7 @@ absl::Status CreateGenericMaterialSchemas(
       // -1 is the Default material. Access the default material by passing
       // absl::nullopt into GetMaterial.
       const gltf::imp_proto::Material& m = model.GetMaterial(
-          material_index == -1 ? absl::nullopt
+          material_index == -1 ? std::nullopt
                                : absl::optional<uint32_t>(material_index));
 
       filament::Box root_bounds;

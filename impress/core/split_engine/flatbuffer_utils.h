@@ -22,13 +22,16 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "split_engine/schemas/split_engine_data_generated.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
@@ -148,6 +151,26 @@ flatbuffers::Offset<android_xr::schemas::MaterialPrecompileOptions> Pack(
 // Unpacks the proto MaterialPreCompileOptions from the flatbuffer format.
 MaterialPreCompileOptions UnPack(
     const android_xr::schemas::MaterialPrecompileOptions& options);
+
+// Enum conversions.
+absl::StatusOr<android_xr::schemas::TextureFormat> Pack(
+    filament::backend::TextureFormat format);
+absl::StatusOr<filament::backend::TextureFormat> UnPack(
+    android_xr::schemas::TextureFormat format);
+
+android_xr::schemas::SamplerType Pack(filament::backend::SamplerType sampler);
+absl::StatusOr<filament::backend::SamplerType> UnPack(
+    android_xr::schemas::SamplerType sampler);
+
+absl::StatusOr<android_xr::schemas::PixelDataFormat> Pack(
+    filament::backend::PixelDataFormat format);
+
+absl::StatusOr<filament::backend::PixelDataFormat> UnPack(
+    android_xr::schemas::PixelDataFormat format);
+
+android_xr::schemas::PixelDataType Pack(filament::backend::PixelDataType type);
+absl::StatusOr<filament::backend::PixelDataType> UnPack(
+    android_xr::schemas::PixelDataType type);
 
 }  // namespace imp::split_engine
 

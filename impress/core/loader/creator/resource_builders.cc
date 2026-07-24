@@ -22,13 +22,13 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "absl/algorithm/container.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/optional.h"
 #include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/IndexBuffer.h"
@@ -41,6 +41,7 @@
 #include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 #include "filament/libs/math/include/math/mat3.h"
 #include "filament/libs/math/include/math/mathfwd.h"
+#include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/enum_flags.h"
 #include "core/common/schemas/render_generated.h"
@@ -50,7 +51,6 @@
 #include "core/material_library/schemas/generic_material_generated.h"
 #include "core/math/vec.h"
 #include "core/model/mesh/base_mesh_builder.h"
-#include "core/model/mesh/mesh_builder.h"
 #include "core/render/texture_builder.h"
 #include "core/view/base_view.h"
 
@@ -468,11 +468,11 @@ absl::Status FillIndexBuffer(BaseView& view, Engine* engine,
   return absl::OkStatus();
 }
 
-Texture* BuildAndFillTexture(BaseView& view, Engine* engine,
-                             const schemas::TextureInfo* info,
-                             std::unique_ptr<image::ImageContents> image,
-                             InflightCreation* out_inflight_creation,
-                             std::optional<absl::string_view> name) {
+absl::StatusOr<TextureBuilder> BuildAndFillTextureHelper(
+    BaseView& view, Engine* engine, const schemas::TextureInfo* info,
+    std::unique_ptr<image::ImageContents> image,
+    InflightCreation* out_inflight_creation,
+    std::optional<absl::string_view> name) {
   const Flags<schemas::TextureInfoFlags> flags(info->flags());
   const uint8_t levels = (flags.Test(schemas::TextureInfoFlags::IsLookup))
                              ? 0x1
@@ -481,8 +481,7 @@ Texture* BuildAndFillTexture(BaseView& view, Engine* engine,
   if (image->GetWidth() == 0 || image->GetHeight() == 0 ||
       image->GetWidth() > kMaxTextureSize ||
       image->GetHeight() > kMaxTextureSize) {
-    IMP_LOG(imp::ERROR) << "Invalid dimensions";
-    return nullptr;
+    return absl::InternalError("Invalid dimensions");
   }
 
   bool hasAlpha = image->HasAlpha();
@@ -541,13 +540,43 @@ Texture* BuildAndFillTexture(BaseView& view, Engine* engine,
     texture_builder.GenerateMipmaps(*engine);
   }
 
-  absl::StatusOr<filament::Texture*> texture = texture_builder.Build(*engine);
+  return texture_builder;
+}
+
+Texture* BuildAndFillTexture(BaseView& view, Engine* engine,
+                             const schemas::TextureInfo* info,
+                             std::unique_ptr<image::ImageContents> image,
+                             InflightCreation* out_inflight_creation,
+                             std::optional<absl::string_view> name) {
+  absl::StatusOr<TextureBuilder> texture_builder = BuildAndFillTextureHelper(
+      view, engine, info, std::move(image), out_inflight_creation, name);
+  if (!texture_builder.ok()) {
+    IMP_LOG(imp::ERROR) << "Could not create texture builder.";
+    return nullptr;
+  }
+
+  absl::StatusOr<filament::Texture*> texture = texture_builder->Build(*engine);
   if (!texture.ok()) {
     IMP_LOG(imp::ERROR) << "Could not create texture.";
     return nullptr;
   }
 
   return *texture;
+}
+
+Future<Texture*> BuildAndFillTextureAsync(
+    BaseView& view, Engine* engine, const schemas::TextureInfo* info,
+    std::unique_ptr<image::ImageContents> image,
+    InflightCreation* out_inflight_creation,
+    std::optional<absl::string_view> name) {
+  absl::StatusOr<TextureBuilder> texture_builder = BuildAndFillTextureHelper(
+      view, engine, info, std::move(image), out_inflight_creation, name);
+  if (!texture_builder.ok()) {
+    return Future<Texture*>(
+        absl::InternalError("Could not create texture builder."));
+  }
+
+  return texture_builder->BuildAsync(*engine);
 }
 
 Material* BuildMaterial(Engine* engine, const BufferAccess& compiled_material) {

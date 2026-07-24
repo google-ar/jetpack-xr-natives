@@ -348,12 +348,6 @@ class XrSessionHost : public ViewHost {
   using XrGraphicsRequirements = XrGraphicsRequirementsOpenGLESKHR;
   using XrGetGraphicsRequirements = PFN_xrGetOpenGLESGraphicsRequirementsKHR;
 #endif
-  enum class LocateViewsStatus { kUnableToObtainPose, kObtainedPose };
-  struct LocateViewsResult {
-    std::vector<XrView> views;
-    LocateViewsStatus status;
-  };
-  absl::StatusOr<LocateViewsResult> LocateViews(XrTime predictedDisplayTime);
   struct ViewInfo {
     std::vector<XrView> views;
     XrViewConfigurationType view_configuration_type;
@@ -398,11 +392,17 @@ class XrSessionHost : public ViewHost {
 #else
   using PlatformType = imp::XrOpenGLPlatform;
 #endif
+  enum class LocateViewsStatus { kUnableToObtainPose, kObtainedPose };
+  struct LocateViewsResult {
+    std::vector<XrView> views;
+    LocateViewsStatus status;
+  };
 
   struct LocateSpaceResult {
     XrSpaceLocation location;
     LocateSpaceStatus status;
   };
+  absl::StatusOr<LocateViewsResult> LocateViews(XrTime predictedDisplayTime);
 
   // Thread-safe queue used to defer the destruction of Filament Sync objects.
   //

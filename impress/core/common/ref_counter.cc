@@ -31,6 +31,7 @@ namespace imp {
 struct SourceLocationTracker {
   SmallSourceLocation loc;
   RefCounter::CounterType count;
+  TrackedRefs* tracked_refs;
 
   bool operator==(const SourceLocationTracker& other) const {
     return loc == other.loc;
@@ -124,25 +125,21 @@ RefCounter::GetLocationToCount() const {
 }
 
 RefCounter::Ref::Ref(SmallSourceLocation loc,
-                     TrackedRefs* tracked_refs) noexcept
-    : tracked_refs_(tracked_refs) {
-  auto it = tracked_refs_->source_location_trackers.find(loc);
-  if (it == tracked_refs_->source_location_trackers.end()) {
-    auto [new_it, inserted] = tracked_refs_->source_location_trackers.insert(
-        std::make_unique<SourceLocationTracker>(SourceLocationTracker{loc, 0}));
-    it = new_it;
-  }
+                     TrackedRefs* tracked_refs) noexcept {
+  auto it = tracked_refs->source_location_trackers.lazy_emplace(
+      loc, [&](const auto& ctor) {
+        ctor(std::make_unique<SourceLocationTracker>(
+            SourceLocationTracker{loc, 0, tracked_refs}));
+      });
   tracker_ptr_ = it->get();
   tracker_ptr_->count++;
 }
 
-RefCounter::Ref::Ref() noexcept : tracked_refs_(nullptr) {}
+RefCounter::Ref::Ref() noexcept {}
 
-RefCounter::Ref::Ref(Ref&& rhs) noexcept
-    : tracker_ptr_(rhs.tracker_ptr_), tracked_refs_(rhs.tracked_refs_) {
+RefCounter::Ref::Ref(Ref&& rhs) noexcept : tracker_ptr_(rhs.tracker_ptr_) {
   // Count doesn't change.
   rhs.tracker_ptr_ = nullptr;
-  rhs.tracked_refs_ = nullptr;
 }
 
 RefCounter::Ref& RefCounter::Ref::operator=(Ref&& rhs) noexcept {
@@ -154,19 +151,13 @@ RefCounter::Ref& RefCounter::Ref::operator=(Ref&& rhs) noexcept {
   DecrementCount();
 
   tracker_ptr_ = rhs.tracker_ptr_;
-  if (tracked_refs_ && tracked_refs_ != rhs.tracked_refs_) {
-    DeleteTrackedRefsIfNeeded(tracked_refs_);
-  }
-  tracked_refs_ = rhs.tracked_refs_;
-
   rhs.tracker_ptr_ = nullptr;
-  rhs.tracked_refs_ = nullptr;
 
   return *this;
 }
 
 RefCounter::Ref::Ref(const Ref& other) noexcept
-    : tracker_ptr_(other.tracker_ptr_), tracked_refs_(other.tracked_refs_) {
+    : tracker_ptr_(other.tracker_ptr_) {
   if (tracker_ptr_) {
     tracker_ptr_->count++;
   }
@@ -174,16 +165,10 @@ RefCounter::Ref::Ref(const Ref& other) noexcept
 
 RefCounter::Ref& RefCounter::Ref::operator=(const Ref& other) noexcept {
   // This check prevents any work being done in the case of a self-copy.
-  if (tracked_refs_ != other.tracked_refs_ ||
-      tracker_ptr_ != other.tracker_ptr_) {
+  if (tracker_ptr_ != other.tracker_ptr_) {
     DecrementCount();
 
     tracker_ptr_ = other.tracker_ptr_;
-    if (tracked_refs_ && tracked_refs_ != other.tracked_refs_) {
-      DeleteTrackedRefsIfNeeded(tracked_refs_);
-    }
-    tracked_refs_ = other.tracked_refs_;
-
     if (tracker_ptr_) {
       tracker_ptr_->count++;
     }
@@ -192,29 +177,26 @@ RefCounter::Ref& RefCounter::Ref::operator=(const Ref& other) noexcept {
   return *this;
 }
 
-RefCounter::Ref::~Ref() noexcept {
-  DecrementCount();
-  if (tracked_refs_) {
-    DeleteTrackedRefsIfNeeded(tracked_refs_);
-    tracked_refs_ = nullptr;
-  }
-}
+RefCounter::Ref::~Ref() noexcept { DecrementCount(); }
 
 void RefCounter::Ref::DecrementCount() {
   if (tracker_ptr_) {
+    TrackedRefs* tracked_refs = tracker_ptr_->tracked_refs;
     tracker_ptr_->count--;
     if (tracker_ptr_->count == 0) {
-      auto it = tracked_refs_->source_location_trackers.find(tracker_ptr_->loc);
-      if (it != tracked_refs_->source_location_trackers.end()) {
-        tracked_refs_->source_location_trackers.erase(it);
+      auto it = tracked_refs->source_location_trackers.find(tracker_ptr_->loc);
+      if (it != tracked_refs->source_location_trackers.end()) {
+        tracked_refs->source_location_trackers.erase(it);
       }
     }
+    DeleteTrackedRefsIfNeeded(tracked_refs);
+    tracker_ptr_ = nullptr;
   }
 }
 
 RefCounter::CounterType RefCounter::Ref::GetCount() const {
-  if (tracked_refs_) {
-    return GetTrackedRefsCount(*tracked_refs_);
+  if (tracker_ptr_) {
+    return GetTrackedRefsCount(*tracker_ptr_->tracked_refs);
   }
   return 0;
 }
@@ -227,8 +209,8 @@ SmallSourceLocation RefCounter::Ref::GetLocation() const {
 }
 
 bool RefCounter::Ref::IsCounterDestroyed() const {
-  if (tracked_refs_) {
-    return tracked_refs_->is_destroyed;
+  if (tracker_ptr_) {
+    return tracker_ptr_->tracked_refs->is_destroyed;
   }
 
   // There is no counter, so it counts as destroyed.
@@ -237,7 +219,10 @@ bool RefCounter::Ref::IsCounterDestroyed() const {
 
 RefCounter::Ref RefCounter::Ref::WithNewLocation(
     SmallSourceLocation loc) const {
-  return Ref(loc, tracked_refs_);
+  if (tracker_ptr_) {
+    return Ref(loc, tracker_ptr_->tracked_refs);
+  }
+  return Ref();
 }
 
 RefCounter::RefCounter() noexcept {}

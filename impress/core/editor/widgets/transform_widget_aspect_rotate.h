@@ -37,6 +37,7 @@ class TransformWidgetAspectRotate : public TransformWidgetAspect {
  protected:
   AspectType GetAspectType() const override { return AspectType::kRotate; }
   float3 GetAxis() const override;
+  float3 GetAxisFromState() const override;
   void CreateCollider(Box bounds) override;
   void UpdateWidgetTransform() override;
   void UpdateAspect(bool commit,

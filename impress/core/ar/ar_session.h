@@ -186,7 +186,7 @@ class ArSession {
   // Returns a handle to the camera texture. In GL, this value should be
   // static_cast to a GLuint. On iOS, it is a CVPixelBufferRef.
   virtual const absl::optional<intptr_t> camera_texture_id() const {
-    return frame_ ? absl::make_optional(frame_->camera_texture_id())
+    return frame_ ? std::make_optional(frame_->camera_texture_id())
                   : absl::nullopt;
   }
 
@@ -196,7 +196,7 @@ class ArSession {
 
   // Gets the time stamp of the current frame.
   virtual absl::optional<absl::Time> Timestamp() const {
-    return frame_ ? absl::make_optional(frame_->timestamp()) : absl::nullopt;
+    return frame_ ? std::make_optional(frame_->timestamp()) : absl::nullopt;
   }
 
   // Gets all trackables in the session.

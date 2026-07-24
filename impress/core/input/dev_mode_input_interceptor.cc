@@ -167,6 +167,10 @@ void DevModeInputInterceptor::FilterPointerEvents(
 
   const bool use_remote_screen = IsUsingRemoteScreen();
 
+  if (use_remote_screen && source == InputEventSource::kRemote) {
+    SanitizeRemotePointerEvents(pointer_events);
+  }
+
   if (use_remote_screen && source == InputEventSource::kLocal) {
     // If the remote editor is active, local touches on the physical screen
     // should bypass ImGui but still reach the application (e.g. for camera
@@ -340,6 +344,34 @@ void DevModeInputInterceptor::FilterPointerEvents(
     event = PointerEvent(event.Type(), transformed_pointers,
                          event.ChangedPointerCount(), event.ElapsedTime(),
                          event.GetDeviceType());
+  }
+}
+
+void DevModeInputInterceptor::SanitizeRemotePointerEvents(
+    std::vector<PointerEvent>& pointer_events) {
+  // Sanitize remote event pointers. If we have multiple pointers and one of
+  // them is Left Click (0) or Right Click (2), remove the hover/middle
+  // pointer (1) to prevent blocking single-finger gestures (like
+  // DragGesture).
+  for (PointerEvent& event : pointer_events) {
+    if (event.GetPointers().size() <= 1) continue;
+    bool has_left_or_right = false;
+    for (const Pointer& p : event.GetPointers()) {
+      if (p.id == kMousePointerIdLeft || p.id == kMousePointerIdRight) {
+        has_left_or_right = true;
+        break;
+      }
+    }
+    if (!has_left_or_right) continue;
+    clean_pointers_.clear();
+    clean_pointers_.reserve(event.GetPointers().size());
+    for (const Pointer& p : event.GetPointers()) {
+      if (p.id != kMousePointerIdMiddle) {
+        clean_pointers_.push_back(p);
+      }
+    }
+    event = PointerEvent(event.Type(), clean_pointers_, clean_pointers_.size(),
+                         event.ElapsedTime(), event.GetDeviceType());
   }
 }
 

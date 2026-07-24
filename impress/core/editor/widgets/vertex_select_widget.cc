@@ -136,7 +136,7 @@ VertexSelectWidget::VertexSelectWidget(BaseView& view, Dispatcher& dispatcher,
 std::optional<std::array<double3, 3>>
 VertexSelectWidget::GetVertexPositionsPrecise() {
   if (!active_node_) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   auto primitive = active_node_->GetComponent<GltfMesh>()
                        ->GetMeshData()[picked_triangle_->primitive_id];

@@ -58,11 +58,15 @@ void TransformWidget::Setup() {
       this);
 
   editor_dispatcher.Connect(
-      [this](const editor::NodeSelectionChangedEvent& event) mutable {
+      [this](const editor::NodeSelectionChangedEvent& event) {
         const absl::flat_hash_set<NodeHandle>& selected_nodes =
             GetView().GetRegistry().Get<Editor>()->get().GetSelectedNodes();
         active_nodes_.assign(selected_nodes.begin(), selected_nodes.end());
-        GetNode()->SetEnabled(!active_nodes_.empty());
+        const bool has_nodes = !active_nodes_.empty();
+        GetNode()->SetEnabled(has_nodes);
+        if (has_nodes) {
+          UpdateWidgetTransform();
+        }
       },
       this);
 
@@ -70,19 +74,18 @@ void TransformWidget::Setup() {
       [this](const imp::KeyboardEvent& event) {
         if (ImGui::GetIO().WantTextInput) return;
 
+        Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
         if (event.type == KeyboardEventType::kOnUp) {
           switch (event.key.code) {
             case VirtualKeyCode::VK_LEFTBRACKET:
               scale_level_--;
               scale_ = pow(1.1f, scale_level_);
-              GetView().GetDispatcher().Send(
-                  TransformWidgetScaleChangedEvent(scale_));
+              editor.GetSettings().transform_widget_scale.Set(scale_);
               break;
             case VirtualKeyCode::VK_RIGHTBRACKET:
               scale_level_++;
               scale_ = pow(1.1f, scale_level_);
-              GetView().GetDispatcher().Send(
-                  TransformWidgetScaleChangedEvent(scale_));
+              editor.GetSettings().transform_widget_scale.Set(scale_);
               break;
             default:
               break;
@@ -98,12 +101,21 @@ void TransformWidget::Setup() {
             case VirtualKeyCode::VK_r:
               SetMode(Mode::kScale);
               break;
+            case VirtualKeyCode::VK_x:
+              ToggleSpaceMode();
+              break;
             default:
               break;
           }
         }
       },
       this);
+}
+
+void TransformWidget::ToggleSpaceMode() {
+  use_local_space_ = !use_local_space_;
+  GetView().GetDispatcher().Send(
+      TransformWidgetSpaceModeChangedEvent(use_local_space_));
 }
 
 void TransformWidget::CycleMode() {
@@ -121,8 +133,6 @@ void TransformWidget::CycleMode() {
 }
 
 void TransformWidget::SetMode(Mode mode) {
-  if (!IsActive()) return;
-
   mode_ = mode;
   if (state_.translate) state_.translate->SetEnabled(mode_ == Mode::kTranslate);
   if (state_.rotate) state_.rotate->SetEnabled(mode_ == Mode::kRotate);
@@ -130,6 +140,10 @@ void TransformWidget::SetMode(Mode mode) {
 }
 
 void TransformWidget::Update(const FrameTime& frame_time) {
+  UpdateWidgetTransform();
+}
+
+void TransformWidget::UpdateWidgetTransform() {
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
   if (!editor.GetEditorRoot()->IsActive()) return;
   if (active_nodes_.empty()) {
@@ -170,8 +184,6 @@ void TransformWidget::Update(const FrameTime& frame_time) {
 
   GetNode()->SetWorldPosition(camera_position + dif);
   GetNode()->SetLocalScale(float3(kBaseScale * scale_));
-  // TODO: Enable for local mode.
-  // GetNode()->SetWorldRotation(active_nodes_[0]->GetWorldRotation());
 }
 
 }  // namespace imp::editor

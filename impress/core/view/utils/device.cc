@@ -20,7 +20,7 @@
 
 namespace imp {
 
-Device::Device() : physical_pixel_ratio_(absl::nullopt) {}
+Device::Device() : physical_pixel_ratio_(std::nullopt) {}
 
 float2 Device::GetPhysicalPixelRatio() const {
   if (!physical_pixel_ratio_.has_value()) {

@@ -127,15 +127,15 @@ class AssetManager {
 
   Future<AssetPtr<GltfAsset>> LoadGltfAsset(
       const AssetDefinition& asset_definition,
-      absl::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      absl::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
   Future<AssetPtr<GltfAsset>> LoadGltfAsset(
       absl::string_view asset_url,
-      absl::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      absl::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
   Future<AssetPtr<GltfAsset>> LoadGltfAsset(
       absl::Cord contents, absl::string_view asset_url,
-      absl::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      absl::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
 #if IMP_PLATFORM(ANDROID)
   Future<AssetPtr<GltfAsset>> LoadGltfAsset(

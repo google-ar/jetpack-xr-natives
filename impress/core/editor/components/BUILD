@@ -40,12 +40,11 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core/actions:input_action_event",
-        "//core/common:platform_storage_interface",
         "//core/common:registry",
         "//core/editor",
         "//core/editor:editor_info",
         "//core/editor:editor_plugin",
-        "//core/editor:events",
+        "//core/editor/common:notifying_property",
         "//core/editor/widgets:input_settings_widget_constants",
         "//core/input",
         "//core/math",
@@ -75,6 +74,7 @@ cc_library(
         "//core/editor",
         "//core/editor:editor_plugin",
         "//core/editor:events",
+        "//core/editor/common:notifying_property",
         "//core/editor/widgets:input_settings_widget_constants",
         "//core/input",
         "//core/math",
@@ -161,10 +161,9 @@ cc_library(
         "//core/collision:collision_helpers",
         "//core/collision:plane",
         "//core/collision:ray",
-        "//core/common:platform_storage_interface",
         "//core/common:registry",
         "//core/editor",
-        "//core/editor:events",
+        "//core/editor/common:notifying_property",
         "//core/math",
         "//core/ncsb",
         "//core/render:primitive_shape_renderer",
@@ -206,6 +205,7 @@ cc_library(
         "//core/common:debug_draw",
         "//core/common:registry",
         "//core/editor",
+        "//core/editor:events",
         "//core/editor/xr:xr_grab_handle",
         "//core/input",
         "//core/materials",
@@ -228,13 +228,9 @@ cc_library(
         "@dear_imgui",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine/input:split_engine_input_event",
-        "@third_party//split_engine/materials:texture_external_material",
-    ] + if_android(
-        [
-            "//core/window:open_gl_imgui_renderer",
-            "//core/render/android:android_external_texture_surface",
-        ],
-    ),
+    ] + if_android([
+        "//core/render/android:android_external_texture_surface",
+    ]),
     alwayslink = 1,
 )
 

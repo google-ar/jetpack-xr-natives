@@ -14,16 +14,19 @@
 
 #include "core/editor/widgets/console.h"
 
+#include <functional>
 #include <string>
 #include <tuple>
 #include <utility>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "dear_imgui/imgui.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/common/platform_helpers.h"
+#include "core/editor/editor_info.h"
 #include "core/editor/editor_style.h"
 #include "core/editor/widgets/icons/texture_assets.h"
 #include "core/render/texture_asset.h"
@@ -52,8 +55,17 @@ const ImVec4 kFilterByColor = {1.0f, 1.0f, 1.0f, 0.6f};
 const int kMaxLogs = 10000;
 
 Console::Console(BaseView& view) : view_(view) {
-  // TODO: Console log frequently crashes in split engine mode.
-  if (!view_.GetSplitEngineSerializer()) {
+  bool should_enable_log_handler = true;
+  if (absl::StatusOr<std::reference_wrapper<EditorInfo>> editor_info =
+          view_.GetRegistry().Get<EditorInfo>();
+      editor_info.ok()) {
+    should_enable_log_handler = editor_info->get().GetPlatformMode() !=
+                                EditorInfo::PlatformMode::kXrSplitEngineApp;
+  } else if (view_.GetSplitEngineSerializer()) {
+    should_enable_log_handler = false;
+  }
+
+  if (should_enable_log_handler) {
     output::AddExternalLogHandler(this, HandleLog);
     output::Configure(true);
   }

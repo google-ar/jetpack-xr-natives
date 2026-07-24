@@ -66,4 +66,7 @@ message SetupParams {
   // The setup params specific for XR / OpenXR platform, such as stereoscopic
   // rendering, foveation, etc.
   xr.XrSetupParams xr_setup_params = 12;
+  // If true, view attachment to surface or texture is posted to the main thread
+  // handler.
+  bool attach_view_on_main_thread_handler = 13 [default = false];
 }

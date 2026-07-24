@@ -202,13 +202,17 @@ Future<WasmTextureContents> WasmDecodeImageManager::DecodeImageToTexture(
   GLuint texture;
   glGenTextures(1, &texture);
   GLuint texture_format = FilamentTextureFormatToGLEnum(format);
+  bool is_fl0 = false;
+#if FILAMENT_ENABLE_FEATURE_LEVEL_0 == 1
+  is_fl0 = true;
+#endif  // FILAMENT_ENABLE_FEATURE_LEVEL_0 == 1
   MAIN_THREAD_EM_ASM(
       {
         Module['wasmDecodeImageManager'].decodeImageToTexture(
-            $0, $1, $2, GL.textures[$3], $3, $4, $5);
+            $0, $1, $2, GL.textures[$3], $3, $4, $5, !!$6);
       },
       future_id, resource.GetData().Data(), resource.GetData().Size(), texture,
-      texture_format, requested_levels);
+      texture_format, requested_levels, is_fl0);
   return texture_future.Then(
       [this, future_id,
        texture](absl::StatusOr<WasmTextureContents> texture_contents) {

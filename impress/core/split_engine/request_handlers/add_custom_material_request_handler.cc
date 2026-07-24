@@ -38,6 +38,7 @@
 #include "core/materials/compiler/material_compiler_config.h"
 #include "core/materials/compiler/runtime_material_compiler.h"
 #include "core/materials/compiler/runtime_material_compiler_creator.h"
+#include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/request_handlers/request_handler_registry.h"
 #include "core/split_engine/split_engine_filament_resource_ptrs.h"
@@ -48,6 +49,46 @@
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
+
+namespace {
+
+// Helper to safely unpack VariantFilter from split engine schema to material
+// compiler schema.
+inline schemas::VariantFilter UnpackVariantFilter(
+    android_xr::schemas::VariantFilter variant_filter) {
+  using MaterialCompilerBit = schemas::VariantFilter;
+  using SplitEngineBit = android_xr::schemas::VariantFilter;
+
+  MaterialCompilerBit result = MaterialCompilerBit::NONE;
+  if (!!(variant_filter & SplitEngineBit::DIRECTIONAL_LIGHTING)) {
+    result |= MaterialCompilerBit::DIRECTIONAL_LIGHTING;
+  }
+  if (!!(variant_filter & SplitEngineBit::DYNAMIC_LIGHTING)) {
+    result |= MaterialCompilerBit::DYNAMIC_LIGHTING;
+  }
+  if (!!(variant_filter & SplitEngineBit::SHADOW_RECEIVER)) {
+    result |= MaterialCompilerBit::SHADOW_RECEIVER;
+  }
+  if (!!(variant_filter & SplitEngineBit::SKINNING)) {
+    result |= MaterialCompilerBit::SKINNING;
+  }
+  if (!!(variant_filter & SplitEngineBit::FOG)) {
+    result |= MaterialCompilerBit::FOG;
+  }
+  if (!!(variant_filter & SplitEngineBit::VSM)) {
+    result |= MaterialCompilerBit::VSM;
+  }
+  if (!!(variant_filter & SplitEngineBit::SSR)) {
+    result |= MaterialCompilerBit::SSR;
+  }
+  if (!!(variant_filter & SplitEngineBit::STE)) {
+    result |= MaterialCompilerBit::STE;
+  }
+
+  return result;
+}
+
+}  // namespace
 
 Future<flatbuffers::DetachedBuffer> AddCustomMaterialHandler::HandleRequest(
     SharedContext& shared_context, AppContext& app_context,
@@ -133,21 +174,30 @@ AddCustomMaterialHandler::CreateFilamentMaterial(
   config.platform = RuntimeMaterialCompiler::Platform::Desktop;
 #endif
 
+  config.target_api = RuntimeMaterialCompiler::TargetApi::NONE;
 #if IMP_MATERIAL_API(OPENGL)
-  config.target_api = RuntimeMaterialCompiler::TargetApi::OpenGL;
-#elif IMP_MATERIAL_API(VULKAN)
-  config.target_api = RuntimeMaterialCompiler::TargetApi::Vulkan;
-#elif IMP_MATERIAL_API(METAL)
-  config.target_api = RuntimeMaterialCompiler::TargetApi::Metal;
+  config.target_api =
+      config.target_api | RuntimeMaterialCompiler::TargetApi::OpenGL;
+#endif
+#if IMP_MATERIAL_API(VULKAN)
+  config.target_api =
+      config.target_api | RuntimeMaterialCompiler::TargetApi::Vulkan;
+#endif
+#if IMP_MATERIAL_API(METAL)
+  config.target_api =
+      config.target_api | RuntimeMaterialCompiler::TargetApi::Metal;
 #endif
 
   return GetOrCreateMaterialCompiler(view).Then(
-      [this, &spec, config](RuntimeMaterialCompiler* compiler)
+      [this, &spec, config](RuntimeMaterialCompiler* compiler) mutable
           -> Future<OwnedFilamentMaterialPtr> {
         MaterialPreCompileOptions precompile_options;
         if (spec.precompile_options()) {
           precompile_options = UnPack(*spec.precompile_options());
+          config.variant_filter =
+              UnpackVariantFilter(spec.precompile_options()->variant_filter());
         }
+
         absl::Time start = absl::Now();
         return compiler
             ->CompileMaterial(spec.source()->string_view(), config,

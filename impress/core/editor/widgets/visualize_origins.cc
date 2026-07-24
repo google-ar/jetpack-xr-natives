@@ -15,8 +15,8 @@
 #include "core/editor/widgets/visualize_origins.h"
 
 #include "core/common/debug_draw.h"
-#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
 #include "core/math/vec.h"
@@ -34,14 +34,6 @@ constexpr debug_draw::Color kOriginColor = debug_draw::kPink;
 constexpr float kCrossHalfExtent = 0.05f;
 
 VisualizeOrigins::VisualizeOrigins(BaseView& view) : view_(view) {
-  PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
-  if (storage.GetBool(kShowAllOriginsEnabledKey,
-                      kShowAllOriginsEnabledDefault)) {
-    mode_ = Mode::kShowAllOrigins;
-  } else {
-    mode_ = Mode::kShowSelectedOrigins;
-  }
-
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
   editor_dispatcher.Connect(
@@ -52,18 +44,13 @@ VisualizeOrigins::VisualizeOrigins(BaseView& view) : view_(view) {
             view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
       },
       this);
-  editor_dispatcher.Connect(
-      [this](const EditorSettingChangedEvent& event) mutable {
-        // Switch modes based on the "show all origins" setting.
-        if (event.show_all_origins_enabled.has_value()) {
-          if (*event.show_all_origins_enabled) {
-            mode_ = Mode::kShowAllOrigins;
-          } else {
-            mode_ = Mode::kShowSelectedOrigins;
-          }
-        }
-      },
-      this);
+
+  const auto change_mode = [this](bool enabled, bool /*old*/) {
+    mode_ = enabled ? Mode::kShowAllOrigins : Mode::kShowSelectedOrigins;
+  };
+  show_all_origins_binding_ =
+      PropertyBinding<bool>(editor.GetSettings().show_all_origins_enabled,
+                            change_mode, BindingMode::kBindAndFire);
 }
 
 void VisualizeOrigins::DrawImGui() {

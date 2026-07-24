@@ -42,6 +42,7 @@ cc_library(
     deps = [
         ":surface_renderer_proto_cc_imp",
         "//:api",
+        "//core/camera:camera_proto_cc_imp",
         "//core/view:view_events",
         "//core/view/framework",
         "//core/view/utils:render_setting_utils",
@@ -185,7 +186,9 @@ cc_library(
         "//core/view/utils:render_setting_utils",
         "//core/view/utils:render_settings_proto_cc_imp",
         "//core/window:filament_host",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",

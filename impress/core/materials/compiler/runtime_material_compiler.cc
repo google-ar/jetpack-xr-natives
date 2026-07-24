@@ -61,17 +61,16 @@ Future<filament::Material*> RuntimeMaterialCompiler::CompileMaterial(
 }
 
 Future<std::vector<uint8_t>> RuntimeMaterialCompiler::CompileMaterialToBytes(
-    absl::string_view source_material_string, Platform platform,
-    TargetApi target_api) {
-  return CompileMaterialInternal(source_material_string,
-                                 MaterialCompilerConfig{platform, target_api});
+    absl::string_view source_material_string,
+    const MaterialCompilerConfig& config) {
+  return CompileMaterialInternal(source_material_string, config);
 }
 
 Future<std::vector<uint8_t>> RuntimeMaterialCompiler::CompileMaterialInternal(
     absl::string_view source_material_string,
     const MaterialCompilerConfig& config) {
   // Check if material exists in the cache first.
-  MaterialHash hash = cache_->Hash(source_material_string);
+  MaterialHash hash = cache_->Hash(source_material_string, config);
   absl::StatusOr<std::vector<uint8_t>> cached_cmat = cache_->Get(hash);
   if (cached_cmat.ok()) {
     return Future<std::vector<uint8_t>>(*cached_cmat);

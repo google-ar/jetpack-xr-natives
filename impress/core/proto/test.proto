@@ -279,3 +279,25 @@ message TestMapMessage {
 message TestNestedMapMessage {
   map<string, TestMapMessage> nested_map = 1;
 }
+
+message PreloadFieldProto {
+  option (imp.native_type) = "::test::PreloadField";
+  option (imp.native_include) = "core/proto/test_native.h";
+}
+
+message PreloadStateProto {
+  PreloadFieldProto field = 1;
+}
+
+message InnerProtoStateProto {
+  option (imp.native_type) = "::test::InnerProtoState";
+  option (imp.native_include) = "core/proto/test_native.h";
+}
+
+message OuterProtoState {
+  InnerProtoStateProto inner = 1;
+}
+
+message NestedPreloadStateProto {
+  OuterProtoState outer = 1;
+}

@@ -15,6 +15,7 @@
 
 #include "openxr/openxr.h"
 #include "absl/log/log.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "common/openxr_util.h"
@@ -52,7 +53,7 @@ const std::array<std::string, 13> kRequiredExtensions = {
 
 // Extensions must be listed after their dependencies.
 // LINT.IfChange
-const std::array<OpenXrExtension, 9> kOptionalExtensions = {{
+const std::array<OpenXrExtension, 10> kOptionalExtensions = {{
     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -71,6 +72,7 @@ const std::array<OpenXrExtension, 9> kOptionalExtensions = {{
      {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_ANDROID_TRACKABLES_QR_CODE_EXTENSION_NAME,
      {XR_EXT_FUTURE_EXTENSION_NAME}},
+    {XR_ANDROID_ENUMERATE_SYSTEM_EXTENSION_PROPERTIES_EXTENSION_NAME, {}},
 }};
 // LINT.ThenChange(//depot/google3/third_party/jetpack_xr_natives/openxr/openxr_manager.cc)
 
@@ -189,6 +191,45 @@ bool OpenXrInstanceManager::GetEnabledExtensions(
   return true;
 }
 
+bool OpenXrInstanceManager::IsExtensionSupportedBySystem(
+    absl::string_view extension_name) {
+  for (const auto& extension : system_extension_properties_) {
+    if (extension.properties.extensionName == extension_name) {
+      return extension.isSupported;
+    }
+  }
+  return false;
+}
+
+bool OpenXrInstanceManager::EnumerateSystemExtensionProperties() {
+  if (has_enumerated_system_extension_properties_) {
+    return true;
+  }
+
+  system_extension_properties_.clear();
+
+  // If the function is not loaded, then we cannot enumerate the system
+  // extension properties.
+  if (xr_enumerate_system_extension_properties_ == nullptr) {
+    return false;
+  }
+
+  uint32_t propertiesCount;
+  XR_RETURN_IF_FAILED(xr_enumerate_system_extension_properties_(
+      instance_, system_id_, 0, &propertiesCount, NULL));
+
+  system_extension_properties_.resize(propertiesCount);
+  for (auto& prop : system_extension_properties_) {
+    prop.type = XR_TYPE_SYSTEM_EXTENSION_PROPERTIES_ANDROID;
+  }
+  XR_RETURN_IF_FAILED(xr_enumerate_system_extension_properties_(
+      instance_, system_id_, propertiesCount, &propertiesCount,
+      system_extension_properties_.data()));
+
+  has_enumerated_system_extension_properties_ = true;
+  return true;
+}
+
 bool OpenXrInstanceManager::IsHandTrackingSupported() {
   absl::MutexLock lock(mutex_);
   if (!GetXrSystem()) {
@@ -196,6 +237,11 @@ bool OpenXrInstanceManager::IsHandTrackingSupported() {
     return false;
   }
 
+  if (EnumerateSystemExtensionProperties()) {
+    return IsExtensionSupportedBySystem(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
+  }
+
+  // Fall back to using xrGetSystemProperties
   XrSystemHandTrackingPropertiesEXT handTrackingProperties = {
     .type = XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT,
   };
@@ -217,6 +263,11 @@ bool OpenXrInstanceManager::IsEyeTrackingSupported() {
     return false;
   }
 
+  if (EnumerateSystemExtensionProperties()) {
+    return IsExtensionSupportedBySystem(XR_ANDROID_EYE_TRACKING_EXTENSION_NAME);
+  }
+
+  // Fall back to using xrGetSystemProperties
   XrSystemEyeTrackingPropertiesANDROID eyeTrackingProperties = {
     .type = XR_TYPE_SYSTEM_EYE_TRACKING_PROPERTIES_ANDROID,
   };
@@ -238,6 +289,12 @@ bool OpenXrInstanceManager::IsDepthTrackingSupported() {
     return false;
   }
 
+  if (EnumerateSystemExtensionProperties()) {
+    return IsExtensionSupportedBySystem(
+        XR_ANDROID_DEPTH_TEXTURE_EXTENSION_NAME);
+  }
+
+  // Fall back to using xrGetSystemProperties
   XrSystemDepthTrackingPropertiesANDROID depthTrackingProperties = {
     .type = XR_TYPE_SYSTEM_DEPTH_TRACKING_PROPERTIES_ANDROID,
   };
@@ -259,6 +316,11 @@ bool OpenXrInstanceManager::IsGeospatialSupported() {
     return false;
   }
 
+  if (EnumerateSystemExtensionProperties()) {
+    return IsExtensionSupportedBySystem(XR_ANDROID_GEOSPATIAL_EXTENSION_NAME);
+  }
+
+  // Fall back to using xrGetSystemProperties
   XrSystemGeospatialPropertiesANDROID geospatialProperties = {
     .type = XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROID,
   };
@@ -366,6 +428,12 @@ bool OpenXrInstanceManager::CreateInstance(JNIEnv* env, jobject context) {
   // Retrieve the system ID.
   if (!GetXrSystem()) {
     return false;
+  }
+
+  if (XR_FAILED(xrGetInstanceProcAddr(
+          instance_, "xrEnumerateSystemExtensionPropertiesANDROID",
+          (PFN_xrVoidFunction*)(&xr_enumerate_system_extension_properties_)))) {
+    LOG(INFO) << "xrEnumerateSystemExtensionPropertiesANDROID not available.";
   }
 
   return true;

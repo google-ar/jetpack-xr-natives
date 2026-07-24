@@ -21,9 +21,48 @@
 #include <optional>
 #include <utility>
 
+#include "absl/status/status.h"
+#include "core/async/future.h"
 #include "core/proto/proto_common.h"
+namespace imp {
+class BaseView;
+}
 
 namespace test {
+
+struct PreloadField {
+  PreloadField() = default;
+  PreloadField(const PreloadField& other) : preload_future() {}
+  PreloadField& operator=(const PreloadField& other) {
+    preload_future = ::imp::Future<absl::Status>();
+    return *this;
+  }
+  PreloadField(PreloadField&&) = default;
+  PreloadField& operator=(PreloadField&&) = default;
+
+  ::imp::Future<absl::Status> AsyncPreload(::imp::BaseView& view) {
+    return preload_future;
+  }
+
+  ::imp::Future<absl::Status> preload_future;
+};
+
+struct InnerProtoState {
+  InnerProtoState() = default;
+  InnerProtoState(const InnerProtoState& other) : preload_future() {}
+  InnerProtoState& operator=(const InnerProtoState& other) {
+    preload_future = ::imp::Future<absl::Status>();
+    return *this;
+  }
+  InnerProtoState(InnerProtoState&&) = default;
+  InnerProtoState& operator=(InnerProtoState&&) = default;
+
+  ::imp::Future<absl::Status> AsyncPreload(::imp::BaseView& view) {
+    return preload_future;
+  }
+
+  ::imp::Future<absl::Status> preload_future;
+};
 
 struct NativeStruct {
   int32_t i32;

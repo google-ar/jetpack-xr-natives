@@ -26,14 +26,19 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "core/assets/asset_ptr.h"
+#include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
+#include "core/camera/camera_component.h"
 #include "core/camera/camera_state.proto.imp.h"
 #include "core/effects/shadow/contact_shadow_assets.h"
+#include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/model/mesh/mesh_factory.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_system.h"
 #include "core/ncsb/node_handle.h"
+#include "core/render/mesh_renderer.h"
 #include "core/render/texture.h"
 #include "core/render_passes/texture_pipeline_renderer.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
@@ -41,13 +46,15 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
-#include "core/view/framework/camera/camera_component.h"
 #include "core/view/framework/camera/camera_helpers.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
-#include "core/view/framework/render/mesh_factory.h"
-#include "core/view/framework/render/mesh_renderer.h"
+#include "core/view/utils/frame_time.h"
 
 namespace imp {
+
+namespace {
+constexpr absl::string_view kClipFromWorldParameter = "clipFromWorld";
+}  // namespace
 
 static constexpr int kDefaultShadowTextureSize = 256;
 static constexpr float kDefaultBlurFactor = .05f;
@@ -142,7 +149,15 @@ void ContactShadowProjector::Cleanup() {
   projector_system.UnregisterProjector(state_.target_group);
 }
 
-void ContactShadowProjector::Update() { Refresh(); }
+bool ContactShadowProjector::IsStatic() const {
+  return state_.is_static.value_or(kIsStaticDefault);
+}
+
+void ContactShadowProjector::Update(const FrameTime& frame_time) {
+  if (!IsStatic()) {
+    UpdateProjectorClipFromWorld();
+  }
+}
 
 Future<absl::Status> ContactShadowProjector::Setup() {
   if (state_.target_group.empty()) {
@@ -165,18 +180,37 @@ void ContactShadowProjector::OnActiveStatusChanged(bool is_active) {
   }
 }
 
-void ContactShadowProjector::Refresh() {
-  bool is_static = this->state_.is_static.value_or(kIsStaticDefault);
-  if (!is_static) return;
-  // Ensure the components are present, in case the refresh got called
-  // during shutdown or destruction of the node.
-  if (camera_) camera_.Get()->SetEnabled(true);
-  if (pass_renderer_) pass_renderer_->SetEnabled(true);
-
-  if (IsActive() &&
-      !FilterNodesViewableByCamera(camera_, state_.target_group).empty()) {
-    MoveIntoView(camera_, state_.target_group).IgnoreError();
+void ContactShadowProjector::UpdateProjectorClipFromWorld() {
+  if (pass_renderer_ && camera_) {
+    if (std::optional<BorrowedMaterialPtr> override_mat =
+            pass_renderer_->GetOverrideMaterial(0)) {
+      // clang-format off
+      constexpr mat4 kGlToDx{mat4::row_major_init{
+          1.0f, 0.0f,  0.0f, 0.0f,
+          0.0f, 1.0f,  0.0f, 0.0f,
+          0.0f, 0.0f, -0.5f, 0.5f,  // z_dx = -0.5 * z_gl + 0.5
+          0.0f, 0.0f,  0.0f, 1.0f
+      }};
+      // clang-format on
+      const mat4f clipFromWorld(kGlToDx * camera_->ClipFromWorld());
+      (*override_mat)->SetParameter(kClipFromWorldParameter, clipFromWorld);
+    }
   }
+}
+
+void ContactShadowProjector::Refresh() {
+  if (IsStatic()) {
+    // Ensure the components are present, in case the refresh got called
+    // during shutdown or destruction of the node.
+    if (camera_) camera_.Get()->SetEnabled(true);
+    if (pass_renderer_) pass_renderer_->SetEnabled(true);
+
+    if (IsActive() &&
+        !FilterNodesViewableByCamera(camera_, state_.target_group).empty()) {
+      MoveIntoView(camera_, state_.target_group).IgnoreError();
+    }
+  }
+  UpdateProjectorClipFromWorld();
 }
 
 Future<absl::Status> ContactShadowProjector::SetupProjector() {
@@ -230,7 +264,7 @@ Future<absl::Status> ContactShadowProjector::SetupProjector() {
       .override_material =
           MaterialDefinition{
               .asset = std::string(
-                  contact_shadow_assets::kSimpleWhiteCmat.GetUrl())},
+                  contact_shadow_assets::kProjectorWhiteCmat.GetUrl())},
   });
 
   // Have the camera capture a quad with a vertically blurred pass on it.
@@ -278,11 +312,9 @@ Future<absl::Status> ContactShadowProjector::SetupProjector() {
         Connect(
             [this](const imp::TexturePipelineRenderer::PostRenderEvent& event) {
               if (event.GetOriginatingNode() != this->GetNode()) return;
-              bool is_static =
-                  this->state_.is_static.value_or(kIsStaticDefault);
               // If the projector is static,
               // the components should not be enabled.
-              bool is_enabled = !is_static;
+              bool is_enabled = !IsStatic();
               pass_renderer_->SetEnabled(is_enabled);
               camera_->SetEnabled(is_enabled);
             },

@@ -38,7 +38,7 @@ DoubleTapGesture::CreateFn DoubleTapGesture::GetCreateFunction(
         return pointer_hit.event.Type() == PointerEventType::kDown
                    ? std::optional<DoubleTapGesture>(DoubleTapGesture(
                          dispatcher, pointer_utils, pointer_hit))
-                   : absl::nullopt;
+                   : std::nullopt;
       };
 }
 

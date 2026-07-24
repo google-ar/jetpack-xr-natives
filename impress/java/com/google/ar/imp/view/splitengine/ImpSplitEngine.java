@@ -18,6 +18,7 @@ package com.google.ar.imp.view.splitengine;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.google.ar.imp.view.FrameScheduler;
 
 /** A class that abstracts the state of the SplitEngine from the ImpSplitEngineApi. */
 public final class ImpSplitEngine {
@@ -29,6 +30,7 @@ public final class ImpSplitEngine {
     @Nullable public String jniLibraryName;
     @Nullable public String viewIdentifier;
     public int bridgeBufferSizeKb;
+    @NonNull public FrameScheduler.ThreadMode threadMode = FrameScheduler.ThreadMode.MAIN_DEFAULT;
   }
 
   /** The screen size in pixels. */

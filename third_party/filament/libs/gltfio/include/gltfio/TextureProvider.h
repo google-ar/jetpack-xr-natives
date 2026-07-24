@@ -17,11 +17,11 @@
 #ifndef GLTFIO_TEXTUREPROVIDER_H
 #define GLTFIO_TEXTUREPROVIDER_H
 
+#include "filament/libs/utils/include/utils/BitmaskEnum.h"
+#include "filament/libs/utils/include/utils/compiler.h"
+
 #include <stddef.h>
 #include <stdint.h>
-
-#include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/BitmaskEnum.h"
 
 namespace filament {
     class Engine;

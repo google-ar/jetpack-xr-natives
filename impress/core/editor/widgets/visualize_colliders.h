@@ -23,6 +23,7 @@
 #include "absl/strings/string_view.h"
 #include "core/collision/collision_flags.h"
 #include "core/common/rememberer.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/widget.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
@@ -64,6 +65,7 @@ class VisualizeColliders : public editor::Widget, public imp::Rememberer {
   Mode mode_;
   absl::flat_hash_set<NodeHandle> selected_nodes_;
   absl::flat_hash_set<NodeHandle> visited_nodes_;
+  PropertyBinding<bool> show_all_colliders_binding_;
 };
 
 }  // namespace imp::editor

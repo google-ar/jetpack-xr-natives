@@ -18,8 +18,6 @@
 #define THIRD_PARTY_IMPRESS_EDITOR_WIDGETS_SETTINGS_WIDGET_H_
 
 #include "absl/strings/string_view.h"
-#include "core/common/platform_storage.h"
-#include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/widget.h"
 #include "core/view/base_view.h"
@@ -38,15 +36,6 @@ class SettingsWidget : public editor::Widget {
  private:
   BaseView& view_;
   editor::Editor& editor_;
-  bool grid_enabled_ = true;
-  bool skybox_enabled_ = true;
-  bool show_bounds_enabled_ = false;
-  bool show_all_colliders_enabled_ = false;
-  bool show_all_origins_enabled_ = false;
-  bool show_physics_visualizer_enabled_ = false;
-  bool vertex_selection_enabled_ = false;
-  bool load_mesh_data_on_cpu_enabled_ = false;
-  bool bvh_mesh_collision_acceleration_enabled_ = false;
 };
 
 }  // namespace imp::editor

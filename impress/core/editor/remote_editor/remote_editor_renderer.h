@@ -18,17 +18,13 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_REMOTE_EDITOR_REMOTE_EDITOR_RENDERER_H_
 
 #include "absl/time/time.h"
-#include "filament/filament/include/filament/Camera.h"
-#include "filament/filament/include/filament/Scene.h"
 #include "filament/filament/include/filament/SwapChain.h"
-#include "filament/filament/include/filament/View.h"
 #include "core/common/rememberer.h"
-#include "core/materials/material.h"
-#include "core/ncsb/node_handle.h"
-#include "core/ncsb/update_system.h"
-#include "core/render/texture.h"
 #include "core/view/base_view.h"
-#include "core/view/utils/frame_time.h"
+
+namespace imp::window {
+class ImGuiRenderer;
+}
 
 namespace imp::editor {
 
@@ -37,25 +33,16 @@ namespace imp::editor {
 // This class is an internal implementation detail of RemoteEditor and
 // should not be used directly.
 //
-// This class manages an offscreen texture that receives the editor UI
-// output. It then draws this texture onto a provided native window to
-// facilitate video streaming of the UI.
-class RemoteEditorRenderer : public UpdateSystem::Updater<RemoteEditorRenderer>,
-                             public Rememberer {
+// This class manages rendering of the editor UI view directly onto the
+// remote swap chain target window.
+class RemoteEditorRenderer : public Rememberer {
  public:
   explicit RemoteEditorRenderer(BaseView& view);
 
-  // RemoteEditorRenderer is not copyable or movable because it manages unique
-  // resources (OwnedTexturePtr, OwnedMaterialPtr) and holds references to
-  // view_ and owner_.
   RemoteEditorRenderer(const RemoteEditorRenderer&) = delete;
   RemoteEditorRenderer& operator=(const RemoteEditorRenderer&) = delete;
 
-  ~RemoteEditorRenderer() override;
-
-  // Updates UI streaming, capped at 30fps via kRenderTargetUpdateDelayMs to
-  // minimize network bandwidth requirements.
-  void Update(const FrameTime& frame_time) override;
+  ~RemoteEditorRenderer();
 
   // Sets the remote window to draw the UI onto. Reallocates the internal
   // offscreen texture if the dimensions change. A valid, non-null
@@ -66,6 +53,16 @@ class RemoteEditorRenderer : public UpdateSystem::Updater<RemoteEditorRenderer>,
   void ClearRenderTargetWindow();
 
  private:
+  // Renders UI streaming, capped at 30fps via kRenderTargetUpdateDelayMs to
+  // minimize network bandwidth requirements.
+  //
+  // Note: This must execute during the secondary view rendering phase
+  // (via ViewSecondaryRenderEvent) after ImGui has completed its PreRender
+  // step for the current frame. Executing during standard update phases before
+  // ImGui updates can cause stale scissor rectangles to be clipped against
+  // newly resized viewports, triggering fatal assertion crashes in Filament.
+  void OnSecondaryRender();
+
   // The main view this renderer is attached to.
   BaseView& view_;
 
@@ -79,23 +76,14 @@ class RemoteEditorRenderer : public UpdateSystem::Updater<RemoteEditorRenderer>,
 
   // The native window target we render onto.
   void* remote_window_ = nullptr;
+  int width_ = 0;
+  int height_ = 0;
 
-  // --- Impress managed resources ---
-  // The offscreen texture representing the rendered UI.
-  OwnedTexturePtr texture_;
-
-  // Renders the offscreen UI texture.
-  OwnedMaterialPtr ui_material_;
-
-  // Node that displays the UI quad in the remote scene.
-  NodeHandle ui_quad_node_;
+  window::ImGuiRenderer* imgui_renderer_ = nullptr;
 
   // --- Filament raw resources ---
   // TODO: Refactor to avoid using Filament directly.
   filament::SwapChain* remote_swap_chain_ = nullptr;
-  filament::View* remote_view_ = nullptr;
-  filament::Scene* ui_scene_ = nullptr;
-  filament::Camera* ui_camera_ = nullptr;
 };
 
 }  // namespace imp::editor

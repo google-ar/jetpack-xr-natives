@@ -303,6 +303,174 @@ OptionalError CreateModelEntityGraph(
   return NoError();
 }
 
+filament::Texture* CreateUvMorphTexture(
+    filament::Engine& engine,
+    const schemas::MorphTargetBufferInfo& morph_target_buffer_info,
+    const size_t vertex_count) {
+  const size_t width = std::min(vertex_count, kMaxMorphTargetTextureWidth);
+  const size_t height = (vertex_count + kMaxMorphTargetTextureWidth - 1) /
+                        kMaxMorphTargetTextureWidth;
+  const size_t num_targets = morph_target_buffer_info.targets()->size();
+
+  // sampler2dArray: width = 2048 (max), height = ceil(vertex_count / 2048),
+  // depth = num_targets. Format: RG32F (float2). Matches Filament's built-in
+  // morphTarget wrapping logic.
+  filament::Texture* uv_morph_tex =
+      filament::Texture::Builder()
+          .width(width)
+          .height(height)
+          .depth(num_targets)
+          .levels(1)
+          .sampler(filament::Texture::Sampler::SAMPLER_2D_ARRAY)
+          .format(filament::Texture::InternalFormat::RG32F)
+          .build(engine);
+
+  const size_t pixels_per_target = width * height;
+  float2* uv_data = new float2[pixels_per_target * num_targets];
+  std::memset(uv_data, 0, pixels_per_target * num_targets * sizeof(float2));
+  for (size_t t = 0; t < num_targets; ++t) {
+    const schemas::MorphTargetAttributeInfo* target =
+        morph_target_buffer_info.targets()->Get(t);
+    if (target->texcoords0() != nullptr) {
+      std::memcpy(&uv_data[t * pixels_per_target], target->texcoords0()->Data(),
+                  vertex_count * sizeof(float2));
+    }
+  }
+
+  filament::Texture::PixelBufferDescriptor desc(
+      uv_data, pixels_per_target * num_targets * sizeof(float2),
+      filament::Texture::Format::RG, filament::Texture::Type::FLOAT,
+      [](void* buffer, size_t size, void* user) {
+        delete[] static_cast<float2*>(buffer);
+      });
+
+  uv_morph_tex->setImage(engine, 0, 0, 0, 0, width, height, num_targets,
+                         std::move(desc));
+
+  return uv_morph_tex;
+}
+
+Future<OwnedTexturePtr> MakeTexture(
+    BaseView& view, filament::Engine* engine,
+    const schemas::TextureInfo* texture_info,
+    std::variant<std::unique_ptr<image::ImageContents>,
+                 std::unique_ptr<TextureAsset>>
+        image_or_texture_asset,
+    std::vector<std::unique_ptr<TextureAsset>>* out_texture_assets,
+    InflightCreation* out_inflight_creation,
+    std::optional<absl::string_view> name) {
+  bool enable_async_loading =
+      view.GetConfig()
+          .experimental_feature_flags->enable_async_graphics_resource_loading
+          .Value();
+
+  // TODO: Add unit tests for this path once Filament adds support
+  // for Vulkan for async texture loading which is needed for unit tests
+  if (enable_async_loading &&
+      std::holds_alternative<std::unique_ptr<image::ImageContents>>(
+          image_or_texture_asset)) {
+    auto image_contents = std::get<std::unique_ptr<image::ImageContents>>(
+        std::move(image_or_texture_asset));
+    return details::BuildAndFillTextureAsync(view, engine, texture_info,
+                                             std::move(image_contents),
+                                             out_inflight_creation, name)
+        .Then([&view, &texture_info](Texture* texture) {
+          imp::OwnedTexturePtr owned_texture =
+              view.GetTextureFactory().WrapTexture(texture);
+
+          if (texture_info->name()) {
+            owned_texture->SetName(texture_info->name()->str());
+          }
+          return owned_texture;
+        });
+  }
+
+  OwnedTexturePtr owned_texture;
+
+  if (std::holds_alternative<std::unique_ptr<TextureAsset>>(
+          image_or_texture_asset)) {
+    auto texture_asset = std::get<std::unique_ptr<TextureAsset>>(
+        std::move(image_or_texture_asset));
+    filament::Texture* texture = texture_asset->ReleaseFilamentTexture();
+    out_texture_assets->push_back(std::move(texture_asset));
+    owned_texture =
+        imp::OwnedTexturePtr(view.GetTextureFactory().WrapTexture(texture));
+  } else {
+    auto image_contents = std::get<std::unique_ptr<image::ImageContents>>(
+        std::move(image_or_texture_asset));
+    Texture* texture = details::BuildAndFillTexture(
+        view, engine, texture_info, std::move(image_contents),
+        out_inflight_creation, name);
+    if (!texture) return absl::InternalError("Failed to create Texture");
+    owned_texture =
+        imp::OwnedTexturePtr(view.GetTextureFactory().WrapTexture(texture));
+  }
+
+  if (texture_info->name()) {
+    owned_texture->SetName(texture_info->name()->str());
+  }
+
+  return Future<OwnedTexturePtr>(std::move(owned_texture));
+}
+
+Future<absl::Status> CreateGenericMaterials(
+    BaseView& view, filament::Engine* engine, const schemas::LoadedModel* model,
+    const MaterialPackage::MaterialCache& materials_by_params,
+    absl::flat_hash_map<uint16_t, MaterialId>& material_id_lookup,
+    std::map<uint16_t, GenericMaterialPtr>& materials_by_index,
+    TypedVector<OwnedTexturePtr>* out_textures) {
+  // Create generic materials.
+  std::vector<imp::Future<absl::Status>> combined_futures;
+
+  for (uint16_t material_index = 0; material_index < model->materials()->size();
+       ++material_index) {
+    const schemas::MaterialInfo* material_schema =
+        model->materials()->Get(material_index);
+
+    // The material Create() call is async and TextureBorrower is moved into the
+    // lambda, so each material needs its own vector of borrowed textures since
+    // this code shouldn't assume how out_textures' lifetime is managed.
+    std::vector<BorrowedTexturePtr> textures;
+    textures.reserve(out_textures->size());
+    absl::c_transform(
+        *out_textures, std::back_inserter(textures),
+        [](const OwnedTexturePtr& texture) { return texture.Borrow(); });
+    // Create a texture borrower that can be used to look up textures by index.
+    // Intentionally copy the vector into each provider so that the provider
+    // can outlive the original vector and make no assumptions about the Future
+    // internals.
+    TextureBorrower texture_borrower =
+        [textures = std::move(textures)](
+            uint64_t texture_index,
+            SmallSourceLocation loc) -> BorrowedTexturePtr {
+      if (texture_index >= textures.size()) return {};
+      return textures[texture_index];
+    };
+    combined_futures.push_back(
+        GenericMaterialImpl::Create(view,
+                                    GenericMaterialSpec::FromFlatbuffer(
+                                        *material_schema->material()->spec()),
+                                    materials_by_params,
+                                    material_schema->material()->name()->str())
+            .Then([material_index, &materials_by_index,
+                   generic_material_parameters =
+                       GenericMaterialParameters::FromFlatbuffer(
+                           material_schema->material()->params()),
+                   texture_borrower = std::move(texture_borrower)](
+                      GenericMaterialPtr generic_material) -> absl::Status {
+              MP_RETURN_IF_ERROR(generic_material->AssignTexturesAndParams(
+                  generic_material_parameters, texture_borrower));
+              materials_by_index.emplace(material_index,
+                                         std::move(generic_material));
+              return absl::OkStatus();
+            }));
+    // Add the material id to the lookup map.
+    material_id_lookup.emplace(material_schema->original_index(),
+                               MaterialId{material_index});
+  }
+  return Future<absl::Status>::CombineList(combined_futures);
+}
+
 // static
 Future<absl::Status> CreateModelResources(
     BaseView& view, filament::Engine* engine, const LoaderOptions options,
@@ -426,46 +594,8 @@ Future<absl::Status> CreateModelResources(
       continue;
     }
 
-    const size_t width = std::min(vertex_count, kMaxMorphTargetTextureWidth);
-    const size_t height = (vertex_count + kMaxMorphTargetTextureWidth - 1) /
-                          kMaxMorphTargetTextureWidth;
-    const size_t num_targets = morph_target_buffer_info->targets()->size();
-
-    // sampler2dArray: width = 2048 (max), height = ceil(vertex_count / 2048),
-    // depth = num_targets. Format: RG32F (float2). Matches Filament's built-in
-    // morphTarget wrapping logic.
     filament::Texture* uv_morph_tex =
-        filament::Texture::Builder()
-            .width(width)
-            .height(height)
-            .depth(num_targets)
-            .levels(1)
-            .sampler(filament::Texture::Sampler::SAMPLER_2D_ARRAY)
-            .format(filament::Texture::InternalFormat::RG32F)
-            .build(*engine);
-
-    const size_t pixels_per_target = width * height;
-    float2* uv_data = new float2[pixels_per_target * num_targets];
-    std::memset(uv_data, 0, pixels_per_target * num_targets * sizeof(float2));
-    for (size_t t = 0; t < num_targets; ++t) {
-      const schemas::MorphTargetAttributeInfo* target =
-          morph_target_buffer_info->targets()->Get(t);
-      if (target->texcoords0() != nullptr) {
-        std::memcpy(&uv_data[t * pixels_per_target],
-                    target->texcoords0()->Data(),
-                    vertex_count * sizeof(float2));
-      }
-    }
-
-    filament::Texture::PixelBufferDescriptor desc(
-        uv_data, pixels_per_target * num_targets * sizeof(float2),
-        filament::Texture::Format::RG, filament::Texture::Type::FLOAT,
-        [](void* buffer, size_t size, void* user) {
-          delete[] static_cast<float2*>(buffer);
-        });
-
-    uv_morph_tex->setImage(*engine, 0, 0, 0, 0, width, height, num_targets,
-                           std::move(desc));
+        CreateUvMorphTexture(*engine, *morph_target_buffer_info, vertex_count);
 
     // TODO: (broken link) - Support SAMPLER_2D_ARRAY in Split Engine. Once
     // supported, use view.GetTextureFactory().CreateTexture() to enable
@@ -480,6 +610,9 @@ Future<absl::Status> CreateModelResources(
     return Future<absl::Status>(absl::InvalidArgumentError(
         "texture infos and texture contents did not match"));
   }
+
+  std::vector<imp::Future<absl::Status>> texture_futures;
+  texture_futures.reserve(model->textures()->size());
   for (size_t i = 0; i < model->textures()->size(); ++i) {
     const schemas::TextureInfo* texture_info = model->textures()->Get(i);
     if (absl::Status status = optional_features::VerifyTexture(texture_info);
@@ -487,92 +620,31 @@ Future<absl::Status> CreateModelResources(
       return Future<absl::Status>(status);
     }
 
-    imp::OwnedTexturePtr owned_texture;
+    Future<absl::Status> texture_future =
+        MakeTexture(view, engine, texture_info,
+                    std::move(images_or_texture_assets[i]), out_texture_assets,
+                    out_inflight_creation, name)
+            .Then([out_textures](OwnedTexturePtr owned_texture) {
+              out_textures->emplace_back(std::move(owned_texture));
+              return absl::OkStatus();
+            });
 
-    if (std::holds_alternative<std::unique_ptr<TextureAsset>>(
-            images_or_texture_assets[i])) {
-      auto texture_asset = std::get<std::unique_ptr<TextureAsset>>(
-          std::move(images_or_texture_assets[i]));
-      filament::Texture* texture = texture_asset->ReleaseFilamentTexture();
-      out_texture_assets->push_back(std::move(texture_asset));
-
-      owned_texture =
-          imp::OwnedTexturePtr(view.GetTextureFactory().WrapTexture(texture));
-    } else {
-      auto image_contents = std::get<std::unique_ptr<image::ImageContents>>(
-          std::move(images_or_texture_assets[i]));
-      Texture* texture = details::BuildAndFillTexture(
-          view, engine, texture_info, std::move(image_contents),
-          out_inflight_creation, name);
-      if (!texture)
-        return Future<absl::Status>(
-            absl::InternalError("Failed to create Texture"));
-      owned_texture =
-          imp::OwnedTexturePtr(view.GetTextureFactory().WrapTexture(texture));
-    }
-
-    if (texture_info->name()) {
-      owned_texture->SetName(texture_info->name()->str());
-    }
-    out_textures->emplace_back(std::move(owned_texture));
+    texture_futures.push_back(texture_future);
   }
 
-  // Create generic materials.
-  std::vector<imp::Future<absl::Status>> combined_futures;
   // Create a map of materials by index to ensure the order is maintained.
   // Note: this is an std::map because of the API around move-only types.
   std::unique_ptr<std::map<uint16_t, GenericMaterialPtr>> materials_by_index =
       std::make_unique<std::map<uint16_t, GenericMaterialPtr>>();
 
-  for (uint16_t material_index = 0; material_index < model->materials()->size();
-       ++material_index) {
-    const schemas::MaterialInfo* material_schema =
-        model->materials()->Get(material_index);
-
-    // The material Create() call is async and TextureBorrower is moved into the
-    // lambda, so each material needs its own vector of borrowed textures since
-    // this code shouldn't assume how out_textures' lifetime is managed.
-    std::vector<BorrowedTexturePtr> textures;
-    textures.reserve(out_textures->size());
-    absl::c_transform(
-        *out_textures, std::back_inserter(textures),
-        [](const OwnedTexturePtr& texture) { return texture.Borrow(); });
-    // Create a texture borrower that can be used to look up textures by index.
-    // Intentionally copy the vector into each provider so that the provider
-    // can outlive the original vector and make no assumptions about the Future
-    // internals.
-    TextureBorrower texture_borrower =
-        [textures = std::move(textures)](
-            uint64_t texture_index,
-            SmallSourceLocation loc) -> BorrowedTexturePtr {
-      if (texture_index >= textures.size()) return {};
-      return textures[texture_index];
-    };
-    combined_futures.push_back(
-        GenericMaterialImpl::Create(view,
-                                    GenericMaterialSpec::FromFlatbuffer(
-                                        *material_schema->material()->spec()),
-                                    materials_by_params,
-                                    material_schema->material()->name()->str())
-            .Then([material_index,
-                   materials_by_index = materials_by_index.get(),
-                   generic_material_parameters =
-                       GenericMaterialParameters::FromFlatbuffer(
-                           material_schema->material()->params()),
-                   texture_borrower = std::move(texture_borrower)](
-                      GenericMaterialPtr generic_material) -> absl::Status {
-              MP_RETURN_IF_ERROR(generic_material->AssignTexturesAndParams(
-                  generic_material_parameters, texture_borrower));
-              materials_by_index->emplace(material_index,
-                                          std::move(generic_material));
-              return absl::OkStatus();
-            }));
-    // Add the material id to the lookup map.
-    material_id_lookup.emplace(material_schema->original_index(),
-                               MaterialId{material_index});
-  }
-
-  return imp::Future<absl::Status>::CombineList(combined_futures)
+  return Future<absl::Status>::CombineList(texture_futures)
+      .Then([&view, engine, model, &materials_by_params, &material_id_lookup,
+             materials_by_index = materials_by_index.get(),
+             &out_textures]() mutable -> Future<absl::Status> {
+        return CreateGenericMaterials(view, engine, model, materials_by_params,
+                                      material_id_lookup, *materials_by_index,
+                                      out_textures);
+      })
       .Then([out_inflight_creation, out_material_configs, out_materials,
              material_count = model->materials()->size(),
              materials_by_index = std::move(materials_by_index)]() {

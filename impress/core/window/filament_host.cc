@@ -500,13 +500,29 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
         GetView()->setCamera(editor_camera_override_);
       }
 
-      if (dev_mode_extension_ && !dev_mode_extension_->HasRenderTarget()) {
-        if (editor_render_target_override_) {
-          GetView()->setRenderTarget(editor_render_target_override_);
-        }
+      bool blit_to_device_swapchain = false;
 
-        if (editor_viewport_override_) {
-          GetView()->setViewport(*editor_viewport_override_);
+      if (dev_mode_extension_) {
+        // TODO: This is a roundabout way to detect whether we're
+        // in Worldspace UI mode, Remote Editor, or the default case.
+        // We only want to blit if we're in Remote Editor mode but we want to
+        // use our override render target/viewport if we're in the default case
+        // as the viewport widget provides the RT and viewport.
+        const bool has_render_target = dev_mode_extension_->HasRenderTarget();
+        const bool is_remote_editor =
+            dev_mode_extension_->ShouldRenderOnRemoteScreen();
+        blit_to_device_swapchain = (has_render_target || is_remote_editor) &&
+                                   editor_render_target_override_ &&
+                                   should_perform_main_render_;
+
+        if (!has_render_target || blit_to_device_swapchain) {
+          if (editor_render_target_override_) {
+            GetView()->setRenderTarget(editor_render_target_override_);
+          }
+
+          if (editor_viewport_override_) {
+            GetView()->setViewport(*editor_viewport_override_);
+          }
         }
       }
 #endif  // IMP_RUNTIME(DEV)
@@ -518,6 +534,23 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
       MP_RETURN_IF_ERROR(state_->MultiPassRender());
 
 #if IMP_RUNTIME(DEV)
+      // In the Remote Editor case, we blit the editor RT into the swap chain.
+      // This is how we get the remote viewport and the device to display the
+      // same image without incurring the cost of another render.
+      //
+      // This is a trade-off between performance and quality.
+      // We cannot directly access the swap chain render target, so we do the
+      // opposite and blit the editor render target to the swap chain.
+      // This means there is an edge case where the resolution of the app is
+      // different than the resolution of the ViewportWidget RT.
+      //
+      // The result is that resolution mismatches between the app and the
+      // Remote Editor viewport adds aliasing or blur into the remote viewport.
+      if (blit_to_device_swapchain) {
+        dev_mode_extension_->Blit(editor_render_target_override_, render_target,
+                                  viewport);
+      }
+
       // Restore the view's camera, render target, and viewport.
       GetView()->setCamera(camera);
       GetView()->setRenderTarget(render_target);

@@ -19,6 +19,7 @@
 
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/widget.h"
 #include "core/physics/physics_manager.h"
 #include "core/view/base_view.h"
@@ -39,7 +40,7 @@ class VisualizePhysicsDebug : public Widget, public Rememberer {
  private:
   BaseView& view_;
   PhysicsManager* physics_manager_;
-  bool show_all_physics_visualizer_enabled_ = false;
+  PropertyBinding<bool> show_physics_visualizer_binding_;
 };
 }  // namespace imp::editor
 

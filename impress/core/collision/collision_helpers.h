@@ -348,7 +348,7 @@ std::optional<RayIntersection<T>> AABBIntersectsRay(const imp::Box& box,
       // Indicates ray is parallel to the slab, so check if origin is inside
       // the slab.
       if (pos_i < min[i] || pos_i > max[i]) {
-        return absl::nullopt;
+        return std::nullopt;
       }
     } else {
       // Turn division into multiplication.

@@ -30,6 +30,8 @@
 
 namespace imp::editor {
 
+class Editor;
+
 // Provides camera rotation by dragging to view model. This is accomplished by
 // setting a pivot where the model is, parenting the camera to the pivot, and
 // then rotating the pivot according to the corresponding drag gesture.
@@ -40,7 +42,7 @@ class CameraRotate : public Component {
   void Setup(NodeHandle pivot, float pitch, float yaw);
   void Update(const FrameTime& frame_time);
 
-  bool UseLegacyCameraControls() const { return use_legacy_camera_controls_; }
+  bool UseLegacyCameraControls() const;
 
   // Called by the FreecamInterceptor
   void FilterPointerEvents(std::vector<PointerEvent>& pointer_events);
@@ -52,11 +54,12 @@ class CameraRotate : public Component {
   // Handles the movement of the pivot based on keyboard input.
   void HandleMovement(const FrameTime& frame_time);
 
+  bool InvertCameraY() const;
+
   float pitch_;
   float yaw_;
   NodeHandle pivot_;
-  bool invert_y_enabled_ = kInvertCameraYDefault;
-  bool use_legacy_camera_controls_ = kUseLegacyCameraControlsDefault;
+  Editor* editor_ = nullptr;
 
   bool w_pressed_ = false;
   bool a_pressed_ = false;

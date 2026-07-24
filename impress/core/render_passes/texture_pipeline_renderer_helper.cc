@@ -29,7 +29,8 @@ int GetFrameDelayForTPR(BaseView& view) {
   }
   const ExperimentalFeatureFlags& feature_flags =
       view.GetConfig().experimental_feature_flags.Value();
-  if (feature_flags.enable_texture_pipeline_renderer_first_frame_fence) {
+  if (feature_flags.enable_texture_pipeline_renderer_first_frame_fence
+          .Value()) {
     // No delay if the flag is enabled.
     return 0;
   }

@@ -37,6 +37,7 @@
 #include "core/common/registry.h"
 #include "core/editor/command.h"
 #include "core/editor/command_manager.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/composite_command.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
@@ -166,10 +167,17 @@ imp::Future<absl::Status> TransformWidgetAspect::Setup() {
       },
       this);
 
+  const auto change_scale = [this](float scale, float /*old*/) {
+    widget_scale_ = scale;
+    UpdateMaterial();
+  };
+  transform_widget_scale_binding_ =
+      PropertyBinding<float>(editor_->GetSettings().transform_widget_scale,
+                             change_scale, BindingMode::kBindAndFire);
+
   GetView().GetDispatcher().Connect(
-      [this](const TransformWidgetScaleChangedEvent& event) {
-        widget_scale_ = event.scale;
-        UpdateMaterial();
+      [this](const TransformWidgetSpaceModeChangedEvent& event) {
+        use_local_space_ = event.local_space;
       },
       this);
 
@@ -259,7 +267,7 @@ ComponentHandle<CameraComponent> TransformWidgetAspect::GetCamera() const {
 
 std::optional<float3> TransformWidgetAspect::ComputeClosestPoint() const {
   const float3 position = centroid_start_;
-  const float3 axis = GetAxis();
+  const float3 axis = GetAxisFromState();
   const Ray pointer = GetCamera()->WorldRayFromPixelPoint(
       pointer_current_ - pointer_start_delta_from_model_center_);
 
@@ -286,14 +294,18 @@ std::optional<float3> TransformWidgetAspect::ComputeClosestPoint() const {
   if (active_axes == 2) {
     plane_normal = kOne3 - axis;
 
-    // Align the plane normal to the node's world rotation for scale aspects.
-    // We only do this for single-node selections to avoid skewing.
-    if (GetAspectType() == AspectType::kScale && selected_nodes_.size() == 1 &&
-        selected_nodes_[0].IsValid()) {
-      // Use the initial rotation if we're currently dragging.
-      quatf rotation = (IsDragging() && !initial_node_transform_data_.empty())
-                           ? initial_node_transform_data_[0].rotation_start
-                           : selected_nodes_[0]->GetWorldRotation();
+    // If using local space, rotate the plane normal to the node's rotation.
+    if (use_local_space_ && HasOneNodeSelected()) {
+      quatf rotation;
+
+      // If dragging, use the initial rotation.
+      // Otherwise, use the current world rotation.
+      if (IsDragging() && !initial_node_transform_data_.empty()) {
+        rotation = initial_node_transform_data_[0].rotation_start;
+      } else {
+        rotation = selected_nodes_[0]->GetWorldRotation();
+      }
+
       plane_normal = rotation * plane_normal;
     }
   } else {

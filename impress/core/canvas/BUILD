@@ -192,6 +192,7 @@ cc_library(
             "//third_party/skia/HEAD:skunicode_icu",
             "//util/utf8/public:unicodetext",
             "@com_google_absl//absl/debugging:leak_check",
+            "@icu//icu4c/source/common:headers",
         ],
     }),
     alwayslink = 1,

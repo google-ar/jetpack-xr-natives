@@ -64,7 +64,7 @@ public:
                 bool assert_texture_can_generate_mipmap = CORRECTNESS_ASSERTION_DEFAULT;
             } debug;
             struct {
-                bool disable_gpu_frame_complete_metric = true;
+                bool disable_gpu_frame_complete_metric = false;
             } frame_info;
             // Automatically requests a frame skip when the CPU gets too much ahead of the display. This can prevent
             // stalls on Android, e.g. when running out buffers, but this also keeps the expected latency in check.
@@ -92,6 +92,7 @@ public:
             bool disable_handle_use_after_free_check = false;
             bool disable_heap_handle_tags = true; // FIXME: this should be false
             bool enable_asynchronous_operation = false;
+            bool enable_priority_override_mitigation = false;
         } backend;
         struct {
             bool check_crc32_after_loading = false;

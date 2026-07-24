@@ -15,12 +15,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_COMMON_POOL_ALLOCATOR_H_
 #define THIRD_PARTY_IMPRESS_CORE_COMMON_POOL_ALLOCATOR_H_
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 #include <utility>
 
+#include "absl/base/attributes.h"
 #include "absl/base/optimization.h"
 #include "absl/log/check.h"
 #include "absl/numeric/bits.h"
@@ -35,14 +34,16 @@ namespace imp {
 //
 // This allocator uses a hybrid memory layout to minimize memory waste.
 //
-// LowCapacity: Geometric Small Blocks
+// Low Capacity: Geometric Small Blocks
 //   - For the first few allocations (indices `0-14` by default, configured via
 //   `MaxBlockPower`), memory is allocated in geometrically growing blocks
 //   (sizes 1, 2, 4, 8).
 //
-// HighCapacity: Aligned Paging
+// High Capacity: Fixed-size Pages
 //  - Once the "Small Block" capacity is reached, the allocator switches to
-//    fixed-size pages (e.g., 4KB, 8KB, up to 64KB depending on item size).
+//    pages that contain a fixed number of slots. The number of slots per page
+//    is always a power of 2. By default, it's determined based on the size of T
+//    but can be specified via `PageSlotsPower`.
 //
 // This approach balances memory overhead with allocation frequency:
 // - For small numbers of allocations, memory usage is kept low.
@@ -63,11 +64,17 @@ namespace imp {
 // valid generation, and Deallocate calls will increment the generation for
 // the slot.
 //
+// NumSubsets configures the number of parallel subset bitmaps to maintain
+// for efficient sparse iteration. When NumSubsets > 0, objects can be
+// associated with subsets using SetSubsetBit, and iterated via
+// ForEach<SubsetIdx>.
+//
 // Key Features:
 // - Pointer stability
 // - O(1) Allocate (Intrusive FreeList).
 // - O(1) Deallocate (Page Masking).
 // - O(1) ResolveKey (Fast key validation).
+// - Subset tracking for efficient sparse iteration.
 // - Minimal memory waste for small element counts.
 // - Zero memory overhead for per-item headers.
 //
@@ -79,15 +86,20 @@ namespace imp {
 //     `void SetPoolAllocatorKey(PoolAllocatorKey key)`
 //   which will be automatically called by the allocator during `Allocate` to
 //   store the key.
-template <typename T, bool EnableGenerations = true, uint32_t MaxBlockPower = 4>
+template <typename T, bool EnableGenerations = true, uint32_t MaxBlockPower = 4,
+          size_t NumSubsets = 0,
+          uint32_t PageSlotsPower =
+              imp_pool_allocator_internal::GetPageSlotsPowerForType<T>(
+                  NumSubsets)>
 class PoolAllocator
-    : public BasePoolAllocator<EnableGenerations, MaxBlockPower> {
+    : public BasePoolAllocator<EnableGenerations, MaxBlockPower, NumSubsets> {
   static_assert(
       imp_pool_allocator_internal::kHasGetPoolKey<T>,
       "T must implement GetPoolAllocatorKey() returning PoolAllocatorKey");
 
  public:
-  using Base = BasePoolAllocator<EnableGenerations, MaxBlockPower>;
+  using Base = BasePoolAllocator<EnableGenerations, MaxBlockPower, NumSubsets>;
+  using MemoryLayout = imp_pool_allocator_internal::MemoryLayout;
 
   struct PtrAndKey {
     // The pointer to the allocated object.
@@ -100,6 +112,9 @@ class PoolAllocator
   };
 
   using AllocateResult = PtrAndKey;
+
+  static constexpr MemoryLayout kMemoryLayout =
+      imp_pool_allocator_internal::ComputeMemoryLayout<T, PageSlotsPower>();
 
   PoolAllocator();
 
@@ -135,35 +150,69 @@ class PoolAllocator
   // Example:
   //   allocator.ForEach([](T* obj) { /* do something with obj */ });
   template <typename Fn>
+  void ForEach(Fn&& fn) {
+    ForEach<Base::kOccupiedSubset>(std::forward<Fn>(fn));
+  }
+
+  // Iterates over all allocated objects in the given subset and calls the given
+  // function for each object.
+  template <size_t SubsetIdx, typename Fn>
   void ForEach(Fn&& fn);
 
  private:
-  using MemoryLayout = imp_pool_allocator_internal::MemoryLayout;
+  using Slot = imp_pool_allocator_internal::Slot<T>;
 
-  // When Deallocate is called, we use the memory of the slot to intrusively
-  // store both the index and pointer of the next free slot in the free list.
-  // This allows us to manage the free list with zero lookup overhead.
-  union Slot {
-    T object;
-    imp_pool_allocator_internal::FreeSlot free_slot;
-  };
+  // Helper function to call the given function if the object is still in the
+  // subset and is not null.
+  //
+  // This function is used for the cold path in ForEach. Marked as noinline to
+  // keep the hot path cold path branch prediction simple and predictable.
+  template <typename Fn>
+  ABSL_ATTRIBUTE_NOINLINE void CallIfStillInSubsetSmallBlock(
+      size_t internal_subset_idx, int bit_index, Fn&& fn);
 
-  // Computes the page layout information based on the type T.
-  static constexpr MemoryLayout ComputeMemoryLayout();
+  // Helper function to call the given function if the object is still in the
+  // subset and is not null.
+  //
+  // This function is used for the cold path in ForEach. Marked as noinline to
+  // keep the hot path cold path branch prediction simple and predictable.
+  template <typename Fn>
+  ABSL_ATTRIBUTE_NOINLINE void CallIfStillInSubsetPage(
+      uint64_t* subset_bitmap, uint32_t w, int bit_index, Slot* slot_base,
+      Slot* slot_limit, Fn&& fn);
+
+  // Returns a pointer to the page bitmaps for the given page base pointer.
+  //
+  // The page bitmaps are stored in the footer of the page starting from the
+  // first word in the occupancy bitmap.
+  //
+  // This is static because the layout is compile-time known (`kMemoryLayout`),
+  // allowing the compiler to optimize the hot path by folding the offset.
+  // For the runtime code-size-optimized fallback layout helper, see
+  // `BasePoolAllocator::GetPageBitmapsWithDynamicLayout`.
+  static uint64_t* GetPageBitmapsWithStaticLayout(std::byte* page_base);
+
+  static_assert(Base::kSmallBlocksCapacity < 64,
+                "MaxBlockPower is too large for subset tracking");
 };
 
-template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
-PoolAllocator<T, EnableGenerations, MaxBlockPower>::PoolAllocator()
-    : Base(ComputeMemoryLayout()) {
-  // Ensure T's alignment is respected.
-  static_assert(sizeof(Slot) <= ComputeMemoryLayout().footer_offset_bytes,
-                "T is too large for PoolAllocator pages");
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
+PoolAllocator<T, EnableGenerations, MaxBlockPower, NumSubsets,
+              PageSlotsPower>::PoolAllocator()
+    : Base(kMemoryLayout) {
+  static_assert(imp_pool_allocator_internal::PageFitsInLimit<T, PageSlotsPower>(
+                    NumSubsets, 65536),
+                "Page size must fit within 64KB");
 }
 
-template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
 template <typename... Args>
-typename PoolAllocator<T, EnableGenerations, MaxBlockPower>::AllocateResult
-PoolAllocator<T, EnableGenerations, MaxBlockPower>::Allocate(Args&&... args) {
+typename PoolAllocator<T, EnableGenerations, MaxBlockPower, NumSubsets,
+                       PageSlotsPower>::AllocateResult
+PoolAllocator<T, EnableGenerations, MaxBlockPower, NumSubsets,
+              PageSlotsPower>::Allocate(Args&&... args) {
   uint32_t index;
   T* ptr = reinterpret_cast<T*>(Base::ClaimSlot(&index));
 
@@ -174,12 +223,14 @@ PoolAllocator<T, EnableGenerations, MaxBlockPower>::Allocate(Args&&... args) {
   // the compiler to optimize based on the compile-time known memory layout.
   if (index < Base::kSmallBlocksCapacity) {
     Base::small_block_pointers_[index] = ptr;
+    Base::small_block_subsets_[0] |= (1ULL << index);
   } else {
-    constexpr MemoryLayout kMemoryLayout = ComputeMemoryLayout();
-    imp_pool_allocator_internal::SetOccupancy(
-        reinterpret_cast<std::byte*>(ptr),
-        ~(static_cast<uintptr_t>(kMemoryLayout.page_size_bytes) - 1), index,
-        kMemoryLayout.footer_offset_bytes, kMemoryLayout.slot_size_bytes);
+    uint32_t relative_idx = index - Base::kSmallBlocksCapacity;
+    uint32_t page_idx = relative_idx >> PageSlotsPower;
+    uint32_t slot_idx = relative_idx & kMemoryLayout.page_slot_mask;
+    std::byte* page_base = Base::pages_[page_idx];
+    uint64_t* bitmaps = GetPageBitmapsWithStaticLayout(page_base);
+    bitmaps[slot_idx / 64] |= (1ULL << (slot_idx % 64));
   }
 
   uint16_t generation = 0;
@@ -193,14 +244,15 @@ PoolAllocator<T, EnableGenerations, MaxBlockPower>::Allocate(Args&&... args) {
   return {ptr, key};
 }
 
-template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
-void PoolAllocator<T, EnableGenerations, MaxBlockPower>::Deallocate(T* obj) {
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
+void PoolAllocator<T, EnableGenerations, MaxBlockPower, NumSubsets,
+                   PageSlotsPower>::Deallocate(T* obj) {
   if (!obj) {
     return;
   }
 
   PoolAllocatorKey key = obj->GetPoolAllocatorKey();
-  constexpr MemoryLayout kMemoryLayout = ComputeMemoryLayout();
 
   // Destruct the object, must be called explicitly when using placement new.
   obj->~T();
@@ -211,160 +263,120 @@ void PoolAllocator<T, EnableGenerations, MaxBlockPower>::Deallocate(T* obj) {
   if (index < Base::kSmallBlocksCapacity) {
     
     Base::small_block_pointers_[index] = nullptr;
+    for (size_t i = 0; i <= NumSubsets; ++i) {
+      Base::small_block_subsets_[i] &= ~(1ULL << index);
+    }
   } else {
-    // Track that the slot is unoccupied. This is done outside of ReleaseSlot to
-    // allow the compiler to optimize based on the compile-time known memory
-    // layout.
-    imp_pool_allocator_internal::UnsetOccupancy(
-        reinterpret_cast<std::byte*>(obj),
-        ~(static_cast<uintptr_t>(kMemoryLayout.page_size_bytes) - 1), index,
-        kMemoryLayout.footer_offset_bytes, kMemoryLayout.slot_size_bytes);
+    // Remove the slot from the subset bitmaps. This is done outside of
+    // ReleaseSlot to allow the compiler to optimize based on the compile-time
+    // known memory layout.
+    uint32_t relative_idx = index - Base::kSmallBlocksCapacity;
+    uint32_t page_idx = relative_idx >> PageSlotsPower;
+    uint32_t slot_idx = relative_idx & kMemoryLayout.page_slot_mask;
+    size_t word_idx = slot_idx / 64;
+    uint64_t bit = ~(1ULL << (slot_idx % 64));
+
+    std::byte* page_base = Base::pages_[page_idx];
+    uint64_t* bitmaps = GetPageBitmapsWithStaticLayout(page_base);
+
+    for (size_t i = 0; i <= NumSubsets; ++i) {
+      bitmaps[i * kMemoryLayout.page_words_per_subset + word_idx] &= bit;
+    }
   }
 
   Base::ReleaseSlot(obj, index);
 }
 
-template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
-T* PoolAllocator<T, EnableGenerations, MaxBlockPower>::ResolveKey(
-    PoolAllocatorKey key) const {
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
+T* PoolAllocator<T, EnableGenerations, MaxBlockPower, NumSubsets,
+                 PageSlotsPower>::ResolveKey(PoolAllocatorKey key) const {
   return reinterpret_cast<T*>(Base::GetSlotPointer(key));
 }
 
-template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
-constexpr size_t
-PoolAllocator<T, EnableGenerations, MaxBlockPower>::GetSlotSize() {
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
+constexpr size_t PoolAllocator<T, EnableGenerations, MaxBlockPower, NumSubsets,
+                               PageSlotsPower>::GetSlotSize() {
   return sizeof(Slot);
 }
 
-template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
-constexpr imp_pool_allocator_internal::MemoryLayout
-PoolAllocator<T, EnableGenerations, MaxBlockPower>::ComputeMemoryLayout() {
-  size_t slot_size_bytes = sizeof(Slot);
-
-  // Target number of slots in a page.
-  // The real number of slots could be higher or lower depending on which power
-  // of 2 page size is picked and header overhead.
-  size_t soft_target_count = std::max(128, 1 << MaxBlockPower);
-
-  // Bytes to hold the soft target number of slots, ignoring the header.
-  size_t soft_target_bytes = slot_size_bytes * soft_target_count;
-
-  // Pick the smallest power of 2 page size that can hold the soft target
-  // number of slots, up to 64KB.
-  size_t page_size_bytes = 4096;
-  while (page_size_bytes < soft_target_bytes && page_size_bytes < 65536) {
-    page_size_bytes *= 2;
-  }
-
-  // The number of slots that would fit in the page if there were no footer.
-  size_t num_potential_slots = page_size_bytes / slot_size_bytes;
-
-  // The number of 64-bit words needed for the occupancy bitmap to cover all of
-  // the potential slots.
-  size_t bitmap_words_per_page = (num_potential_slots + 63) / 64;
-
-  // Now we need to find how much space the footer will take up.
-  // It consists of a start_index (uint32_t), then the occupancy bitmap
-
-  // The alignment between start_index and occupancy.
-  size_t occupancy_alignment = alignof(uint64_t);
-
-  // Offset between start_index and occupancy, accounting for alignment.
-  size_t bitmap_offset =
-      (sizeof(uint32_t) + occupancy_alignment - 1) & ~(occupancy_alignment - 1);
-
-  // The number of bytes required for the bitmap, which is the number of words *
-  // 8 because each word is 64 bits.
-  size_t bitmap_bytes = bitmap_words_per_page * 8;
-
-  // The total size of the footer.
-  size_t footer_overhead = bitmap_offset + bitmap_bytes;
-
-  size_t footer_offset_bytes = page_size_bytes - footer_overhead;
-
-  // The actual number of slots that fit in the page after the footer size is
-  // accounted for.
-  size_t slots_per_page = footer_offset_bytes / slot_size_bytes;
-
-  return {.slot_size_bytes = slot_size_bytes,
-          .slot_alignment = alignof(Slot),
-          .page_size_bytes = static_cast<uint32_t>(page_size_bytes),
-          .slots_per_page = static_cast<uint32_t>(slots_per_page),
-          .bitmap_words_per_page = static_cast<uint32_t>(bitmap_words_per_page),
-          .footer_offset_bytes = static_cast<uint32_t>(footer_offset_bytes)};
-}
-
-template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
-template <typename Fn>
-void PoolAllocator<T, EnableGenerations, MaxBlockPower>::ForEach(Fn&& fn) {
-  // Use the memory layout computed at compile time instead of the one stored on
-  // the object so that the values can be inlined for performance.
-  constexpr MemoryLayout kMemoryLayout = ComputeMemoryLayout();
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
+template <size_t SubsetIdx, typename Fn>
+void PoolAllocator<T, EnableGenerations, MaxBlockPower, NumSubsets,
+                   PageSlotsPower>::ForEach(Fn&& fn) {
+  static_assert(SubsetIdx == Base::kOccupiedSubset || SubsetIdx < NumSubsets,
+                "Subset index out of bounds");
+  constexpr size_t kInternalSubsetIdx =
+      (SubsetIdx == Base::kOccupiedSubset) ? 0 : 1 + SubsetIdx;
 
   Base::iteration_depth_++;
 
-  // Captured at the start of ForEach so we don't iterate over objects allocated
-  // during iteration.
   uint32_t end_index = Base::cursor_index_;
-  size_t pages_count = Base::pages_.size();
+  uint16_t pages_count = Base::pages_count_;
+  uint32_t captured_generation = Base::modification_generation_;
 
   if (end_index > 0) {
-    uint32_t sb_limit = std::min(end_index, Base::kSmallBlocksCapacity);
-    for (uint32_t i = 0; i < sb_limit; ++i) {
-      if (Base::small_block_pointers_[i]) {
-        fn(reinterpret_cast<T*>(Base::small_block_pointers_[i]));
+    uint64_t word = Base::small_block_subsets_[kInternalSubsetIdx];
+    while (word != 0) {
+      // Use countr_zero to scan through the slots and process them.
+      int bit_index = absl::countr_zero(word);
+
+      // Fast path: no modifications have occurred during iteration.
+      // This check is predictable for the CPU so the branch is cheap.
+      if (ABSL_PREDICT_TRUE(captured_generation ==
+                            Base::modification_generation_)) {
+        fn(reinterpret_cast<T*>(Base::small_block_pointers_[bit_index]));
+      } else {
+        // A modification has occurred during iteration, re-check bitmap.
+        // Intentionally nested so the compiler can generate more optimized
+        // code for the fast path.
+        CallIfStillInSubsetSmallBlock(kInternalSubsetIdx, bit_index, fn);
       }
+
+      // Clear the lowest set bit
+      word &= (word - 1);
     }
   }
 
   if (end_index > Base::kSmallBlocksCapacity) {
-    uint32_t captured_deallocation_generation = Base::deallocation_generation_;
-
     const size_t last_page_index = pages_count - 1;
     const uint32_t slots_in_final_page =
         end_index - Base::kSmallBlocksCapacity -
         (last_page_index * kMemoryLayout.slots_per_page);
-    uint32_t remainder = slots_in_final_page % 64;
-    const uint64_t last_word_mask =
-        remainder == 0 ? ~uint64_t{0} : (uint64_t{1} << remainder) - 1;
-    const uint32_t last_word_index = ((slots_in_final_page + 63) / 64) - 1;
 
     for (size_t page_index = 0; page_index < pages_count; ++page_index) {
       std::byte* page_base = Base::pages_[page_index];
-      uint64_t* occupancy = imp_pool_allocator_internal::GetPageOccupancy(
-          page_base, kMemoryLayout.footer_offset_bytes);
 
-      const uint32_t last_word_index_for_page =
-          page_index == last_page_index
-              ? last_word_index
-              : kMemoryLayout.bitmap_words_per_page - 1;
+      uint64_t* subset_bitmap =
+          GetPageBitmapsWithStaticLayout(page_base) +
+          kInternalSubsetIdx * kMemoryLayout.page_words_per_subset;
 
-      Slot* page_slot_base = reinterpret_cast<Slot*>(page_base);
+      Slot* slot_limit =
+          reinterpret_cast<Slot*>(page_base) +
+          (page_index == last_page_index ? slots_in_final_page
+                                         : kMemoryLayout.slots_per_page);
 
-      for (uint32_t w = 0; w <= last_word_index_for_page; ++w) {
-        uint64_t mask =
-            (page_index == last_page_index && w == last_word_index_for_page)
-                ? last_word_mask
-                : ~uint64_t{0};
-        uint64_t word = occupancy[w] & mask;
-        Slot* slot_base = page_slot_base + (w * 64);
+      for (uint32_t w = 0; w < kMemoryLayout.page_words_per_subset; ++w) {
+        Slot* slots = reinterpret_cast<Slot*>(page_base) + (w * 64);
+        uint64_t word = subset_bitmap[w];
 
-        // Use countr_zero to scan through the occupied slots and process them.
+        // Use countr_zero to scan through the slots and process them.
         while (word != 0) {
           int bit_index = absl::countr_zero(word);
 
-          // Fast path: no deallocations have occurred during iteration.
+          // Fast path: no modifications have occurred during iteration.
           // This check is predictable for the CPU so the branch is cheap.
-          if (ABSL_PREDICT_TRUE(captured_deallocation_generation ==
-                                Base::deallocation_generation_)) {
-            fn(&slot_base[bit_index].object);
+          if (ABSL_PREDICT_TRUE(captured_generation ==
+                                Base::modification_generation_)) {
+            fn(&slots[bit_index].object);
           } else {
-            // A deallocation has occurred during iteration, re-check occupancy.
+            // A modification has occurred during iteration, re-check bitmap.
             // Intentionally nested so the compiler can generate more optimized
             // code for the fast path.
-            if (occupancy[w] & (uint64_t{1} << bit_index)) {
-              fn(&slot_base[bit_index].object);
-            }
+            CallIfStillInSubsetPage(subset_bitmap, w, bit_index, slots,
+                                    slot_limit, fn);
           }
 
           // Clear the lowest set bit
@@ -375,6 +387,46 @@ void PoolAllocator<T, EnableGenerations, MaxBlockPower>::ForEach(Fn&& fn) {
   }
 
   Base::iteration_depth_--;
+}
+
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
+template <typename Fn>
+ABSL_ATTRIBUTE_NOINLINE void PoolAllocator<
+    T, EnableGenerations, MaxBlockPower, NumSubsets,
+    PageSlotsPower>::CallIfStillInSubsetSmallBlock(size_t internal_subset_idx,
+                                                   int bit_index, Fn&& fn) {
+  bool is_still_in_subset = (Base::small_block_subsets_[internal_subset_idx] &
+                             (1ULL << bit_index)) != 0;
+  if (is_still_in_subset && Base::small_block_pointers_[bit_index] != nullptr) {
+    fn(reinterpret_cast<T*>(Base::small_block_pointers_[bit_index]));
+  }
+}
+
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
+template <typename Fn>
+ABSL_ATTRIBUTE_NOINLINE void
+PoolAllocator<T, EnableGenerations, MaxBlockPower, NumSubsets,
+              PageSlotsPower>::CallIfStillInSubsetPage(uint64_t* subset_bitmap,
+                                                       uint32_t w,
+                                                       int bit_index,
+                                                       Slot* slot_base,
+                                                       Slot* slot_limit,
+                                                       Fn&& fn) {
+  Slot* slot_ptr = &slot_base[bit_index];
+  if (slot_ptr < slot_limit && (subset_bitmap[w] & (1ULL << bit_index))) {
+    fn(&slot_ptr->object);
+  }
+}
+
+template <typename T, bool EnableGenerations, uint32_t MaxBlockPower,
+          size_t NumSubsets, uint32_t PageSlotsPower>
+uint64_t* PoolAllocator<
+    T, EnableGenerations, MaxBlockPower, NumSubsets,
+    PageSlotsPower>::GetPageBitmapsWithStaticLayout(std::byte* page_base) {
+  return reinterpret_cast<uint64_t*>(page_base +
+                                     kMemoryLayout.footer_offset_bytes);
 }
 
 }  // namespace imp

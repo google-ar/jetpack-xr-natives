@@ -82,11 +82,6 @@ bool IsLabelVisible(absl::string_view label) {
   return !absl::StartsWith(label, "##");
 }
 
-bool LatchFocusRequest(Widget* widget) {
-  const bool focus_requested = widget->IsRequestingFocus();
-  widget->SetIsRequestingFocus(false);
-  return focus_requested;
-}
 }  // namespace
 
 LayoutComposer::LayoutComposer(LayoutConfig layout_config)
@@ -110,6 +105,15 @@ LayoutComposer::LayoutComposer(LayoutConfig layout_config)
 #endif
   saved_layout_filename_ =
       GetRepoDirectory() + std::string(kSavedLayoutIniFile);
+}
+
+bool LayoutComposer::LatchFocusRequest(Widget* widget) {
+  bool focus = widget->IsRequestingFocus();
+  widget->SetIsRequestingFocus(false);
+  if (window_configuration_.has_value()) {
+    focus |= (*window_configuration_)->PopFocusRequest(widget->GetName());
+  }
+  return focus;
 }
 
 std::optional<LayoutConfig::LayoutType> LayoutComposer::GetLayoutType() const {
@@ -141,13 +145,13 @@ void LayoutComposer::DrawOnDockingLayout(const WidgetLayoutInfo& layout_info,
     case PanelId::kLeftPanel:
       DrawInLeftDock(
           widget->GetName(), [widget]() { widget->DrawImGui(); },
-          /*force_focus=*/LatchFocusRequest(widget));
+          /*force_focus=*/LatchFocusRequest(widget), widget->IsCloseable());
       break;
     case PanelId::kTabBar:
       DrawAsDockableTab(
           widget->GetName(), [widget]() { widget->DrawImGui(); },
           /*draw_before_previous_tabs=*/false,
-          /*force_focus=*/LatchFocusRequest(widget));
+          /*force_focus=*/LatchFocusRequest(widget), widget->IsCloseable());
       break;
     case PanelId::kMenuBar:
       DrawAsMenuInMenuBar(widget->GetName(),
@@ -157,7 +161,9 @@ void LayoutComposer::DrawOnDockingLayout(const WidgetLayoutInfo& layout_info,
       DrawInToolbar([widget]() { widget->DrawImGui(); });
       break;
     default:
-      DrawAfterLayout(widget->GetName(), [widget]() { widget->DrawImGui(); });
+      DrawAfterLayout(
+          widget->GetName(), [widget]() { widget->DrawImGui(); },
+          widget->IsCloseable());
   }
 }
 
@@ -190,7 +196,9 @@ void LayoutComposer::DrawOnFixedLayout(const WidgetLayoutInfo& layout_info,
             ImGuiTabItemFlags_Leading, /*draw_before_previous_tabs=*/false,
             /*force_focus=*/LatchFocusRequest(widget));
       } else {
-        DrawAfterLayout(widget->GetName(), [widget]() { widget->DrawImGui(); });
+        DrawAfterLayout(
+            widget->GetName(), [widget]() { widget->DrawImGui(); },
+            widget->IsCloseable());
       }
   }
 }
@@ -205,17 +213,20 @@ void LayoutComposer::DrawInDetailsSectionAsHeader(Widget* widget) {
     // Pull out component library to draw after other components (no header)
     component_library_draw_function_ = [widget]() { widget->DrawImGui(); };
   } else if (details_filter_.PassFilter(header_label.data())) {
-    // For all other widgets, only draw if filter passes (with header)
+    // Node-specific components (structural or ECS) are drawn in the node
+    // details section if component filter passes.
     details_draw_functions_.push_back(BuildHeaderDrawFunction(
         header_label, [widget]() { widget->DrawImGui(); },
-        widget->OnCloseButton(), widget->GetTreeNodeFlags()));
+        widget->OnCloseButton(), widget->GetTreeNodeFlags(),
+        widget->IsCloseable()));
   }
 }
 
 void LayoutComposer::DrawInSceneSectionAsHeader(Widget* widget) {
   scene_draw_functions_.push_back(BuildHeaderDrawFunction(
       widget->GetName(), [widget]() { widget->DrawImGui(); },
-      widget->OnCloseButton(), widget->GetTreeNodeFlags()));
+      widget->OnCloseButton(), widget->GetTreeNodeFlags(),
+      widget->IsCloseable()));
 }
 
 void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
@@ -295,17 +306,18 @@ void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
 
 void LayoutComposer::DrawInLeftDock(absl::string_view tab_label,
                                     imp::Invocable<void()> draw_function,
-                                    bool force_focus) {
-  left_dock_draw_functions_.push_back(
-      {std::string(tab_label), std::move(draw_function), force_focus});
+                                    bool force_focus, bool is_closeable) {
+  left_dock_draw_functions_.push_back({std::string(tab_label),
+                                       std::move(draw_function), force_focus,
+                                       is_closeable});
 }
 
 void LayoutComposer::DrawAsDockableTab(absl::string_view tab_label,
                                        imp::Invocable<void()> draw_function,
                                        bool draw_before_previous_tabs,
-                                       bool force_focus) {
+                                       bool force_focus, bool is_closeable) {
   WidgetInfo tab = {std::string(tab_label), std::move(draw_function),
-                    force_focus};
+                    force_focus, is_closeable};
 
   if (draw_before_previous_tabs) {
     tab_item_info_.insert(tab_item_info_.begin(), std::move(tab));
@@ -330,31 +342,35 @@ void LayoutComposer::DrawInToolbar(imp::Invocable<void()> draw_function) {
 }
 
 void LayoutComposer::DrawAfterLayout(absl::string_view label,
-                                     imp::Invocable<void()> draw_function) {
+                                     imp::Invocable<void()> draw_function,
+                                     bool is_closeable) {
   draw_after_functions_.push_back(
-      WidgetInfo{std::string(label), std::move(draw_function)});
+      WidgetInfo{std::string(label), std::move(draw_function),
+                 /*force_focus=*/false, is_closeable});
 }
 
 imp::Invocable<void()> LayoutComposer::BuildHeaderDrawFunction(
     absl::string_view header_label, imp::Invocable<void()> draw_function,
     imp::Invocable<void()> on_close_button_pressed,
-    ImGuiTreeNodeFlags additional_flags) {
-  return [label = std::string(header_label),
+    ImGuiTreeNodeFlags additional_flags, bool is_closeable) {
+  return [this, label = std::string(header_label),
           draw_function = std::move(draw_function),
           on_close_button_pressed = std::move(on_close_button_pressed),
-          additional_flags]() {
-    // Making it so that the header can highlight when hovered or clicked.
+          additional_flags, is_closeable]() {
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                           ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
     ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                           ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-    // A pointer of p_visible is passed into ImGui::CollapsingHeader and is set
-    // to false if the close button is pressed.
+
     bool p_visible = true;
+    bool* p_close = nullptr;
+    const bool is_closeable_via_config =
+        is_closeable && window_configuration_.has_value();
+    if (on_close_button_pressed || is_closeable_via_config) {
+      p_close = &p_visible;
+    }
     ImGui::Separator();
-    if (ImGui::CollapsingHeader(label.c_str(),
-                                on_close_button_pressed ? &p_visible : nullptr,
-                                additional_flags)) {
+    if (ImGui::CollapsingHeader(label.c_str(), p_close, additional_flags)) {
       ImGui::Indent();
       draw_function();
       ImGui::Unindent();
@@ -362,9 +378,14 @@ imp::Invocable<void()> LayoutComposer::BuildHeaderDrawFunction(
 
     ImGui::PopStyleColor(2);
 
-    // The close button has been pressed, so run the callback.
     if (!p_visible) {
-      on_close_button_pressed();
+      if (on_close_button_pressed) {
+        on_close_button_pressed();
+      } else if (window_configuration_.has_value()) {
+        (*window_configuration_)
+            ->SetWindowVisibility(
+                label, WindowConfiguration::WindowVisibility::kHidden);
+      }
     }
   };
 }
@@ -520,15 +541,24 @@ void LayoutComposer::DrawDockableTabbedWindow() {
     } else {
       ImGui::SetNextWindowDockID(
           docking_helper_->GetDockId(DockingHelper::DockingType::kBottom),
-          ImGuiCond_FirstUseEver);
+          ImGuiCond_Appearing);
     }
     if (info.force_focus) {
       ImGui::SetNextWindowFocus();
     }
-    if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
+    bool is_open = true;
+    bool* p_open = (window_configuration_.has_value() && info.is_closeable)
+                       ? &is_open
+                       : nullptr;
+    if (ImGui::Begin(info.label.c_str(), p_open, flags)) {
       info.draw_function();
     }
     ImGui::End();
+    if (!is_open && window_configuration_.has_value()) {
+      (*window_configuration_)
+          ->SetWindowVisibility(info.label,
+                                WindowConfiguration::WindowVisibility::kHidden);
+    }
   }
 
   for (auto& info : left_dock_draw_functions_) {
@@ -538,10 +568,19 @@ void LayoutComposer::DrawDockableTabbedWindow() {
     if (info.force_focus) {
       ImGui::SetNextWindowFocus();
     }
-    if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
+    bool is_open = true;
+    bool* p_open = (window_configuration_.has_value() && info.is_closeable)
+                       ? &is_open
+                       : nullptr;
+    if (ImGui::Begin(info.label.c_str(), p_open, flags)) {
       info.draw_function();
     }
     ImGui::End();
+    if (!is_open && window_configuration_.has_value()) {
+      (*window_configuration_)
+          ->SetWindowVisibility(info.label,
+                                WindowConfiguration::WindowVisibility::kHidden);
+    }
   }
 }
 
@@ -734,7 +773,7 @@ void LayoutComposer::DrawToolbar() {
 }
 
 void LayoutComposer::DrawAfterLayout() {
-  for (auto& [label, draw_function, _] : draw_after_functions_) {
+  for (auto& [label, draw_function, _, is_closeable] : draw_after_functions_) {
     // Freeform windows with invisible labels draw invisible widgets, so we
     // don't need to draw them in a freeform window.
     if (label.empty() || !IsLabelVisible(label)) {
@@ -756,7 +795,8 @@ void LayoutComposer::DrawAfterLayout() {
       // If the window configuration is available, show a close button for the
       // window.
       bool show_draw = (*window_configuration_)->IsWindowVisible(label);
-      ImGui::Begin(label.c_str(), &show_draw);
+      bool* p_open = is_closeable ? &show_draw : nullptr;
+      ImGui::Begin(label.c_str(), p_open);
       draw_function();
       ImGui::End();
       // Allow other mechanisms to hide the window while the window is shown and

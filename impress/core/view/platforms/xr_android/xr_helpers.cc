@@ -124,19 +124,16 @@ mat4 GetEncompassingProjectionMatrix(const XrView& left_eye_view,
                                      const XrView& right_eye_view,
                                      const float near_plane,
                                      const float far_plane) {
-  // TODO: Figure out why each eye values might not be
-  // almost equal and either uncomment the commented code below or even adapt
-  // the fustrum calculation implementation in this file according to the
-  // findings.
-  // Assert that the eyes are symmetrical.
-  // 
   // Assert gaze is parallel.
   // 
 
   /*
-   * For a symmetrical stereoscopic configuration, starting from head space and
-   * matching the FOV angles of each eye, a shift backwards will result in a
-   * frustum that encompasses both eye frustums.
+   * Hardware profiles like Aura may provide non-mirrored per-eye frustums, so
+   * asymmetric FOVs are supported here ((broken link)).
+   *
+   * For a stereoscopic configuration, starting from head space and matching
+   * the FOV angles of each eye, a shift backwards will result in a frustum
+   * that encompasses both eye frustums.
    *
    *    Top down view:
    *
@@ -160,17 +157,24 @@ mat4 GetEncompassingProjectionMatrix(const XrView& left_eye_view,
   float distance_between_eyes =
       distance(ToVector3(left_eye_view.pose.position),
                ToVector3(right_eye_view.pose.position));
-  // Note angleRight/angleUp are positive, angleLeft/angleDown are negative.
+  // For asymmetric FOVs ((broken link)), ensure the shift backward is sufficient
+  // to encompass both outermost horizontal angles. Use std::min because a
+  // narrower field of view spreads out more slowly, requiring a larger backward
+  // shift distance to safely cover both eye pupil positions.
+  float min_outer_tan = std::min(std::abs(tan(left_eye_view.fov.angleLeft)),
+                                 std::abs(tan(right_eye_view.fov.angleRight)));
   float shift_backwards_distance =
-      (distance_between_eyes / 2.0f) / tan(left_eye_view.fov.angleRight);
+      (distance_between_eyes / 2.0f) / min_outer_tan;
 
-  // Use the left FOV of the left eye, the right FOV of the right eye, and the
-  // up/bottom angles of either.
+  // Use the outer left FOV of the left eye, outer right FOV of the right eye,
+  // and the extrema up/bottom angles from both eyes.
   XrFovf encompassing_frustum_fov = {
       .angleLeft = left_eye_view.fov.angleLeft,
       .angleRight = right_eye_view.fov.angleRight,
-      .angleUp = left_eye_view.fov.angleUp,
-      .angleDown = right_eye_view.fov.angleDown};
+      .angleUp =
+          std::max(left_eye_view.fov.angleUp, right_eye_view.fov.angleUp),
+      .angleDown =
+          std::min(left_eye_view.fov.angleDown, right_eye_view.fov.angleDown)};
 
   // We add shift_backwards_distance to the near and far planes because we will
   // be shifting the frustum backwards.

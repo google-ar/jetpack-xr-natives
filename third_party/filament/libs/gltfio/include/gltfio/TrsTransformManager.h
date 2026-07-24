@@ -21,9 +21,10 @@
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/EntityInstance.h"
+
+#include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/quat.h"
 #include "filament/libs/math/include/math/vec3.h"
-#include "filament/libs/math/include/math/mat4.h"
 
 using namespace filament::math;
 

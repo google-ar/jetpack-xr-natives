@@ -19,6 +19,7 @@
 
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/widget.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
@@ -56,6 +57,7 @@ class VisualizeOrigins : public editor::Widget, public imp::Rememberer {
   Mode mode_ = Mode::kShowSelectedOrigins;
   NodeHandle selected_node_;
   float3 empty_node_origins_size_;
+  PropertyBinding<bool> show_all_origins_binding_;
 };
 
 }  // namespace imp::editor

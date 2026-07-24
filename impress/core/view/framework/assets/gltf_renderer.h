@@ -175,20 +175,20 @@ class GltfRenderer : public Component {
   };
 
   void Setup(AssetPtr<GltfAsset> gltf_asset,
-             std::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+             std::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
   void Cleanup();
 
   Future<absl::Status> Setup();
   Future<absl::Status> Setup(
       const AssetDefinition& asset_definition,
-      std::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      std::optional<GltfAsset::LoadOptions> options = std::nullopt);
   Future<absl::Status> Setup(
       absl::string_view asset_url,
-      std::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      std::optional<GltfAsset::LoadOptions> options = std::nullopt);
   Future<absl::Status> Setup(
       absl::Cord contents, absl::string_view asset_url,
-      std::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      std::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
   void Update(const FrameTime& frame_time);
 

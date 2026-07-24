@@ -76,6 +76,7 @@ class AccessorReader {
   }
   size_t GetStride() const { return stride_; }
   size_t GetCount() const { return count_; }
+  bool IsNormalized() const { return normalized_; }
 
   // Returns data defined by the accessor. Avoids copying when possible.
   DenseDataAccess GetData() const;
@@ -96,13 +97,18 @@ class AccessorReader {
   //
   // Otherwise, if the data is of float format, simply
   // pack it and return.
-  // TODO: Add unit test for GetPackedFloatData.
   absl::StatusOr<DenseDataAccess> GetPackedFloatData(
-      CopyOption copy_option = CopyOption::kDefault) const;
+      CopyOption copy_option = CopyOption::kDefault,
+      bool normalized = true) const;
 
   // Returns the attribute type of the accessor, if the accessor holds data for
   // an attribute.
   absl::StatusOr<schemas::AttributeType> GetAttributeType() const;
+
+  static size_t GetAccessorTypeSize(
+      absl::string_view type,
+      imp::gltf::imp_proto::ComponentType component_type);
+  static size_t GetAccessorTypeSize(const gltf::imp_proto::Accessor& accessor);
 
   // Fills data to existing array.
   template <typename T>
@@ -123,11 +129,6 @@ class AccessorReader {
   };
 
   AccessorReader() = default;
-
-  static size_t GetAccessorTypeSize(
-      absl::string_view type,
-      imp::gltf::imp_proto::ComponentType component_type);
-  static size_t GetAccessorTypeSize(const gltf::imp_proto::Accessor& accessor);
 
   // Adds only the sparse data to existing buffer (or overwrites the existing
   // buffer with only the sparse data). Ignores the base data.
@@ -154,7 +155,7 @@ class AccessorReader {
   const uint8_t* base_;
   size_t stride_;
   size_t count_;
-
+  bool normalized_;
   std::optional<SparseAccessorReader> sparse_accessor_;
 };
 

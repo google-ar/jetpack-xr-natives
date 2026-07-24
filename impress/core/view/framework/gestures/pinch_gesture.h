@@ -18,9 +18,14 @@
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_GESTURES_PINCH_GESTURE_H_
 
 #include <array>
+#include <cstddef>
 #include <functional>
+#include <optional>
 
+#include "absl/types/span.h"
+#include "core/input/pointer_event.h"
 #include "core/math/vec.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/view/framework/gestures/gesture.h"
 #include "core/view/framework/gestures/gesture_pointer_utils.h"
 #include "core/view/framework/input/pointer_input_handler.h"
@@ -32,9 +37,11 @@ class View;
 /** PinchGesture represents a pinching motion across the device screen. */
 class PinchGesture : public Gesture {
  public:
+  static constexpr int kPointersPerPinch = 2;
+
   PinchGesture(Dispatcher* dispatcher, GesturePointerUtils* pointer_utils,
                const PointerHitEvent& pointer_hit,
-               const std::array<Pointer::Id, 2>& pointer_id);
+               const std::array<Pointer::Id, kPointersPerPinch>& pointer_id);
 
   using CreateFn = std::function<std::optional<PinchGesture>(
       const PointerHitEvent& pointer_hit,
@@ -73,7 +80,7 @@ class PinchGesture : public Gesture {
   };
 
   float2 GetPosition(size_t index) const {
-    return index < 2 ? position_[index] : kZero2;
+    return index < kPointersPerPinch ? position_[index] : kZero2;
   }
 
  protected:
@@ -85,12 +92,25 @@ class PinchGesture : public Gesture {
  private:
   static constexpr float kSlopPixels = 8;
   static constexpr float kSlopDegrees = 30.0f;
-  Pointer::Id pointer_id_[2];
-  GesturePointerUtils::ScopedPointerRetainer pointer_retainer_[2];
-  float2 start_position_[2];
-  float2 position_[2];
+  Pointer::Id pointer_id_[kPointersPerPinch];
+  GesturePointerUtils::ScopedPointerRetainer
+      pointer_retainer_[kPointersPerPinch];
+  float2 start_position_[kPointersPerPinch];
+  float2 position_[kPointersPerPinch];
   float start_gap_;
   float gap_;
+
+  // Returns true if the pointer ID is one of the pointers tracked by this
+  // gesture.
+  bool HasPointerId(Pointer::Id id) const;
+
+  // Calculates the centroid of the tracked pointers based on current positions.
+  float2 CalculateCentroid() const;
+
+  // Returns the event indices for the tracked pointers, or nullopt if any
+  // pointer is not found in the event.
+  std::optional<std::array<int, kPointersPerPinch>> GetPointerIndices(
+      const PointerEvent& event) const;
 };
 
 }  // namespace imp

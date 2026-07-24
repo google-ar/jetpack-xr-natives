@@ -15,9 +15,9 @@
 #include "core/resources/curl_url_loader.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <queue>
 #include <string>
 #include <utility>
@@ -89,11 +89,12 @@ class CurlUrlLoader : public UrlLoader {
     absl::Mutex mu;
     std::queue<QueuedUrl> urls_to_load ABSL_GUARDED_BY(mu);
     bool is_running ABSL_GUARDED_BY(mu) = false;
+    uint64_t scheduling_generation ABSL_GUARDED_BY(mu) = 0;
   };
 
   absl::StatusOr<absl::Cord> LoadPath(const std::string& path);
 
-  void ScheduleUrlConsumer();
+  void ScheduleUrlConsumer(uint64_t generation);
 
   // Called from background executor.
   static void ConsumeUrls(std::shared_ptr<DownloadInfo> download_info);
@@ -103,7 +104,7 @@ class CurlUrlLoader : public UrlLoader {
   std::shared_ptr<DownloadInfo> download_info_;
 
   // Keeps the future alive for consuming urls.
-  Future<absl::Status> consume_urls_future;
+  Future<absl::Status> consume_urls_future_ ABSL_GUARDED_BY(download_info_->mu);
 };
 
 CurlUrlLoader::CurlUrlLoader() {
@@ -133,36 +134,49 @@ Future<absl::Cord> CurlUrlLoader::LoadUrl(const std::string& url) {
     return Future<absl::Cord>(LoadPath(url.substr(kFileUriPrefix.size())));
   }
 
-  bool was_running;
   Future<absl::Cord> result;
+  bool should_schedule = false;
+  uint64_t generation = 0;
 
   // While locked, enqueue the url to load and determine if we need to start a
   // Future task to consume the urls. We must start a task to consume the urls
   // if no url is already loading at the moment.
   {
-    absl::MutexLock lock(&download_info_->mu);
+    absl::MutexLock lock(download_info_->mu);
     download_info_->urls_to_load.push({std::string(url), result});
 
-    was_running = download_info_->is_running;
-    download_info_->is_running = true;
+    if (!download_info_->is_running) {
+      download_info_->is_running = true;
+      should_schedule = true;
+      generation = ++download_info_->scheduling_generation;
+    }
   }
 
-  if (!was_running) {
-    ScheduleUrlConsumer();
+  if (should_schedule) {
+    ScheduleUrlConsumer(generation);
   }
 
   return result;
 }
 
-void CurlUrlLoader::ScheduleUrlConsumer() {
+void CurlUrlLoader::ScheduleUrlConsumer(uint64_t generation) {
   // TODO (broken link) Schedule future with correct future group if there are
   // in-flight requests going on.
-  consume_urls_future = Future<absl::Status>::Schedule(
+  //
+  // We schedule the future to a local variable outside the lock to avoid
+  // deadlock risks if the executor runs the task synchronously/inline
+  // (which would try to re-acquire download_info_->mu in ConsumeUrls).
+  Future<absl::Status> new_future = Future<absl::Status>::Schedule(
       [download_info = download_info_] {
         ConsumeUrls(download_info);
         return absl::OkStatus();
       },
       {.executor = Executor::Type::kBackground});
+
+  absl::MutexLock lock(download_info_->mu);
+  if (generation == download_info_->scheduling_generation) {
+    consume_urls_future_ = std::move(new_future);
+  }
 }
 
 // TODO: Implement a way to add headers to the request.
@@ -179,7 +193,7 @@ void CurlUrlLoader::ConsumeUrls(std::shared_ptr<DownloadInfo> download_info) {
     // Grab the pending urls from the queue.
     std::queue<QueuedUrl> urls_to_load;
     {
-      absl::MutexLock lock(&download_info->mu);
+      absl::MutexLock lock(download_info->mu);
       std::swap(urls_to_load, download_info->urls_to_load);
     }
 
@@ -287,7 +301,7 @@ void CurlUrlLoader::ConsumeUrls(std::shared_ptr<DownloadInfo> download_info) {
     // Continue looping if any downloads are in-flight or if there are new
     // requests in the queue.
     if (num_remaining_urls_loading == 0) {
-      absl::MutexLock lock(&download_info->mu);
+      absl::MutexLock lock(download_info->mu);
       should_continue = !download_info->urls_to_load.empty();
       if (!should_continue) {
         download_info->is_running = false;

@@ -52,7 +52,11 @@ void ViewportRenderTarget::SetSize(uint2 size) {
                        .height(size.y)
                        .levels(1)
                        .sampler(filament::Texture::Sampler::SAMPLER_2D)
+#if FILAMENT_ENABLE_FEATURE_LEVEL_0 == 1
+                       .format(filament::Texture::InternalFormat::DEPTH24)
+#else   // FILAMENT_ENABLE_FEATURE_LEVEL_0 == 1
                        .format(filament::Texture::InternalFormat::DEPTH32F)
+#endif  // FILAMENT_ENABLE_FEATURE_LEVEL_0 == 1
                        .usage(filament::Texture::Usage::DEPTH_ATTACHMENT)
                        .build(engine_);
 

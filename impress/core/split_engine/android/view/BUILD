@@ -59,7 +59,9 @@ cc_library(
     deps = [
         ":view_update_params",
         "//:platform_android",
+        "//core:config",
         "//core/async:executor",
+        "//core/camera",
         "//core/common:buffer_access",
         "//core/common:enum_flags",
         "//core/common:jni_helpers",

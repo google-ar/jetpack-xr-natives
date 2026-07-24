@@ -25,7 +25,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "absl/status/status_macros.h"
+#include "mediapipe/framework/port/status_macros.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "filament/filament/include/filament/Engine.h"

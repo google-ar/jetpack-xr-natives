@@ -185,8 +185,22 @@ union MaterialPrecompileConstantValue (requires_api: 1) {
   Bool = 3 (requires_api: 1),
 }
 
+// This should match the Filament UserVariantFilterBit enum:
+// http://google3/third_party/filament/libs/filabridge/include/filament/MaterialEnums.h;l=277
+enum VariantFilter:uint32 (bit_flags) {
+  DIRECTIONAL_LIGHTING = 0,  // (1 << 0)
+  DYNAMIC_LIGHTING = 1,  // (1 << 1)
+  SHADOW_RECEIVER = 2,  // (1 << 2)
+  SKINNING = 3,  // (1 << 3)
+  FOG = 4,  // (1 << 4)
+  VSM = 5,  // (1 << 5)
+  SSR = 6,  // (1 << 6)
+  STE = 7,  // (1 << 7)
+}
+
 table MaterialPrecompileOptions (requires_api: 1) {
   precompile_constants:[MaterialPrecompileConstant] (id: 0, requires_api: 1);
+  variant_filter:VariantFilter (id: 1);
 }
 
 table MaterialPrecompileConstant (requires_api: 1) {
@@ -638,20 +652,20 @@ table BuiltInMaterialbd7fe08cParameters (requires_api: 1) {
   uv_scale:Float2 (id: 5, requires_api: 1);
 }
 
-enum GsplatMode:int (unstable_api) {
+enum GsplatMode:int (preview_api, unstable_api) {
   UNSPECIFIED = 0,
   MAGIC_WINDOW = 1,
   GSPLAT = 2,
 }
 
 // Gsplat material mode specific spec.
-union GsplatModeSpec (unstable_api) {
+union GsplatModeSpec (preview_api, unstable_api) {
   GsplatSpec = 1,
   MagicWindowSpec = 2,
 }
 
 // GSPLAT mode spec.
-table GsplatSpec (unstable_api) {
+table GsplatSpec (preview_api, unstable_api) {
   // Optional: when specified, this is the render group the Gsplat scene will be
   // rendered to. This is to be used with another Gsplat material in
   // MAGIC_WINDOW mode.
@@ -660,7 +674,7 @@ table GsplatSpec (unstable_api) {
 
 // MAGIC_WINDOW mode spec.
 // All fields are required.
-table MagicWindowSpec (unstable_api) {
+table MagicWindowSpec (preview_api, unstable_api) {
   // The initial resolution of the offscreen texture.
   magic_window_offscreen_resolution:Uint2 (id: 0);
 
@@ -672,7 +686,7 @@ table MagicWindowSpec (unstable_api) {
 // Built-in material spec for Gaussian Splat Material.
 // See go/gsplat-built-materials-api-proposal
 // All fields are required.
-table BuiltInMaterialGsplatSpec (unstable_api) {
+table BuiltInMaterialGsplatSpec (preview_api, unstable_api) {
   // The material mode. See GsplatMode.
   material_mode:GsplatMode (id: 0);
 
@@ -696,13 +710,13 @@ table BuiltInMaterialGsplatSpec (unstable_api) {
 }
 
 // Gsplat material mode specific parameters.
-union GsplatModeParameters (unstable_api) {
+union GsplatModeParameters (preview_api, unstable_api) {
   GsplatParameters = 1,
   MagicWindowParameters = 2,
 }
 
 // GSPLAT mode parameters.
-table GsplatParameters (unstable_api) {
+table GsplatParameters (preview_api, unstable_api) {
   // ---------------------------------------------------------------------------
   // Required parameters.
 
@@ -794,7 +808,7 @@ table GsplatParameters (unstable_api) {
 
 // MAGIC_WINDOW mode parameters.
 // All fields are required.
-table MagicWindowParameters (unstable_api) {
+table MagicWindowParameters (preview_api, unstable_api) {
   // Specifies the pose and the dimension of the Magic Window projection quad,
   // relative to the node specified by entity in BuiltInMaterialGsplatSpec.
   magic_window_projection_quad:ProjectionQuad (id: 0);
@@ -808,7 +822,7 @@ table MagicWindowParameters (unstable_api) {
 // Built-in material parameters for Gaussian Splat Material.
 // See go/gsplat-built-materials-api-proposal
 // All fields are required.
-table BuiltInMaterialGsplatParameters (unstable_api) {
+table BuiltInMaterialGsplatParameters (preview_api, unstable_api) {
   // Mode specific parameters.
   mode_parameters:GsplatModeParameters (id: 1);
 }
@@ -869,7 +883,7 @@ table BuiltInMaterialInstanceParameters (requires_api: 1) {
 root_type BuiltInMaterialInstanceParameters;
 
 // Spec for a filament material.
-table FilamentMaterialSpec (unstable_api) {
+table FilamentMaterialSpec (preview_api, unstable_api) {
   // The source of the material in the filament "jsonish" text format.
   source:string (id: 0);
 
@@ -878,12 +892,12 @@ table FilamentMaterialSpec (unstable_api) {
 }
 
 // Spec for a custom material to be compiled and used by Split Engine.
-union CustomMaterialSpec (unstable_api) {
+union CustomMaterialSpec (preview_api, unstable_api) {
   FilamentMaterialSpec = 1,
 }
 
 // Request to compile a material, defined by a spec.
-table AddCustomMaterialRequest (unstable_api) {
+table AddCustomMaterialRequest (preview_api, unstable_api) {
   // The ID to assign to the material.
   material_id:uint64 (id: 0);
 

@@ -138,7 +138,8 @@ struct CanvasOptionsKey {
                canvas_options.size_pixels == other.canvas_options.size_pixels &&
                // text_tracking can affect the width of cursive glyphs.
                AlmostEqual(canvas_options.text_tracking,
-                           other.canvas_options.text_tracking));
+                           other.canvas_options.text_tracking) &&
+               canvas_options.locale == other.canvas_options.locale);
     if (requires_color_key) {
       return eq && canvas_options.color == other.canvas_options.color &&
              canvas_options.stroke_color == other.canvas_options.stroke_color;
@@ -155,6 +156,7 @@ struct CanvasOptionsKey {
                         canvas_options_key.canvas_options.font_holder,
                         canvas_options_key.canvas_options.size_pixels,
                         canvas_options_key.canvas_options.text_tracking,
+                        canvas_options_key.canvas_options.locale,
                         canvas_options_key.canvas_options.color.x,
                         canvas_options_key.canvas_options.color.y,
                         canvas_options_key.canvas_options.color.z,
@@ -168,7 +170,8 @@ struct CanvasOptionsKey {
                       canvas_options_key.canvas_options.stroke_width_pixels,
                       canvas_options_key.canvas_options.font_holder,
                       canvas_options_key.canvas_options.size_pixels,
-                      canvas_options_key.canvas_options.text_tracking);
+                      canvas_options_key.canvas_options.text_tracking,
+                      canvas_options_key.canvas_options.locale);
   }
 };
 
@@ -195,7 +198,8 @@ struct CanvasOptionsGlyphKey {
                canvas_options.size_pixels == other.canvas_options.size_pixels &&
                // text_tracking can affect the width of cursive glyphs.
                AlmostEqual(canvas_options.text_tracking,
-                           other.canvas_options.text_tracking));
+                           other.canvas_options.text_tracking) &&
+               canvas_options.locale == other.canvas_options.locale);
     if (requires_color_key) {
       return eq && canvas_options.color == other.canvas_options.color &&
              canvas_options.stroke_color == other.canvas_options.stroke_color;
@@ -213,6 +217,7 @@ struct CanvasOptionsGlyphKey {
                         canvas_options_key.canvas_options.font_holder,
                         canvas_options_key.canvas_options.size_pixels,
                         canvas_options_key.canvas_options.text_tracking,
+                        canvas_options_key.canvas_options.locale,
                         canvas_options_key.canvas_options.color.x,
                         canvas_options_key.canvas_options.color.y,
                         canvas_options_key.canvas_options.color.z,
@@ -226,7 +231,8 @@ struct CanvasOptionsGlyphKey {
                       canvas_options_key.canvas_options.stroke_width_pixels,
                       canvas_options_key.canvas_options.font_holder,
                       canvas_options_key.canvas_options.size_pixels,
-                      canvas_options_key.canvas_options.text_tracking);
+                      canvas_options_key.canvas_options.text_tracking,
+                      canvas_options_key.canvas_options.locale);
   }
 };
 

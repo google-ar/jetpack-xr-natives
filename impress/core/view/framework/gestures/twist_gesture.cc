@@ -47,7 +47,7 @@ TwistGesture::CreateFn TwistGesture::GetCreateFunction(
                                      absl::Span<const TwistGesture> gestures)
              -> std::optional<TwistGesture> {
     if (pointer_hit.event.Type() != PointerEventType::kDown) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     int next = 0;
@@ -55,13 +55,13 @@ TwistGesture::CreateFn TwistGesture::GetCreateFunction(
     for (const auto& pointer : pointer_hit.event.GetPointers()) {
       if (pointer_utils->IsPointerRetained(pointer.id)) continue;
       if (next >= 2) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       pointer_id[next] = pointer.id;
       ++next;
     }
     if (next < 2) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     return TwistGesture(dispatcher, pointer_utils, pointer_hit, pointer_id);
   };

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "AndroidFrameCallback.h"
+#include "AndroidNativeWindow.h"
 
 #include "vulkan/platform/VulkanPlatformSwapChainImpl.h"
 #include "vulkan/utils/Image.h"
@@ -166,12 +166,6 @@ uint32_t selectMemoryTypeForExternalImage(VkPhysicalDevice physicalDevice, VkDev
 
 // ---------------------------------------------------------------------------------------------
 
-struct VulkanPlatformAndroid::AndroidDetails {
-    AndroidFrameCallback androidFrameCallback;
-};
-
-// ---------------------------------------------------------------------------------------------
-
 VulkanPlatformAndroid::ExternalImageVulkanAndroid::~ExternalImageVulkanAndroid() {
     if (__builtin_available(android 26, *)) {
         if (aHardwareBuffer) {
@@ -182,8 +176,7 @@ VulkanPlatformAndroid::ExternalImageVulkanAndroid::~ExternalImageVulkanAndroid()
 
 // ---------------------------------------------------------------------------------------------
 
-VulkanPlatformAndroid::VulkanPlatformAndroid() :
-        mAndroidDetails(*(new(std::nothrow) AndroidDetails{})) {
+VulkanPlatformAndroid::VulkanPlatformAndroid() {
     mOSVersion = android_get_device_api_level();
     if (mOSVersion < 0) {
         mOSVersion = __ANDROID_API_FUTURE__;
@@ -191,7 +184,6 @@ VulkanPlatformAndroid::VulkanPlatformAndroid() :
 }
 
 VulkanPlatformAndroid::~VulkanPlatformAndroid() noexcept {
-    delete &mAndroidDetails;
 }
 
 Platform::ExternalImageHandle VulkanPlatformAndroid::createExternalImage(
@@ -685,15 +677,11 @@ int VulkanPlatformAndroid::getOSVersion() const noexcept {
 }
 
 void VulkanPlatformAndroid::terminate() {
-    mAndroidDetails.androidFrameCallback.terminate();
     VulkanPlatform::terminate();
 }
 
 Driver* VulkanPlatformAndroid::createDriver(void* sharedContext, DriverConfig const& driverConfig) {
     Driver* driver = VulkanPlatform::createDriver(sharedContext, driverConfig);
-    if (driver) {
-        mAndroidDetails.androidFrameCallback.init();
-    }
     return driver;
 }
 
@@ -707,28 +695,16 @@ bool VulkanPlatformAndroid::queryCompositorTiming(SwapChain const* swapchain,
         return false;
     }
 
-    AndroidFrameCallback::Timeline const preferredTimeline{
-        mAndroidDetails.androidFrameCallback.getPreferredTimeline() };
-    // FIXME: expectedPresentLatency might reflect the previous frame's value because
-    //        the choreographer's callback can happen before (good) or after (bad) us.
-    //        This problem is mitigated by storing the latency instead of the deadline,
-    //        because it generally is constant frame to frame.
-    if (UTILS_LIKELY(preferredTimeline.expectedPresentTime > preferredTimeline.frameTime)) {
-        // latency can never be negative, let's be safe
-        outCompositorTiming->expectedPresentLatency =
-                preferredTimeline.expectedPresentTime - preferredTimeline.frameTime;
-    } else {
-        // fake a reasonable value (33ms)
-        outCompositorTiming->expectedPresentLatency = 33'000'000;
-    }
-    outCompositorTiming->compositeDeadline = CompositorTiming::INVALID;
     outCompositorTiming->compositeInterval = CompositorTiming::INVALID;
     outCompositorTiming->compositeToPresentLatency = CompositorTiming::INVALID;
 
     // From this point on, we always return "success" because some timings were returned.
 
+    CompositorTiming result{};
     auto vulkanSwapchain = static_cast<VulkanPlatformSwapChainBase const *>(swapchain);
-    vulkanSwapchain->queryCompositorTiming(outCompositorTiming);
+    vulkanSwapchain->queryCompositorTiming(&result);
+    outCompositorTiming->compositeInterval = result.compositeInterval;
+    outCompositorTiming->compositeToPresentLatency = result.compositeToPresentLatency;
     return true;
 }
 
@@ -743,4 +719,15 @@ bool VulkanPlatformAndroid::queryFrameTimestamps(SwapChain const* swapchain, uin
     return vulkanSwapchain->queryFrameTimestamps(frameId, outFrameTimestamps);
 }
 
+utils::tribool VulkanPlatformAndroid::isFrameRateChangeSupported(void* const nativeWindow) const noexcept {
+    return NativeWindow::isFrameRateChangeSupported(static_cast<ANativeWindow*>(nativeWindow));
+}
+
+int VulkanPlatformAndroid::setFrameRate(SwapChain const* swapchain, float frameRate,
+        FrameRateCompatibility compatibility, ChangeFrameRateStrategy strategy) noexcept {
+    auto vulkanSwapchain = static_cast<VulkanPlatformSwapChainBase const*>(swapchain);
+    return vulkanSwapchain ? vulkanSwapchain->setFrameRate(frameRate, compatibility, strategy) : -1;
+}
+
 } // namespace filament::backend
+

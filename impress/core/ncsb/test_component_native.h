@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #ifndef THIRD_PARTY_IMPRESS_CORE_NCSB_TEST_COMPONENT_NATIVE_H_
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_TEST_COMPONENT_NATIVE_H_
 
+#include "absl/strings/string_view.h"
 #include "core/ncsb/isf_info.h"
+
 namespace imp {
 namespace test {
 

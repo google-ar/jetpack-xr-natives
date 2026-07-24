@@ -17,47 +17,37 @@
 #include "core/editor/visualizers/physics/visualize_physics_debug.h"
 
 #include "core/common/log.h"
-#include "core/common/platform_storage.h"
 #include "core/config.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/editor.h"
-#include "core/editor/events.h"
-#include "core/editor/widgets/settings_widget_constants.h"
-#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/physics/physics_manager.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
-VisualizePhysicsDebug::VisualizePhysicsDebug(
-    BaseView& view, bool use_view_dispatcher)
+VisualizePhysicsDebug::VisualizePhysicsDebug(BaseView& view,
+                                             bool use_view_dispatcher)
     : view_(view),
       physics_manager_(
           &view_.GetRegistry().GetOrCreate<PhysicsManager>(view_)) {
-  PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
-  show_all_physics_visualizer_enabled_ = storage.GetBool(
-      kShowPhysicsVisualizerEnabledKey, kShowPhysicsVisualizerEnabledDefault);
-  Dispatcher& dispatcher =
-      use_view_dispatcher
-          ? view_.GetDispatcher()
-          : view_.GetRegistry().Get<Editor>()->get().GetDispatcher();
+  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
 
-  dispatcher.Connect(
-      [this](const EditorSettingChangedEvent& event) mutable {
-        if (event.show_physics_visualizer_enabled.has_value()) {
-          if (*event.show_physics_visualizer_enabled) {
-            IMP_LOG(imp::INFO) << "Visualizing all physics visualizers";
-            show_all_physics_visualizer_enabled_ = true;
-          } else {
-            IMP_LOG(imp::INFO) << "Not visualizing any physics visualizers";
-            show_all_physics_visualizer_enabled_ = false;
-          }
-        }
-      },
-      this);
+  const auto set_enabled = [](bool enabled, bool /*old*/) {
+    if (enabled) {
+      IMP_LOG(imp::INFO) << "Visualizing all physics visualizers";
+    } else {
+      IMP_LOG(imp::INFO) << "Not visualizing any physics visualizers";
+    }
+  };
+
+  show_physics_visualizer_binding_ = PropertyBinding<bool>(
+      editor.GetSettings().show_physics_visualizer_enabled, set_enabled);
 }
 
 void VisualizePhysicsDebug::DrawImGui() {
 #if IMP_RUNTIME(DEV)
-  if (show_all_physics_visualizer_enabled_) {
+  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
+
+  if (*editor.GetSettings().show_physics_visualizer_enabled) {
     physics_manager_->DrawDebug();
   }
 #endif

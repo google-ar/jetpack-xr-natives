@@ -42,6 +42,8 @@ class FallbackComponentWidget : public Widget {
 
   absl::string_view GetName() const override;
 
+  bool IsCloseable() const override { return false; }
+
   bool HasContent() const override;
 
   void DrawImGui() override;

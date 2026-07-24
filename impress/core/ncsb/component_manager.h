@@ -47,6 +47,8 @@
 #include "core/ncsb/node_controller.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/update_system.h"
+#include "core/proto/async_preload_visitor.h"
+#include "core/proto/proto_traits.h"
 
 #if IMP_RUNTIME(DEV)
 #include "core/editor/editor_info.h"
@@ -296,13 +298,31 @@ Component::AddResult<T, Args...> ComponentManager::Add(NodeHandle node,
 template <typename T, typename... Args>
 Component::AddWithStateResult<T, Args...> ComponentManager::AddWithState(
     NodeHandle node, typename T::IsfInfo::StateT state, Args&&... args) {
-  ComponentHandle<T> comp = AddWithoutSetup<T>(node);
-
-  // Copy the state to the component's state field.
-  T::IsfInfo::GetState(comp) = std::move(state);
-
-  return SetupComponentAfterAdd<SetupMode::kSetupWithStateOrSetup>(
-      comp, std::forward<Args>(args)...);
+  if constexpr (component_traits::kComponentRequiresAsyncPreload<T>) {
+    Future<absl::Status> preload_future =
+        AsyncPreloadVisitor::Preload(state, *view_);
+    // TODO: Consider passing in the preload future to
+    // AddWithoutSetup.
+    return preload_future.Then(
+        [this, node, state = std::move(state),
+         args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+          ComponentHandle<T> comp = AddWithoutSetup<T>(node);
+          T::IsfInfo::GetState(comp) = std::move(state);
+          return std::apply(
+              [this, comp](auto&&... args) {
+                return this
+                    ->SetupComponentAfterAdd<SetupMode::kSetupWithStateOrSetup>(
+                        comp, std::forward<decltype(args)>(args)...);
+              },
+              std::move(args));
+        });
+  } else {
+    ComponentHandle<T> comp = AddWithoutSetup<T>(node);
+    // Copy the state to the component's state field.
+    T::IsfInfo::GetState(comp) = std::move(state);
+    return SetupComponentAfterAdd<SetupMode::kSetupWithStateOrSetup>(
+        comp, std::forward<Args>(args)...);
+  }
 }
 
 template <ComponentManager::SetupMode setup_mode, typename T, typename... Args>
@@ -534,6 +554,10 @@ Component::AddResult<T, Args...> ComponentManager::GetOrAdd(NodeHandle node,
 template <typename T, typename... Args>
 Component::AddWithStateResult<T, Args...> ComponentManager::GetOrAddWithState(
     NodeHandle node, typename T::IsfInfo::StateT state, Args&&... args) {
+  // TODO: Support async preload for GetOrAddWithState.
+  static_assert(!component_traits::kComponentRequiresAsyncPreload<T>,
+                "GetOrAddWithState requires a component with a state that "
+                "requires async preload, which is not supported.");
   std::optional<Component::AddWithStateResult<T, Args...>> result =
       GetOrAddHelper<SetupMode::kSetupWithStateOrSetup, T, Args...>(
           node.GetEntity());

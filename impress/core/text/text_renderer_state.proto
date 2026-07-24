@@ -33,7 +33,7 @@ import "core/text/text_metrics.proto";
 // share glyphs instead of duplicating them in texture memory and repeatedly
 // re-drawing them.
 //
-// Next ID: 24
+// Next ID: 25
 message TextRendererState {
   // Type used for bottom_pivot and top_pivot. These two fields respectively
   // determine how a pivot.y value of 0 or a pivot.y value of 1 positions text
@@ -252,4 +252,7 @@ message TextRendererState {
 
   // If set, the text will not be culled by the frustum culling.
   bool disable_frustum_culling = 23;
+
+  // The locale of the text to render.
+  optional string locale = 24;
 }

@@ -100,8 +100,8 @@ MaterialCompilerClient::CompileMaterial(absl::string_view material_string,
                                         const MaterialCompilerConfig& config,
                                         OperationId operation_id) {
   flatbuffers::FlatBufferBuilder builder;
-  auto config_offset =
-      schemas::CreateConfig(builder, config.platform, config.target_api);
+  auto config_offset = schemas::CreateConfig(
+      builder, config.platform, config.target_api, config.variant_filter);
   auto command_offset = schemas::CreateCompileRequest(
       builder,
       builder.CreateString(material_string.data(), material_string.size()),

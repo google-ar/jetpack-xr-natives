@@ -40,11 +40,13 @@ class WindowConfiguration {
                WindowVisibility initial_visibility)
         : window_name(window_name),
           initial_visibility(initial_visibility),
-          current_visibility(initial_visibility) {}
+          current_visibility(initial_visibility),
+          focus_requested(false) {}
 
     std::string window_name;
     bool initial_visibility;
     bool current_visibility;
+    bool focus_requested;
   };
   using WindowInfoMap =
       absl::flat_hash_map<std::string, std::unique_ptr<WindowInfo>>;
@@ -72,7 +74,12 @@ class WindowConfiguration {
 
   // Sets the current visibility of the window.
   void SetWindowVisibility(absl::string_view window_name,
-                           WindowVisibility visibility);
+                           WindowVisibility visibility,
+                           bool request_focus = false);
+
+  // Returns true if there is a pending focus request for the window, and clears
+  // it.
+  bool PopFocusRequest(absl::string_view window_name);
 
   // Restores the default visibility and layout of the windows.
   void RestoreDefault();

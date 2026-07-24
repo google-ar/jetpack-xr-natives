@@ -25,6 +25,7 @@ load(
 )
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_license//rules:license_kind.bzl", "license_kind")
+load("@third_party//split_engine/build_tools:gen_flatbuffer_size_calculator.bzl", "gen_flatbuffer_size_calculator")
 load("@third_party//split_engine/build_tools:gen_max_api_requirement.bzl", "gen_max_api_requirement")
 
 package(default_visibility = ["//visibility:public"])
@@ -70,6 +71,7 @@ flatbuffer_library_public(
     flatc_args = IMP_FLATC_ARGS + [
         "--bfbs-gen-embed",  # Enable embedding of the flatbuffers schema in the binary.
         "--gen-name-strings",  # Generate fully qualified names for the flatbuffers tables to find them in the embedded schema.
+        "--gen-object-api",  # Generate C++ classes for the flatbuffers tables.
     ],
     include_paths = IMP_FLATBUFFER_INCLUDE_PATHS,
     language_flag = "-c",
@@ -97,8 +99,17 @@ cc_library(
 cc_library(
     name = "split_engine_schema_version",
     hdrs = ["schemas/split_engine_schema_version.h"],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "flatbuffer_size_calculator",
+    srcs = ["flatbuffer_size_calculator.cc"],
+    hdrs = ["flatbuffer_size_calculator.h"],
     deps = [
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/strings:string_view",
+        "@flatbuffers",
     ],
     alwayslink = 1,
 )
@@ -107,6 +118,16 @@ gen_max_api_requirement(
     name = "max_api_requirement",
     srcs = schemas,
     out = "schemas/max_api_requirement.h",
+)
+
+gen_flatbuffer_size_calculator(
+    name = "fbs_size_calculator",
+    srcs = schemas,
+    out_prefix = "schemas/",
+    scoped_enums = True,
+    deps = [
+        ":fbs",
+    ],
 )
 
 cc_library(
@@ -198,9 +219,36 @@ cc_library(
 filegroup(
     name = "build_cleaner_ignore",
     srcs = [
+        "schemas/split_engine_attributes.fbs",
         "schemas/split_engine_data.fbs",
         "schemas/split_engine_ipc.fbs",
+        "schemas/split_engine_material.fbs",
+        "schemas/split_engine_primitive.fbs",
         "schemas/split_engine_render_passes.fbs",
     ],
     tags = ["ignore_srcs"],
+)
+
+cc_library(
+    name = "headless_openxr_camera_updater",
+    srcs = ["headless_openxr_camera_updater.cc"],
+    hdrs = ["headless_openxr_camera_updater.h"],
+    deps = [
+        "@bazel_tools//tools/jdk:jni",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_impress//core:config",
+        "@com_google_impress//core/camera",
+        "@com_google_impress//core/common:context",
+        "@com_google_impress//core/common:log",
+        "@com_google_impress//core/math",
+        "@com_google_impress//core/ncsb",
+        "@com_google_impress//core/view:base_view",
+        "@com_google_impress//core/view/platforms/xr_android:openxr_includes",
+        "@com_google_impress//core/view/platforms/xr_android:xr_helpers",
+        "@com_google_impress//core/view/utils:frame_time",
+    ],
+    alwayslink = 1,
 )

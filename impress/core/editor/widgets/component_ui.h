@@ -37,6 +37,7 @@ class ComponentUi : public editor::Widget, public imp::Rememberer {
   void DrawImGui() override;
   bool HasContent() const override;
   absl::string_view GetName() const override { return "Component Library"; }
+  bool IsCloseable() const override { return false; }
 
  private:
   // Loops through all components on the active model and updates the UI.

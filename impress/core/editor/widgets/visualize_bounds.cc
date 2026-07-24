@@ -15,11 +15,10 @@
 #include "core/editor/widgets/visualize_bounds.h"
 
 #include "absl/container/flat_hash_set.h"
-#include "core/common/log.h"
 #include "core/camera/camera_component.h"
 #include "core/common/debug_draw.h"
-#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
 #include "core/geometry/shapes/box.h"
@@ -32,7 +31,6 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"
-#include "core/view/framework/assets/gltf_scene.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/capsule_collider.h"
 #include "core/view/framework/collision/cone_collider.h"
@@ -50,13 +48,6 @@ constexpr debug_draw::Color kSelectedNodeColor = {0x81, 0xd4, 0xfa,
 constexpr debug_draw::Color kMeshNodeColor = debug_draw::kLightBlue;
 
 VisualizeBounds::VisualizeBounds(BaseView& view) : view_(view) {
-  PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
-  if (storage.GetBool(kShowBoundsEnabledKey, kShowBoundsEnabledDefault)) {
-    mode_ = Mode::kShowAllBounds;
-  } else {
-    mode_ = Mode::kShowSelectedBounds;
-  }
-
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
   editor_dispatcher.Connect(
@@ -78,18 +69,13 @@ VisualizeBounds::VisualizeBounds(BaseView& view) : view_(view) {
             view_.GetRegistry().Get<Editor>()->get().GetSelectedNodes();
       },
       this);
-  editor_dispatcher.Connect(
-      [this](const EditorSettingChangedEvent& event) {
-        // Switch modes based on the "show all bounds" setting.
-        if (!event.show_all_bounds_enabled.has_value()) return;
 
-        if (*event.show_all_bounds_enabled) {
-          mode_ = Mode::kShowAllBounds;
-        } else {
-          mode_ = Mode::kShowSelectedBounds;
-        }
-      },
-      this);
+  const auto change_mode = [this](bool enabled, bool /*old*/) {
+    mode_ = enabled ? Mode::kShowAllBounds : Mode::kShowSelectedBounds;
+  };
+  show_all_bounds_binding_ =
+      PropertyBinding<bool>(editor.GetSettings().show_all_bounds_enabled,
+                            change_mode, BindingMode::kBindAndFire);
 }
 
 bool VisualizeBounds::HasCollider(NodeHandle node) const {

@@ -347,7 +347,7 @@ absl::Status XrSessionHost::PreBeginRender() {
         // does not support protected buffers.
         MP_ASSIGN_OR_RETURN(
             swap_chain_protected_,
-            AddSwapChain(static_cast<XrSessionHost*>(this),
+            AddSwapChain(native_window_.get(),
                          filament::SwapChain::CONFIG_TRANSPARENT |
                              filament::SwapChain::CONFIG_PROTECTED_CONTENT));
       }
@@ -375,6 +375,18 @@ absl::Status XrSessionHost::Setup(JNIEnv* env, JavaVM* vm, jobject context) {
 
   imp::output::Xr("Composition layer depth enabled: %d",
                   is_composition_layer_depth_enabled_);
+#if IMP_MATERIAL_API(OPENGL)
+  if (is_composition_layer_depth_enabled_ && msaa_sample_count_ > 0) {
+    IMP_LOG(imp::WARNING) << "OpenXR composition layer depth is enabled with MSAA "
+                 << "(msaa_sample_count = " << msaa_sample_count_ << "). "
+                 << "Note that this MSAA path does not work as expected on the "
+                    "OpenGL backend "
+                 << "due to hardware MSRTT (Multisampled Render to Texture) "
+                    "discarding depth buffers on resolve. "
+                 << "Please use the Vulkan backend or disable MSAA if depth "
+                    "submission is required.";
+  }
+#endif
 
   // This method is called on the Impress thread.
   //
@@ -655,6 +667,8 @@ absl::Status XrSessionHost::AdvanceFrame() {
       frame_state.predictedDisplayPeriod, frame_state.predictedDisplayTime,
       frame_state.shouldRender ? "true" : "false");
 
+  latest_predicted_display_time_ = frame_state.predictedDisplayTime;
+
   if (frame_state.predictedDisplayPeriod != XR_INFINITE_DURATION) {
     // Report if predictedDisplayPeriod is exceeded significantly.
     auto maximum_display_period =
@@ -725,8 +739,10 @@ absl::Status XrSessionHost::AdvanceFrame() {
   xr_scheduled_timing_->AddSample(
       absl::Nanoseconds(frame_state.predictedDisplayPeriod));
 
-  latest_predicted_display_time_ = frame_state.predictedDisplayTime;
-
+  // We only broadcast reference space changes for valid, rendered frames. If
+  // tracking is lost (or the frame is skipped for any other reason), pending
+  // space changes are held until tracking is restored and a frame is
+  // successfully processed.
   BroadcastReferenceSpaceChanges(latest_predicted_display_time_);
 
   // TODO: Consider changing/renaming/moving as part of
@@ -1978,6 +1994,11 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
   void* next = nullptr;
   std::vector<XrCompositionLayerProjectionView> layer_views;
 
+  // If this gets used, it gets passed by address outside the below scope, so
+  // must be have a lifetime larger than the below scope where it actually
+  // (might) get populated.
+  XrCompositionLayerDepthTestFB depth_test;
+
   if (is_main_projection_layer_enabled_) {
     layer_depth_infos_.clear();
     layer_depth_infos_.reserve(frame_info.views.size());
@@ -2035,7 +2056,6 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
       });
     }
 
-    XrCompositionLayerDepthTestFB depth_test;
     next = nullptr;
     if (depth_swapchain != XR_NULL_HANDLE &&
         is_composition_layer_depth_enabled_) {

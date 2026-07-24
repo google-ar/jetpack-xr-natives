@@ -20,6 +20,8 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -32,6 +34,7 @@ import com.google.ar.imp.core.scripting.ScriptEndpoint;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.errorprone.annotations.concurrent.GuardedBy;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -42,12 +45,19 @@ import java.util.concurrent.ExecutionException;
  */
 public class ImpViewController {
   private static final String TAG = "ImpViewController";
+  private static final Handler MAIN_THREAD_HANDLER = new Handler(Looper.getMainLooper());
 
   // TODO: replace with MonotonicNonNull
   @Nullable public final UiHelper uiHelper;
   private final View view;
   private final FrameScheduler frameScheduler;
   @Nullable private final android.view.View androidView;
+  @Nullable private Runnable attachRunnable;
+  private final Object viewAttachmentLock = new Object();
+
+  @GuardedBy("viewAttachmentLock")
+  private boolean skipViewAttach = false;
+
   private boolean shouldAlwaysAdvanceExecutor = false;
   private boolean shouldAlwaysPreRender = false;
 
@@ -59,7 +69,8 @@ public class ImpViewController {
       View view,
       float desiredSizeScale,
       long swapChainFlags,
-      boolean useSynchronousSurfaceChanges) {
+      boolean useSynchronousSurfaceChanges,
+      boolean attachViewOnMainThreadHandler) {
     this.androidView = androidView;
 
     Preconditions.checkState(
@@ -164,10 +175,31 @@ public class ImpViewController {
         });
     // If the androidView is already valid, the callback will be called immediately. Therefore, we
     // need to make sure the callback is set before the view.
-    if (androidView instanceof TextureView) {
-      uiHelper.attachTo((TextureView) androidView);
+    if (attachViewOnMainThreadHandler) {
+      attachRunnable =
+          () -> {
+            synchronized (viewAttachmentLock) {
+              if (!skipViewAttach) {
+                if (androidView instanceof TextureView textureView) {
+                  uiHelper.attachTo(textureView);
+                } else if (androidView instanceof SurfaceView surfaceView) {
+                  uiHelper.attachTo(surfaceView);
+                }
+              }
+            }
+          };
+
+      if (Looper.myLooper() == Looper.getMainLooper()) {
+        attachRunnable.run();
+      } else {
+        MAIN_THREAD_HANDLER.post(attachRunnable);
+      }
     } else {
-      uiHelper.attachTo((SurfaceView) androidView);
+      if (androidView instanceof TextureView textureView) {
+        uiHelper.attachTo(textureView);
+      } else if (androidView instanceof SurfaceView surfaceView) {
+        uiHelper.attachTo(surfaceView);
+      }
     }
   }
 
@@ -260,6 +292,13 @@ public class ImpViewController {
   }
 
   public void releaseResources(boolean asyncDestructionEnabled) {
+    if (attachRunnable != null) {
+      synchronized (viewAttachmentLock) {
+        skipViewAttach = true;
+      }
+      MAIN_THREAD_HANDLER.removeCallbacks(attachRunnable);
+    }
+
     if (getNativeHandle() == 0) {
       return;
     }
@@ -267,8 +306,8 @@ public class ImpViewController {
     // Always detach the surface before destroying the engine
     if (uiHelper != null) {
       uiHelper.detach();
-      if (androidView instanceof TextureView) {
-        ((TextureView) androidView).setSurfaceTextureListener(null);
+      if (androidView instanceof TextureView textureView) {
+        textureView.setSurfaceTextureListener(null);
       }
     }
 

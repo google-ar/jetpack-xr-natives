@@ -223,4 +223,29 @@ std::string JoinPath(absl::string_view directory, absl::string_view basename) {
                          basename.data());
 }
 
+absl::Status AppendString(absl::string_view filename, const uint8_t* data,
+                          size_t size, bool binary) {
+  std::string filename_string(filename);
+  FILE* file = fopen(filename_string.c_str(), binary ? "ab" : "a");
+  if (!file) {
+    return absl::InternalError(
+        absl::StrFormat("Failed to open '%s'", filename_string));
+  }
+
+  size_t written = fwrite(data, sizeof(uint8_t), size, file);
+  fclose(file);
+
+  if (written < size) {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Failed to append all %lu bytes to '%s', only wrote %lu", size,
+        filename_string, written));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status AppendBinary(absl::string_view filename, const uint8_t* data,
+                          size_t size) {
+  return AppendString(filename, data, size, /*binary=*/true);
+}
+
 }  // namespace imp

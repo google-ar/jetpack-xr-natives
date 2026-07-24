@@ -45,23 +45,20 @@ void CameraZoom::Setup(NodeHandle pivot) {
 
   pivot_ = pivot;
 
-  PlatformStorage& storage = *GetView().GetRegistry().Get<PlatformStorage>();
-  invert_scroll_enabled_ =
-      storage.GetBool(kInvertMouseScrollKey, kInvertMouseScrollDefault);
-
   absl::StatusOr<std::reference_wrapper<Editor>> editor_or =
       GetView().GetRegistry().Get<Editor>();
   if (!editor_or.ok()) {
     IMP_LOG(imp::FATAL) << "Editor could not be retrieved from the registry.";
   }
   Editor& editor = editor_or->get();
+  editor_ = &editor;
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
 
   auto wheel_scroll_event_listener =
       [this](const imp::WheelScrollEvent& event) mutable {
-        UpdateCameraZoom(
-            event.event.GetDelta().y * (invert_scroll_enabled_ ? -1.0f : 1.0f),
-            kScrollZoomSensitivity, kScrollZoomMinDistance);
+        bool invert = editor_->GetSettings().invert_mouse_scroll_enabled.Get();
+        UpdateCameraZoom(event.event.GetDelta().y * (invert ? -1.0f : 1.0f),
+                         kScrollZoomSensitivity, kScrollZoomMinDistance);
       };
 
   auto pinch_gesture_event_listener =
@@ -70,14 +67,8 @@ void CameraZoom::Setup(NodeHandle pivot) {
                          kPinchZoomMinDistance);
       };
 
-  auto invert_scroll_event_listener =
-      [this](const InvertMouseScrollEvent& event) mutable {
-        invert_scroll_enabled_ = event.enabled;
-      };
-
   editor_dispatcher.Connect(wheel_scroll_event_listener, this);
   editor_dispatcher.Connect(pinch_gesture_event_listener, this);
-  editor_dispatcher.Connect(invert_scroll_event_listener, this);
 
   // When the app camera is ignored, the editor camera is always active and can
   // be controlled by the app dispatcher.
@@ -86,7 +77,6 @@ void CameraZoom::Setup(NodeHandle pivot) {
     Dispatcher& app_dispatcher = GetView().GetDispatcher();
     app_dispatcher.Connect(wheel_scroll_event_listener, this);
     app_dispatcher.Connect(pinch_gesture_event_listener, this);
-    app_dispatcher.Connect(invert_scroll_event_listener, this);
   }
 }
 

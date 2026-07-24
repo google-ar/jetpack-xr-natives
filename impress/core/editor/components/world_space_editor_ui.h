@@ -33,11 +33,6 @@
 #include "core/view/utils/string_map.h"
 #include "split_engine/input/split_engine_input_event.h"
 
-#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV)
-#include "core/render/android/android_external_texture_surface.h"
-#include "core/window/open_gl_imgui_renderer.h"
-#endif
-
 namespace imp::editor {
 /*
  * When enabled, WorldSpaceEditorUi renders the Editor on a quad in world space.

@@ -23,7 +23,10 @@
 
 #include "core/common/log.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "core/common/registry.h"
 #include "core/config.h"
+#include "core/editor/components/world_space_editor_ui.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_constants.h"
 #include "core/editor/editor_info.h"
@@ -31,10 +34,10 @@
 #include "core/editor/remote_editor/noop_remote_editor.h"
 #include "core/editor/remote_editor/remote_editor_info.h"
 #include "core/editor/widget_ui_system.h"
+#include "core/ncsb/path_manager.h"
 #include "core/view/base_view.h"
 
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS)
-#include "core/common/registry.h"
 #include "core/scripting/message_handlers/forward_input_handler.h"
 #include "core/scripting/scripting_system.h"
 #endif
@@ -45,23 +48,16 @@
 #include "core/editor/remote_editor/ios/ios_web_ui_remote_editor.h"
 #endif
 
+namespace imp::split_engine {
+class SplitEngineRenderer;
+}
+
 namespace imp::editor {
 
 std::unique_ptr<RemoteEditor> RemoteEditor::Create(
     const RemoteEditorInfo::RemoteUiConfig& config, BaseView& view) {
   if (std::holds_alternative<RemoteEditorInfo::RemoteUiDisabledConfig>(
           config)) {
-    IMP_LOG(imp::INFO) << "Remote Editor: Disabled";
-    return std::make_unique<NoopRemoteEditor>(view);
-  }
-
-  // TODO: Remove this check when RemoteEditor is supported on
-  // SplitEngineSerializer.
-  if (view.GetSplitEngineSerializer() != nullptr &&
-      std::holds_alternative<RemoteEditorInfo::RemoteEditorStreamingConfig>(
-          config)) {
-    IMP_LOG(imp::INFO)
-        << "Remote Editor: Streaming disabled due to SplitEngineSerializer.";
     return std::make_unique<NoopRemoteEditor>(view);
   }
 
@@ -69,8 +65,9 @@ std::unique_ptr<RemoteEditor> RemoteEditor::Create(
   bool is_streaming =
       std::holds_alternative<RemoteEditorInfo::RemoteEditorStreamingConfig>(
           config);
-  if (is_streaming ||
-      std::holds_alternative<RemoteEditorInfo::RemoteCustomUiConfig>(config)) {
+  bool is_custom_ui =
+      std::holds_alternative<RemoteEditorInfo::RemoteCustomUiConfig>(config);
+  if (is_streaming || is_custom_ui) {
     imp::scripting::ScriptingSystem& scripting_system =
         view.GetRegistry().GetOrRegister<imp::scripting::ScriptingSystem>(
             [&view]() {
@@ -138,11 +135,29 @@ void RemoteEditor::SetDisplayMode(editor::EditorInfo::DisplayMode mode) {
     // Apply the default desktop layout for the remote web UI.
     widget_ui_system.SetLayoutComposer(std::make_unique<editor::LayoutComposer>(
         editor::kDefaultDesktopLayoutConfig));
+
+    // TODO: Replace this with a solution that uses Config data to
+    // determine whether to show the world space UI.
+    // Set the world space UI canvas to disabled when in remote mode.
+    NodeHandle world_ui_node = view_.GetPathManager().Find(
+        absl::StrCat("//", WorldSpaceEditorUi::kWorldUiName));
+    if (world_ui_node) {
+      world_ui_node->SetEnabled(false);
+    }
   } else if (mode == editor::EditorInfo::DisplayMode::kNativeScreen) {
     // Restore the original native layout. Note that std::move automatically
     // nullifies native_layout_composer_ after transferring ownership,
     // readying it for the next remote connection.
     widget_ui_system.SetLayoutComposer(std::move(native_layout_composer_));
+
+    // TODO: Replace this with a solution that uses Config data to
+    // determine whether to show the world space UI.
+    // Re-enable the world space UI canvas when in native mode.
+    NodeHandle world_ui_node = view_.GetPathManager().Find(
+        absl::StrCat("//", WorldSpaceEditorUi::kWorldUiName));
+    if (world_ui_node) {
+      world_ui_node->SetEnabled(true);
+    }
   }
 }
 

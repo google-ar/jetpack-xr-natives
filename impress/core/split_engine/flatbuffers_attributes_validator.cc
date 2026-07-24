@@ -17,7 +17,6 @@
 #include "core/split_engine/flatbuffers_attributes_validator.h"
 
 #include <cstdint>
-#include <cstring>
 #include <string>
 
 #include "flatbuffers/base.h"
@@ -39,39 +38,51 @@ absl::Status ApiLevelValidator::operator()(
     const flatbuffers::Vector<
         flatbuffers::Offset<reflection::KeyValue>>* /*absl_nullable*/  attributes)
     const {
-  if (attributes == nullptr) {
-    return absl::NotFoundError(
-        absl::StrCat("Attribute '", kRequiresApiAttrName, "' not found."));
-  }
-
-  // Linear search for the requires_api attribute is faster than using the
-  // bsearch lookup for a few attributes.
   const reflection::KeyValue* requires_api_attr = nullptr;
-  for (const auto* attr : *attributes) {
-    if (attr->key()->string_view() == kRequiresApiAttrName) {
-      requires_api_attr = attr;
-      break;
+  const reflection::KeyValue* preview_api_attr = nullptr;
+
+  if (attributes != nullptr) {
+    for (const reflection::KeyValue* /*absl_nullable*/  attr : *attributes) {
+      if (attr->key()->string_view() == kRequiresApiAttrName) {
+        requires_api_attr = attr;
+      } else if (attr->key()->string_view() == kPreviewApiAttrName) {
+        preview_api_attr = attr;
+      }
     }
   }
 
-  if (requires_api_attr == nullptr) {
-    return absl::NotFoundError(
-        absl::StrCat("Attribute '", kRequiresApiAttrName, "' not found."));
+  // If the requires_api attribute is present, then check that the API level is
+  // less than or equal to the maximum API level.
+  if (requires_api_attr != nullptr) {
+    int32_t api_level;
+    if (!absl::SimpleAtoi(requires_api_attr->value()->c_str(), &api_level)) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Attribute '", kRequiresApiAttrName,
+          "' has invalid value: ", requires_api_attr->value()->c_str()));
+    }
+    if (api_level > max_api_level_) {
+      return absl::PermissionDeniedError(
+          absl::StrCat("Requires API level ", api_level,
+                       " but the production API level is ", max_api_level_));
+    }
+    return absl::OkStatus();
   }
 
-  int32_t api_level;
-  if (!absl::SimpleAtoi(requires_api_attr->value()->c_str(), &api_level)) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Attribute '", kRequiresApiAttrName,
-        "' has invalid value: ", requires_api_attr->value()->c_str()));
+  // If the preview_api attribute is present, then check that preview APIs are
+  // allowed.
+  if (preview_api_attr != nullptr) {
+    if (!allow_preview_apis_) {
+      return absl::PermissionDeniedError(
+          absl::StrCat("Attribute '", kPreviewApiAttrName,
+                       "' is present but preview APIs are not supported."));
+    }
+
+    return absl::OkStatus();
   }
 
-  if (api_level > max_api_level_) {
-    return absl::PermissionDeniedError(
-        absl::StrCat("Requires API level ", api_level,
-                     " but the maximum API level is ", max_api_level_));
-  }
-  return absl::OkStatus();
+  return absl::NotFoundError(absl::StrCat("Attribute '", kRequiresApiAttrName,
+                                          "' or '", kPreviewApiAttrName,
+                                          "' not found."));
 }
 
 absl::Status UnstableApiAttributeValidator::operator()(

@@ -15,19 +15,21 @@
  */
 namespace imp.schemas;
 
-// This should match the Filament material builder Platform enum.
+// This should match the Filament material builder Platform enum:
+// http://google3/third_party/filament/libs/filamat/include/filamat/MaterialBuilder.h;l=68
 enum Platform : uint8 {
   Desktop,
   Mobile,
-  All
+  All,
 }
 
-// This should match the Filament material builder TargetApi enum.
+// This should match the Filament material builder TargetApi enum:
+// http://google3/third_party/filament/libs/filamat/include/filamat/MaterialBuilder.h;l=78
 enum TargetApi : uint8 (bit_flags) {
-  OpenGL,
-  Vulkan,
-  Metal,
-  WebGPU,
+  OpenGL = 0,  // (1 << 0)
+  Vulkan = 1,  // (1 << 1)
+  Metal = 2,  // (1 << 2)
+  WebGPU = 3,  // (1 << 3)
 }
 
 // Filament error StatusCodes.
@@ -39,11 +41,26 @@ enum ErrorStatusCode : uint8 {
   Cancelled,
 }
 
+// This should match the Filament UserVariantFilterBit enum:
+// http://google3/third_party/filament/libs/filabridge/include/filament/MaterialEnums.h;l=277
+enum VariantFilter : uint32 (bit_flags) {
+  DIRECTIONAL_LIGHTING = 0,  // (1 << 0)
+  DYNAMIC_LIGHTING = 1,  // (1 << 1)
+  SHADOW_RECEIVER = 2,  // (1 << 2)
+  SKINNING = 3,  // (1 << 3)
+  FOG = 4,  // (1 << 4)
+  VSM = 5,  // (1 << 5)
+  SSR = 6,  // (1 << 6)
+  STE = 7,  // (1 << 7)
+}
+
 table Config {
   // The platform to compile for.
   platform: Platform;
   // The target API to compile for.
   target_api: TargetApi;
+  // The variant filter bitmask for the material compilation.
+  variant_filter: VariantFilter;
 }
 
 // Client->Service requests.
@@ -81,7 +98,7 @@ root_type Request;
 
 union ResponseType {
   CompileResponse,
-  ErrorResponse
+  ErrorResponse,
 }
 
 table Response {

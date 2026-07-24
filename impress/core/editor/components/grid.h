@@ -19,6 +19,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/ncsb/component.h"
 #include "core/render/primitive_shape_renderer.h"
 
@@ -39,6 +40,7 @@ class Grid : public Component {
  private:
   ComponentHandle<PrimitiveShapeRenderer> grid_renderer_;
   AssetPtr<imp::MaterialAsset> grid_material_;
+  PropertyBinding<bool> grid_enabled_binding_;
 };
 
 }  // namespace imp::editor

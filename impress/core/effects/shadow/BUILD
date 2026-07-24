@@ -36,6 +36,11 @@ imp_material(
 )
 
 imp_material(
+    name = "projector_white",
+    src = "projector_white.mat",
+)
+
+imp_material(
     name = "single_axis_blur",
     src = "single_axis_blur.mat",
     includes = ["gaussian_kernel.glsl"],
@@ -44,6 +49,7 @@ imp_material(
 imp_assets(
     name = "contact_shadow_assets",
     srcs = [
+        ":projector_white",
         ":simple_white",
         ":single_axis_blur",
     ],
@@ -93,12 +99,17 @@ cc_library(
         ":contact_shadow_projector_state_cc_proto",
         ":contact_shadow_receiver_state_cc_proto",
         "//core/assets",
+        "//core/assets/material:material_asset",
         "//core/async:future",
+        "//core/camera",
         "//core/camera:camera_proto_cc_imp",
         "//core/common:platform_helpers",
+        "//core/materials",
         "//core/math",
+        "//core/model/mesh:mesh_factory",
         "//core/ncsb",
         "//core/render",
+        "//core/render:mesh_renderer",
         "//core/render_passes:texture_pipeline_renderer",
         "//core/render_passes:texture_pipeline_renderer_proto_cc_imp",
         "//core/scene_handles",

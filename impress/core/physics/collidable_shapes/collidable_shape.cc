@@ -46,7 +46,7 @@ bool CollidableShape::UpdatedEvenScale(float3& prev_scale,
   if (!x_changed && !y_changed && !z_changed) {
     return false;
   }
-  float new_fscale = std::numeric_limits<float>::min();
+  float new_fscale = std::numeric_limits<float>::lowest();
   if (x_changed) {
     new_fscale = fmax(new_scale.x, new_fscale);
   }

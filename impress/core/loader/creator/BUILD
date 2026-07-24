@@ -171,6 +171,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":inflight_creation",
+        "//core/async:future",
         "//core/common",
         "//core/common:fbs",
         "//core/common:fbs_deps",  # build_cleaner: keep
@@ -181,7 +182,6 @@ cc_library(
         "//core/material_library:fbs_deps",  # build_cleaner: keep
         "//core/math",
         "//core/model/mesh:base_mesh_builder",
-        "//core/model/mesh:mesh_builder",
         "//core/render",
         "//core/view:base_view",
         "@com_google_absl//absl/algorithm:container",

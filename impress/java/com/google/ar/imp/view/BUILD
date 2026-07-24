@@ -179,6 +179,7 @@ android_library(
         "//java/com/google/ar/imp/core/scripting:script_endpoint",
         "//java/com/google/ar/imp/core/web:fragment_host",
         "@maven//:androidx_annotation_annotation",
+        "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
         "@third_party//filament/android:filament_android_no_jni",
         "@third_party//filament/android:ui_helper",

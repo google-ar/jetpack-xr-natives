@@ -14,6 +14,13 @@
 
 material {
     name : "White",
+    constants : [
+        {
+            name : enableColorConversion,
+            type : bool,
+            default : false
+        }
+    ],
     blending : opaque,
     shadingModel : unlit,
 }

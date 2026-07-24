@@ -19,13 +19,11 @@
 
 #include "core/common/log.h"
 #include "core/actions/input_action_event.h"
-#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/editor_plugin.h"
-#include "core/editor/events.h"
-#include "core/editor/widgets/input_settings_widget_constants.h"
 #include "core/input/input_events_pool.h"
 #include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
@@ -126,12 +124,8 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
   yaw_ = yaw;
   pivot_->SetLocalRotation(QuatFromEuler({pitch_, yaw_, 0}));
 
-  PlatformStorage& storage = *GetView().GetRegistry().Get<PlatformStorage>();
-  invert_y_enabled_ = storage.GetBool(kInvertCameraYKey, kInvertCameraYDefault);
-  use_legacy_camera_controls_ = storage.GetBool(
-      kUseLegacyCameraControlsKey, kUseLegacyCameraControlsDefault);
-
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+  editor_ = &editor;
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
 
   GetView().GetInputManager().AddInterceptor(
@@ -141,12 +135,12 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
   // Camera transformations
   auto drag_gesture_event_listener =
       [this](const DragGesture::UpdateEvent& event) mutable {
-        if (!use_legacy_camera_controls_) return;
+        if (!UseLegacyCameraControls()) return;
 
         if (event.pointer != kMousePointerIdLeft) return;
 
         float2 current_rotation_delta = event.delta * kDragSensitivity * -1.0f;
-        if (invert_y_enabled_) {
+        if (InvertCameraY()) {
           current_rotation_delta.y *= -1.0f;
         }
         yaw_ += current_rotation_delta.x;
@@ -156,19 +150,7 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
         pivot_->SetLocalRotation(QuatFromEuler(float3(pitch_, yaw_, 0.0f)));
       };
 
-  auto invert_camera_event_listener =
-      [this](const InvertCameraYEvent& event) mutable {
-        invert_y_enabled_ = event.enabled;
-      };
-
-  auto use_legacy_controls_event_listener =
-      [this](const UseLegacyCameraControlsEvent& event) mutable {
-        use_legacy_camera_controls_ = event.enabled;
-      };
-
   editor_dispatcher.Connect(drag_gesture_event_listener, this);
-  editor_dispatcher.Connect(invert_camera_event_listener, this);
-  editor_dispatcher.Connect(use_legacy_controls_event_listener, this);
 
   // When the app camera is ignored, the editor camera is always active and can
   // be controlled by the app dispatcher.
@@ -176,8 +158,6 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
       EditorPlugin::CameraConfiguration::kEditorCameraOnly) {
     Dispatcher& app_dispatcher = GetView().GetDispatcher();
     app_dispatcher.Connect(drag_gesture_event_listener, this);
-    app_dispatcher.Connect(invert_camera_event_listener, this);
-    app_dispatcher.Connect(use_legacy_controls_event_listener, this);
   }
 }
 
@@ -275,7 +255,7 @@ void CameraRotate::HandleRotation() {
 
   float2 current_rotation_delta = rotation_delta_ * kDragSensitivity * -1.0f;
 
-  current_rotation_delta.y *= invert_y_enabled_ ? -1.0f : 1.0f;
+  current_rotation_delta.y *= InvertCameraY() ? -1.0f : 1.0f;
 
   yaw_ += current_rotation_delta.x;
   pitch_ += current_rotation_delta.y;
@@ -291,23 +271,26 @@ void CameraRotate::HandleMovement(const FrameTime& frame_time) {
   const quatf orientation = GetNode()->GetWorldRotation();
   float3 move_dir = kZero3;
 
-  // Give W priority over S.
-  if (w_pressed_)
+  if (w_pressed_) {
     move_dir += orientation * kForward;
-  else if (s_pressed_)
+  }
+  if (s_pressed_) {
     move_dir += orientation * kBack;
+  }
 
-  // Give A priority over D.
-  if (a_pressed_)
+  if (a_pressed_) {
     move_dir += orientation * kLeft;
-  else if (d_pressed_)
+  }
+  if (d_pressed_) {
     move_dir += orientation * kRight;
+  }
 
-  // Give E priority over Q.
-  if (e_pressed_)
+  if (e_pressed_) {
     move_dir += orientation * kUp;
-  else if (q_pressed_)
+  }
+  if (q_pressed_) {
     move_dir += orientation * kDown;
+  }
 
   if (length2(move_dir) <= 0.0f) return;
 
@@ -318,6 +301,14 @@ void CameraRotate::HandleMovement(const FrameTime& frame_time) {
 
   pivot_->SetWorldPosition(pivot_->GetWorldPosition() +
                            move_dir * speed * frame_time.GetDeltaSeconds());
+}
+
+bool CameraRotate::UseLegacyCameraControls() const {
+  return editor_->GetSettings().use_legacy_camera_controls.Get();
+}
+
+bool CameraRotate::InvertCameraY() const {
+  return editor_->GetSettings().invert_camera_y_enabled.Get();
 }
 
 }  // namespace imp::editor

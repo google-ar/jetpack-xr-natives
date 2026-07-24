@@ -26,9 +26,7 @@
 #include "core/editor/remote_editor/remote_editor_info.h"
 #include "core/editor/remote_editor/remote_editor_renderer.h"
 #include "core/editor/remote_editor/web_ui_remote_editor.h"
-#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/view/base_view.h"
-#include "core/view/view_events.h"
 
 namespace imp::editor {
 
@@ -92,12 +90,6 @@ class AndroidWebUiRemoteEditor : public WebUiRemoteEditor,
   // Dimensions of the rendering target.
   int width_ = 0;
   int height_ = 0;
-
-  Dispatcher::ScopedConnection view_paused_connection_;
-  Dispatcher::ScopedConnection view_resumed_connection_;
-  int http_port_ = 0;
-  int script_api_bridge_port_ = 0;
-  int ui_streaming_port_ = 0;
 };
 
 }  // namespace imp::editor

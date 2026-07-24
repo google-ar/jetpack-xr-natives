@@ -25,6 +25,7 @@
 #include "core/camera/camera_component.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/editor_plugin.h"
+#include "core/editor/editor_settings.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
@@ -210,6 +211,9 @@ class Editor : public System {
 
   // Returns the screen-space rect of the 3D viewport widget.
   virtual std::optional<Rect> GetViewportRect() const = 0;
+
+  // Returns the editor settings structure.
+  virtual EditorSettings& GetSettings() noexcept = 0;
 };
 
 // Gets the Editor from the Registry. If no Editor is present in the Registry,

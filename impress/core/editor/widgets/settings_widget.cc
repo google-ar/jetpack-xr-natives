@@ -14,105 +14,69 @@
 
 #include "core/editor/widgets/settings_widget.h"
 
-#include <optional>
-
 #include "dear_imgui/imgui.h"
 #include "filament/filament/include/filament/View.h"
 #include "core/common/platform_storage.h"
-#include "core/editor/components/grid.h"
 #include "core/editor/editor.h"
-#include "core/editor/events.h"
 #include "core/editor/widgets/asset_library.h"
 #include "core/editor/widgets/settings_widget_constants.h"
-#include "core/editor/widgets/visualize_bounds.h"
-#include "core/editor/widgets/visualize_colliders.h"
-#include "core/editor/widgets/visualize_origins.h"
 #include "core/view/base_view.h"
 #include "core/window/filament_host.h"
 
 namespace imp::editor {
 
 SettingsWidget::SettingsWidget(BaseView& view)
-    : view_(view), editor_(*view_.GetRegistry().Get<editor::Editor>()) {
-  PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
-  grid_enabled_ = storage.GetBool(kGridEnabledKey, kGridEnabledDefault);
-  skybox_enabled_ = storage.GetBool(kSkyboxEnabledKey, kSkyboxEnabledDefault);
-  show_bounds_enabled_ =
-      storage.GetBool(kShowBoundsEnabledKey, kShowBoundsEnabledDefault);
-  show_all_colliders_enabled_ = storage.GetBool(
-      kShowAllCollidersEnabledKey, kShowAllCollidersEnabledDefault);
-  show_all_origins_enabled_ =
-      storage.GetBool(kShowAllOriginsEnabledKey, kShowAllOriginsEnabledDefault);
-  show_physics_visualizer_enabled_ = storage.GetBool(
-      kShowPhysicsVisualizerEnabledKey, kShowPhysicsVisualizerEnabledDefault);
-  vertex_selection_enabled_ = storage.GetBool(kVertexSelectionEnabledKey,
-                                              kVertexSelectionEnabledDefault);
-  load_mesh_data_on_cpu_enabled_ = storage.GetBool(
-      kLoadMeshDataOnCpuEnabledKey, kLoadMeshDataOnCpuEnabledDefault);
-  bvh_mesh_collision_acceleration_enabled_ =
-      storage.GetBool(kBvhMeshCollisionAccelerationEnabledKey,
-                      kBvhMeshCollisionAccelerationEnabledDefault);
-}
+    : view_(view), editor_(*view_.GetRegistry().Get<editor::Editor>()) {}
 
 void SettingsWidget::DrawImGui() {
   PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
-  std::optional<editor::EditorSettingChangedEvent> event;
-  if (ImGui::MenuItem(kGridText.data(), nullptr, &grid_enabled_)) {
-    event.emplace().grid_enabled = grid_enabled_;
-    storage.SetBool(kGridEnabledKey, grid_enabled_);
+  bool grid_enabled = editor_.GetSettings().show_grid.Get();
+  if (ImGui::MenuItem(kGridText.data(), nullptr, &grid_enabled)) {
+    editor_.GetSettings().show_grid.Set(grid_enabled);
   }
-  if (ImGui::MenuItem(kSkyboxText.data(), nullptr, &skybox_enabled_)) {
-    event.emplace().skybox_enabled = skybox_enabled_;
-    storage.SetBool(kSkyboxEnabledKey, skybox_enabled_);
+  bool skybox_enabled = editor_.GetSettings().skybox_enabled.Get();
+  if (ImGui::MenuItem(kSkyboxText.data(), nullptr, &skybox_enabled)) {
+    editor_.GetSettings().skybox_enabled.Set(skybox_enabled);
   }
-  if (ImGui::MenuItem(kShowBoundsText.data(), nullptr, &show_bounds_enabled_)) {
-    event.emplace().show_all_bounds_enabled = show_bounds_enabled_;
-    storage.SetBool(kShowBoundsEnabledKey, show_bounds_enabled_);
+  bool show_bounds_enabled =
+      editor_.GetSettings().show_all_bounds_enabled.Get();
+  if (ImGui::MenuItem(kShowBoundsText.data(), nullptr, &show_bounds_enabled)) {
+    editor_.GetSettings().show_all_bounds_enabled.Set(show_bounds_enabled);
   }
+  bool show_all_colliders =
+      editor_.GetSettings().show_all_colliders_enabled.Get();
   if (ImGui::MenuItem(kShowAllCollidersText.data(), nullptr,
-                      &show_all_colliders_enabled_)) {
-    event.emplace().show_all_colliders_enabled = show_all_colliders_enabled_;
-    storage.SetBool(kShowAllCollidersEnabledKey, show_all_colliders_enabled_);
+                      &show_all_colliders)) {
+    editor_.GetSettings().show_all_colliders_enabled.Set(show_all_colliders);
   }
-  if (ImGui::MenuItem(kShowAllOriginsText.data(), nullptr,
-                      &show_all_origins_enabled_)) {
-    event.emplace().show_all_origins_enabled = show_all_origins_enabled_;
-    storage.SetBool(kShowAllOriginsEnabledKey, show_all_origins_enabled_);
+  bool show_all_origins = editor_.GetSettings().show_all_origins_enabled.Get();
+  if (ImGui::MenuItem(kShowAllOriginsText.data(), nullptr, &show_all_origins)) {
+    editor_.GetSettings().show_all_origins_enabled.Set(show_all_origins);
   }
+  bool show_physics_visualizer =
+      editor_.GetSettings().show_physics_visualizer_enabled.Get();
   if (ImGui::MenuItem(kShowPhysicsVisualizerText.data(), nullptr,
-                      &show_physics_visualizer_enabled_)) {
-    event.emplace().show_physics_visualizer_enabled =
-        show_physics_visualizer_enabled_;
-    storage.SetBool(kShowPhysicsVisualizerEnabledKey,
-                    show_physics_visualizer_enabled_);
+                      &show_physics_visualizer)) {
+    editor_.GetSettings().show_physics_visualizer_enabled.Set(
+        show_physics_visualizer);
   }
+  bool vertex_selection = editor_.GetSettings().vertex_selection_enabled.Get();
   if (ImGui::MenuItem(kEnableVertexSelection.data(), nullptr,
-                      &vertex_selection_enabled_)) {
-    event.emplace().vertex_selection_enabled = vertex_selection_enabled_;
-    storage.SetBool(kVertexSelectionEnabledKey, vertex_selection_enabled_);
+                      &vertex_selection)) {
+    editor_.GetSettings().vertex_selection_enabled.Set(vertex_selection);
   }
-  if (ImGui::MenuItem(kEnableLoadMeshDataOnCpu.data(), nullptr,
-                      &load_mesh_data_on_cpu_enabled_)) {
-    event.emplace().load_mesh_data_on_cpu_enabled =
-        load_mesh_data_on_cpu_enabled_;
-    bvh_mesh_collision_acceleration_enabled_ = false;
-    storage.SetBool(kLoadMeshDataOnCpuEnabledKey,
-                    load_mesh_data_on_cpu_enabled_);
-    storage.SetBool(kBvhMeshCollisionAccelerationEnabledKey, false);
+  bool load_mesh = editor_.GetSettings().load_mesh_data_on_cpu_enabled.Get();
+  if (ImGui::MenuItem(kEnableLoadMeshDataOnCpu.data(), nullptr, &load_mesh)) {
+    editor_.GetSettings().load_mesh_data_on_cpu_enabled.Set(load_mesh);
+    editor_.GetSettings().bvh_mesh_collision_acceleration_enabled.Set(false);
   }
+  bool bvh_acceleration =
+      editor_.GetSettings().bvh_mesh_collision_acceleration_enabled.Get();
   if (ImGui::MenuItem(kEnableBvhMeshCollisionAcceleration.data(), nullptr,
-                      &bvh_mesh_collision_acceleration_enabled_)) {
-    event.emplace().bvh_mesh_collision_acceleration_enabled =
-        bvh_mesh_collision_acceleration_enabled_;
-    load_mesh_data_on_cpu_enabled_ = true;
-    storage.SetBool(kBvhMeshCollisionAccelerationEnabledKey,
-                    bvh_mesh_collision_acceleration_enabled_);
-    storage.SetBool(kLoadMeshDataOnCpuEnabledKey, true);
-  }
-
-  // If any settings changed, send the event.
-  if (event) {
-    editor_.GetDispatcher().Send(*event);
+                      &bvh_acceleration)) {
+    editor_.GetSettings().bvh_mesh_collision_acceleration_enabled.Set(
+        bvh_acceleration);
+    editor_.GetSettings().load_mesh_data_on_cpu_enabled.Set(true);
   }
 
   filament::View* filament_view = view_.GetHost()->GetView();

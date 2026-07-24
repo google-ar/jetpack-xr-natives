@@ -19,6 +19,7 @@
 
 #include <vector>
 
+#include "absl/types/span.h"
 #include "core/math/mat.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
 #include "core/model/mesh/mesh_vertex_data.h"
@@ -30,7 +31,7 @@ namespace imp::split_engine {
 // rebuilding of the MeshVertexData/MeshIndexData associations.
 void UpdateSkinning(const MeshVertexAndIndexData& unskinned_primitive_mesh_data,
                     MeshVertexData& skinned_primitive_vertex_data,
-                    const std::vector<mat4f>& bone_transforms);
+                    absl::Span<const mat4f> bone_transforms);
 
 }  // namespace imp::split_engine
 

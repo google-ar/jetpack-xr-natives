@@ -77,9 +77,7 @@ cc_library(
     name = "material_compiler_config",
     hdrs = ["material_compiler_config.h"],
     copts = imp_copts(),
-    deps = [
-        ":fbs",
-    ],
+    deps = [":fbs"],
     alwayslink = 1,
 )
 
@@ -130,6 +128,7 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@third_party//filament/filament/backend:platform",
+        "@third_party//filament/libs:filabridge_hdrs",
         "@third_party//filament/libs:filamat",
         "@third_party//filament/libs:matp",
         "@third_party//filament/libs:utils_hdrs",
@@ -252,6 +251,7 @@ cc_library(
     copts = imp_copts(),
     deps = [
         ":file_utilities",
+        ":material_compiler_config",
         "//core/async:future",
         "//core/common:context",
         "//third_party/openssl:crypto",

@@ -150,7 +150,7 @@ absl::optional<V> EvalValue(float t, BaseCurve::Cursor* cursor,
         }
       },
       curve);
-  if (!has_value) return absl::nullopt;
+  if (!has_value) return std::nullopt;
   return result;
 }
 

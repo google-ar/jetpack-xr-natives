@@ -50,11 +50,20 @@ cc_library(
         "XR_USE_TIMESPEC",
     ],
     deps = [
-        ":jni_utils",
+        ":stub_jni",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/strings:string_view",
         "@third_party//OpenXR_KHR:generated_openxr_headers_public",
         "@third_party//OpenXR_KHR:openxr_headers_androidxr",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "stub_jni",
+    testonly = 1,
+    srcs = ["stub_jni.cc"],
+    deps = [
     ],
     alwayslink = 1,
 )

@@ -114,7 +114,8 @@ class Image {
 
   static std::unique_ptr<ImageAPIProvider> api_provider;
 
-  absl::Status UpdateMultivewInfoUsingImageAPIProvider();
+  void FallbackToSingleView();
+  void UpdateMultivewInfoUsingImageAPIProvider();
 
   // Returns the static API provider for class Image.
   static std::unique_ptr<ImageAPIProvider>& GetImageAPIProvider();

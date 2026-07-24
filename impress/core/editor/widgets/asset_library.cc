@@ -188,6 +188,7 @@ void AssetLibrary::DrawImGui() {
       return;
     }
 
+    bool thumbnail_clicked = false;
     directory_ui_->DrawDirectoriesInCurrentDirectory();
 
     const absl::btree_set<std::string>& registered_resources =
@@ -217,7 +218,26 @@ void AssetLibrary::DrawImGui() {
 
       filament::Texture* thumbnail =
           thumbnail_provider.GetThumbnailForResource(resource);
+
+      ImVec2 p_min = ImGui::GetCursorScreenPos();
+
       ImGui::Image(thumbnail, kTableEntryImageSize);
+      if (ImGui::IsItemClicked()) {
+        thumbnail_clicked = true;
+        if (selected_asset_ == resource) {
+          selected_asset_ = std::nullopt;
+        } else {
+          selected_asset_ = resource;
+        }
+      }
+
+      if (selected_asset_ == resource) {
+        ImVec2 p_max = ImVec2(p_min.x + kTableEntryImageSize.x,
+                              p_min.y + kTableEntryImageSize.y);
+        ImGui::GetForegroundDrawList()->AddRect(
+            p_min, p_max, ImGui::GetColorU32(ImGuiCol_ButtonActive), 0.0f, 0,
+            2.0f);
+      }
 
       auto itr = resource_types_.find(extension);
       if (itr != resource_types_.end()) {
@@ -245,6 +265,12 @@ void AssetLibrary::DrawImGui() {
     }
 
     ImGui::EndTable();
+
+    if (!thumbnail_clicked &&
+        ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+      selected_asset_ = std::nullopt;
+    }
   }
 
   ImGui::EndChild();
@@ -337,9 +363,9 @@ void AssetLibrary::HandleDragAndDropNewResource() {
       };
 
       pending_new_resource_.emplace(PendingResource{
-          .type = std::string(kIsfExt).substr(1, kIsfExt.length()),
-          .data = std::move(isf_data),
           .name = std::string(isf->GetName()),
+          .type = std::string(kIsfExt).substr(1, kIsfExt.length()),
+          .data = absl::Cord(std::move(isf_data)),
           .saved_data = std::move(saved_data),
           .saved_extension = ".textproto",
           .on_save_callback = std::move(on_save_callback)});
@@ -359,8 +385,8 @@ void AssetLibrary::HandleDragAndDropNewResource() {
         std::string message_type =
             std::string(data_type.substr(kProtoDragAndDropScheme.length()));
         pending_new_resource_.emplace(PendingResource{
-            .type = message_type,
-            .data = payload.value(),
+            .type = std::move(message_type),
+            .data = absl::Cord(std::move(*payload)),
         });
       }
     }
@@ -387,7 +413,7 @@ void AssetLibrary::HandleDragAndDropNewResource() {
       if (absl::StrContains(pending_new_resource_->name, ' ')) {
         ImGui::OpenPopup("Invalid Filename");
       } else {
-        AddResource(*pending_new_resource_);
+        AddResource(std::move(*pending_new_resource_));
         pending_new_resource_.reset();
         ImGui::CloseCurrentPopup();
       }
@@ -423,6 +449,14 @@ bool AssetLibrary::IsSavingToDiskEnabled() const {
 std::string AssetLibrary::RemoveHomeDirectoryFromPath(
     absl::string_view path) const {
   return directory_ui_->RemoveHomeDirectoryFromPath(path);
+}
+
+std::optional<std::string> AssetLibrary::GetSelectedAsset() const {
+  return selected_asset_;
+}
+
+void AssetLibrary::SetSelectedAsset(std::optional<std::string> asset) {
+  selected_asset_ = asset;
 }
 
 void AssetLibrary::DrawTypeFilter() {
@@ -482,11 +516,21 @@ void AssetLibrary::DrawTypeFilter() {
 std::string AssetLibrary::AddResourceInCurrentDirectory(
     absl::string_view name, absl::string_view type, absl::string_view data,
     absl::string_view description) {
-  return AddResource(PendingResource{.type = std::string(type),
-                                     .data = std::string(data),
-                                     .name = std::string(name),
+  return AddResource(PendingResource{.name = std::string(name),
+                                     .type = std::string(type),
+                                     .data = absl::Cord(data),
                                      .description = std::string(description)});
 }
+
+std::string AssetLibrary::AddResourceInCurrentDirectory(
+    absl::string_view name, absl::string_view type, absl::Cord data,
+    absl::string_view description) {
+  return AddResource(PendingResource{.name = std::string(name),
+                                     .type = std::string(type),
+                                     .data = std::move(data),
+                                     .description = std::string(description)});
+}
+
 void AssetLibrary::AddResourceAtPath(absl::string_view resource_path,
                                      absl::string_view data,
                                      absl::string_view description) {
@@ -495,9 +539,9 @@ void AssetLibrary::AddResourceAtPath(absl::string_view resource_path,
       std::make_unique<AssetLibrary::DynamicResource>(
           std::string(RemoveDirectoryAndExtensionFromFilename(resource_path)),
           std::string(GetExtensionFromFilename(resource_path).substr(1)),
-          std::string(data)));
+          absl::Cord(data)));
 
-  absl::string_view stored_data = itr->second->data;
+  absl::string_view stored_data = *itr->second->data.TryFlat();
   resources::ResourceManager::RegisterResource(resource_path, stored_data,
                                                /* allow_overwrite = */ true);
 }
@@ -512,7 +556,7 @@ void AssetLibrary::SetThumbnailOverride(absl::string_view resource,
 }
 
 std::string AssetLibrary::AddResource(
-    const AssetLibrary::PendingResource& pending_resource) {
+    AssetLibrary::PendingResource pending_resource) {
   // TODO: Figure out why this target gets built in non-dev.
 #if IMP_RUNTIME(DEV)
 
@@ -528,17 +572,6 @@ std::string AssetLibrary::AddResource(
 
   IMP_LOG(imp::INFO) << "Saving resource " << resource_path;
 
-  std::pair<StringMap<std::unique_ptr<AssetLibrary::DynamicResource>>::iterator,
-            bool>
-      result = dynamic_resources_.insert_or_assign(
-          resource_path, std::make_unique<AssetLibrary::DynamicResource>(
-                             pending_resource.name, pending_resource.type,
-                             pending_resource.data));
-
-  absl::string_view stored_data = result.first->second->data;
-  resources::ResourceManager::RegisterResource(resource_path, stored_data,
-                                               /* allow_overwrite = */ true);
-
   std::string saved_name;
   if (!pending_resource.saved_extension.empty()) {
     saved_name =
@@ -546,6 +579,18 @@ std::string AssetLibrary::AddResource(
   } else {
     saved_name = resource_name;
   }
+
+  std::pair<StringMap<std::unique_ptr<AssetLibrary::DynamicResource>>::iterator,
+            bool>
+      result = dynamic_resources_.insert_or_assign(
+          resource_path, std::make_unique<AssetLibrary::DynamicResource>(
+                             std::move(pending_resource.name),
+                             std::move(pending_resource.type),
+                             std::move(pending_resource.data)));
+
+  absl::string_view stored_data = *result.first->second->data.TryFlat();
+  resources::ResourceManager::RegisterResource(resource_path, stored_data,
+                                               /* allow_overwrite = */ true);
 
   absl::string_view data_to_save;
   if (!pending_resource.saved_data.empty()) {
@@ -582,10 +627,10 @@ void AssetLibrary::CreateDerivedIsf(absl::string_view base_isf_path) {
       "derived_", RemoveDirectoryAndExtensionFromFilename(base_isf_path));
 
   pending_new_resource_.emplace(
-      PendingResource{.type = std::string(kIsfExt).substr(1),
-                      .data = isf_data,
-                      .name = new_name,
-                      .saved_data = textproto_data,
+      PendingResource{.name = std::move(new_name),
+                      .type = std::string(kIsfExt).substr(1),
+                      .data = absl::Cord(std::move(isf_data)),
+                      .saved_data = std::move(textproto_data),
                       .saved_extension = ".textproto"});
 }
 

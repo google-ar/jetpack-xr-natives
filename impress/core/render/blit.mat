@@ -30,7 +30,8 @@ material {
     }
   ],
   shadingModel: unlit,
-  vertexDomain: device
+  vertexDomain: device,
+  featureLevel: 0
 }
 
 fragment {

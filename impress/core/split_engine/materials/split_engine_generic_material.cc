@@ -76,70 +76,115 @@ namespace {
 class SplitEngineGenericMaterialParametersCreator {
  public:
   using Schema = android_xr::schemas::GenericMaterialParameters;
-  static constexpr auto CreateGenericMaterialParameters =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParameters;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParameters(Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParameters(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialTextureParameter =
       android_xr::schemas::GenericMaterialTextureParameter;
-  static constexpr auto CreateGenericMaterialTextureParameter =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialTextureParameter;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialTextureParameter(Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialTextureParameter(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersBaseColor =
       android_xr::schemas::GenericMaterialParametersBaseColor;
-  static constexpr auto CreateGenericMaterialParametersBaseColor =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersBaseColor;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersBaseColor(
+      Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersBaseColor(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersMetallicRoughness =
       android_xr::schemas::GenericMaterialParametersMetallicRoughness;
-  static constexpr auto
-      CreateGenericMaterialParametersMetallicRoughness =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersMetallicRoughness;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersMetallicRoughness(
+      Args&&... args) {
+    return android_xr::schemas::
+        CreateGenericMaterialParametersMetallicRoughness(
+            std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersNormal =
       android_xr::schemas::GenericMaterialParametersNormal;
-  static constexpr auto CreateGenericMaterialParametersNormal =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersNormal;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersNormal(Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersNormal(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersAmbientOcclusion =
       android_xr::schemas::GenericMaterialParametersAmbientOcclusion;
-  static constexpr auto
-      CreateGenericMaterialParametersAmbientOcclusion =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersAmbientOcclusion;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersAmbientOcclusion(
+      Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersAmbientOcclusion(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersEmissive =
       android_xr::schemas::GenericMaterialParametersEmissive;
-  static constexpr auto CreateGenericMaterialParametersEmissive =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersEmissive;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersEmissive(
+      Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersEmissive(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersClearcoat =
       android_xr::schemas::GenericMaterialParametersClearcoat;
-  static constexpr auto CreateGenericMaterialParametersClearcoat =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersClearcoat;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersClearcoat(
+      Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersClearcoat(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersSheen =
       android_xr::schemas::GenericMaterialParametersSheen;
-  static constexpr auto CreateGenericMaterialParametersSheen =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersSheen;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersSheen(Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersSheen(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersTransmission =
       android_xr::schemas::GenericMaterialParametersTransmission;
-  static constexpr auto CreateGenericMaterialParametersTransmission =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersTransmission;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersTransmission(
+      Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersTransmission(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersVolume =
       android_xr::schemas::GenericMaterialParametersVolume;
-  static constexpr auto CreateGenericMaterialParametersVolume =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersVolume;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersVolume(Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersVolume(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersRefraction =
       android_xr::schemas::GenericMaterialParametersRefraction;
-  static constexpr auto CreateGenericMaterialParametersRefraction =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersRefraction;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersRefraction(
+      Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersRefraction(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using GenericMaterialParametersMasking =
       android_xr::schemas::GenericMaterialParametersMasking;
-  static constexpr auto CreateGenericMaterialParametersMasking =  // NOLINT
-      android_xr::schemas::CreateGenericMaterialParametersMasking;
+  template <typename... Args>
+  static constexpr auto CreateGenericMaterialParametersMasking(Args&&... args) {
+    return android_xr::schemas::CreateGenericMaterialParametersMasking(
+        std::forward<decltype(args)>(args)...);
+  };
 
   using Bool = android_xr::schemas::Bool;
   using Float = android_xr::schemas::Float;

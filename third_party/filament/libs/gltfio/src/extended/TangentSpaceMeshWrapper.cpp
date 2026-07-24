@@ -19,9 +19,9 @@
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 
+#include <cstring>
 #include <memory>
 #include <unordered_map>
-#include <cstring>
 
 namespace filament::gltfio {
 

@@ -88,11 +88,11 @@ Future<std::string> AddFileToAssetLibraryIfNeeded(Editor& editor,
                                                   absl::string_view extension,
                                                   LoadAssetFileSource source) {
   if (std::holds_alternative<absl::Cord>(source)) {
-    absl::Cord& cord = std::get<absl::Cord>(source);
+    absl::Cord cord = std::move(std::get<absl::Cord>(source));
     // The data is coming from a Cord, so add it to the AssetLibrary.
     return Future<std::string>(
         editor.GetAssetLibrary()->AddResourceInCurrentDirectory(
-            file_name, extension, cord.Flatten()));
+            file_name, extension, std::move(cord)));
   } else {
     LoadAssetFileFromPathSource from_path_source =
         std::get<LoadAssetFileFromPathSource>(source);

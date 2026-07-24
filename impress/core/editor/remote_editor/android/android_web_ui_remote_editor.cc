@@ -85,36 +85,13 @@ void AndroidWebUiRemoteEditor::OnWebUiStart() {
           }},
       config_);
 
-  http_port_ = http_port;
-  script_api_bridge_port_ = script_api_bridge_port;
-  ui_streaming_port_ = ui_streaming_port;
-
   if (android_remote_editor_wrapper_) {
     android_remote_editor_wrapper_->Start(
-        {.http_port = http_port_,
-         .script_api_bridge_port = script_api_bridge_port_,
-         .ui_streaming_port = ui_streaming_port_},
+        {.http_port = http_port,
+         .script_api_bridge_port = script_api_bridge_port,
+         .ui_streaming_port = ui_streaming_port},
         *this);
   }
-
-  view_paused_connection_ =
-      view_.GetDispatcher().Connect([this](const imp::ViewPausedEvent& event) {
-        if (android_remote_editor_wrapper_) {
-          android_remote_editor_wrapper_->Stop();
-        }
-        ClearConnections();
-      });
-
-  view_resumed_connection_ =
-      view_.GetDispatcher().Connect([this](const imp::ViewResumedEvent& event) {
-        if (android_remote_editor_wrapper_) {
-          android_remote_editor_wrapper_->Start(
-              {.http_port = http_port_,
-               .script_api_bridge_port = script_api_bridge_port_,
-               .ui_streaming_port = ui_streaming_port_},
-              *this);
-        }
-      });
 
   UpdateRemoteRenderingState();
 }
@@ -123,9 +100,6 @@ void AndroidWebUiRemoteEditor::OnWebUiStop() {
   if (android_remote_editor_wrapper_) {
     android_remote_editor_wrapper_->Stop();
   }
-
-  view_paused_connection_.Disconnect();
-  view_resumed_connection_.Disconnect();
 
   ClearConnections();
 

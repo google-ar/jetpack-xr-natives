@@ -31,6 +31,7 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/synchronization/notification.h"
 #include "filament/filament/backend/include/backend/Platform.h"
+#include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 #include "filament/libs/filamat/include/filamat/MaterialBuilder.h"
 #include "filament/libs/filamat/include/filamat/Package.h"
 #include "filament/libs/filament-matp/include/filament-matp/Config.h"
@@ -69,6 +70,7 @@ inline filamat::MaterialBuilder::TargetApi UnpackTargetApi(
     result |= FilamentApi::WEBGPU;
   }
 
+  // If no API is specified, default to ALL.
   return any(result) ? result : FilamentApi::ALL;
 }
 
@@ -84,6 +86,45 @@ inline filamat::MaterialBuilder::Platform UnpackPlatform(
     case schemas::Platform::All:
       return filamat::MaterialBuilder::Platform::ALL;
   }
+  return filamat::MaterialBuilder::Platform::ALL;
+}
+
+inline filament::UserVariantFilterMask UnpackVariantFilter(
+    schemas::VariantFilter variant_filter) {
+  using FilamentBit = filament::UserVariantFilterBit;
+  using SchemaBit = schemas::VariantFilter;
+
+  filament::UserVariantFilterMask result = 0;
+  if (!!(variant_filter & SchemaBit::DIRECTIONAL_LIGHTING)) {
+    result |= static_cast<filament::UserVariantFilterMask>(
+        FilamentBit::DIRECTIONAL_LIGHTING);
+  }
+  if (!!(variant_filter & SchemaBit::DYNAMIC_LIGHTING)) {
+    result |= static_cast<filament::UserVariantFilterMask>(
+        FilamentBit::DYNAMIC_LIGHTING);
+  }
+  if (!!(variant_filter & SchemaBit::SHADOW_RECEIVER)) {
+    result |= static_cast<filament::UserVariantFilterMask>(
+        FilamentBit::SHADOW_RECEIVER);
+  }
+  if (!!(variant_filter & SchemaBit::SKINNING)) {
+    result |=
+        static_cast<filament::UserVariantFilterMask>(FilamentBit::SKINNING);
+  }
+  if (!!(variant_filter & SchemaBit::FOG)) {
+    result |= static_cast<filament::UserVariantFilterMask>(FilamentBit::FOG);
+  }
+  if (!!(variant_filter & SchemaBit::VSM)) {
+    result |= static_cast<filament::UserVariantFilterMask>(FilamentBit::VSM);
+  }
+  if (!!(variant_filter & SchemaBit::SSR)) {
+    result |= static_cast<filament::UserVariantFilterMask>(FilamentBit::SSR);
+  }
+  if (!!(variant_filter & SchemaBit::STE)) {
+    result |= static_cast<filament::UserVariantFilterMask>(FilamentBit::STE);
+  }
+
+  return result;
 }
 
 // Convert the absl::StatusCode to the IPC schema ErrorStatusCode.
@@ -204,11 +245,13 @@ void MaterialCompilerService::HandleCompileRequest(
       filamat::MaterialBuilder::Platform::DESKTOP;
   filamat::MaterialBuilder::TargetApi target_api =
       filamat::MaterialBuilder::TargetApi::ALL;
+  filament::UserVariantFilterMask variant_filter = 0;
 
   // Unpack if the config is given.
   if (request->config()) {
     platform = UnpackPlatform(request->config()->platform());
     target_api = UnpackTargetApi(request->config()->target_api());
+    variant_filter = UnpackVariantFilter(request->config()->variant_filter());
   }
 
   // We use shared_ptr here so that MaterialCompilerService can signal
@@ -218,7 +261,7 @@ void MaterialCompilerService::HandleCompileRequest(
   auto cancelled = std::make_shared<absl::Notification>();
 
   auto compile_lambda = [this, operation_id, source_material, platform,
-                         target_api, cancelled] {
+                         target_api, variant_filter, cancelled] {
     if (cancelled->HasBeenNotified()) {
       SendErrorResponse(operation_id,
                         absl::CancelledError("Operation cancelled early"));
@@ -229,8 +272,8 @@ void MaterialCompilerService::HandleCompileRequest(
       return;
     }
 
-    absl::StatusOr<std::string> compile_result =
-        CompileMaterial(source_material, platform, target_api, cancelled);
+    absl::StatusOr<std::string> compile_result = CompileMaterial(
+        source_material, platform, target_api, variant_filter, cancelled);
 
     if (!compile_result.ok()) {
       SendErrorResponse(operation_id, compile_result.status());
@@ -318,6 +361,7 @@ absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
     absl::string_view source_material_string,
     filamat::MaterialBuilder::Platform platform,
     filamat::MaterialBuilder::TargetApi target_api,
+    filament::UserVariantFilterMask variant_filter,
     std::shared_ptr<absl::Notification> cancelled) {
   matp::MaterialParser parser;
   filamat::MaterialBuilder builder;
@@ -326,6 +370,7 @@ absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
   RuntimeMaterialCompilerConfig config(source_material_string, compiler_output);
   config.SetPlatform(platform);
   config.SetTargetApi(target_api);
+  config.SetVariantFilter(variant_filter);
 
   // TODO: This is only relevant to XR or stereo variant. This
   // should be updated or removed once we implement handling variant filters

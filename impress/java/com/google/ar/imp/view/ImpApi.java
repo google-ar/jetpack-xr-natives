@@ -233,7 +233,8 @@ public class ImpApi implements ImpApiScuba {
               view,
               setupParams.getDesiredSizeScale(),
               setupParams.getSwapChainFlags(),
-              setupParams.getUseSynchronousSurfaceChanges()));
+              setupParams.getUseSynchronousSurfaceChanges(),
+              setupParams.getAttachViewOnMainThreadHandler()));
     } catch (InterruptedException | ExecutionException e) {
       throw new IllegalStateException("Unable to initialize Impress API", e);
     }
@@ -323,7 +324,8 @@ public class ImpApi implements ImpApiScuba {
                     view,
                     setupParams.getDesiredSizeScale(),
                     setupParams.getSwapChainFlags(),
-                    setupParams.getUseSynchronousSurfaceChanges());
+                    setupParams.getUseSynchronousSurfaceChanges(),
+                    setupParams.getAttachViewOnMainThreadHandler());
             postCreatedCallback.accept(impApi);
           }
 
@@ -379,7 +381,8 @@ public class ImpApi implements ImpApiScuba {
                   view,
                   setupParams.getDesiredSizeScale(),
                   setupParams.getSwapChainFlags(),
-                  setupParams.getUseSynchronousSurfaceChanges()));
+                  setupParams.getUseSynchronousSurfaceChanges(),
+                  setupParams.getAttachViewOnMainThreadHandler()));
         },
         frameScheduler.getExecutor());
   }

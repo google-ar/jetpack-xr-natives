@@ -169,10 +169,163 @@ table MorphTargetBuffer (requires_api: 1) {
   buffer:MorphTargetBufferInfo (id: 1, requires_api: 1);
 }
 
+enum SamplerType:uint8 (requires_api: 1) {
+  SAMPLER_2D = 0 (requires_api: 1),
+  SAMPLER_2D_ARRAY = 1 (requires_api: 1),
+  SAMPLER_CUBEMAP = 2 (requires_api: 1),
+  SAMPLER_EXTERNAL = 3 (requires_api: 1),
+  SAMPLER_3D = 4 (requires_api: 1),
+  SAMPLER_CUBEMAP_ARRAY = 5 (requires_api: 1),
+}
+
+enum PixelDataFormat:uint8 (requires_api: 1) {
+  R = 0 (requires_api: 1),
+  R_INTEGER = 1 (requires_api: 1),
+  RG = 2 (requires_api: 1),
+  RG_INTEGER = 3 (requires_api: 1),
+  RGB = 4 (requires_api: 1),
+  RGB_INTEGER = 5 (requires_api: 1),
+  RGBA = 6 (requires_api: 1),
+  RGBA_INTEGER = 7 (requires_api: 1),
+
+  // Value 8 is unused and reserved.
+  DEPTH_COMPONENT = 9 (requires_api: 1),
+  DEPTH_STENCIL = 10 (requires_api: 1),
+  ALPHA = 11 (requires_api: 1),
+}
+
+enum PixelDataType:uint8 (requires_api: 1) {
+  UBYTE = 0 (requires_api: 1),
+  BYTE = 1 (requires_api: 1),
+  USHORT = 2 (requires_api: 1),
+  SHORT = 3 (requires_api: 1),
+  UINT = 4 (requires_api: 1),
+  INT = 5 (requires_api: 1),
+  HALF = 6 (requires_api: 1),
+  FLOAT = 7 (requires_api: 1),
+  COMPRESSED = 8 (requires_api: 1),
+  UINT_10F_11F_11F_REV = 9 (requires_api: 1),
+  USHORT_565 = 10 (requires_api: 1),
+  UINT_2_10_10_10_REV = 11 (requires_api: 1),
+}
+
+enum TextureFormat:uint16 (requires_api: 1) {
+  R8 = 0 (requires_api: 1),
+  R8_SNORM = 1 (requires_api: 1),
+  R8UI = 2 (requires_api: 1),
+  R8I = 3 (requires_api: 1),
+  STENCIL8 = 4 (requires_api: 1),
+  R16F = 5 (requires_api: 1),
+  R16UI = 6 (requires_api: 1),
+  R16I = 7 (requires_api: 1),
+  RG8 = 8 (requires_api: 1),
+  RG8_SNORM = 9 (requires_api: 1),
+  RG8UI = 10 (requires_api: 1),
+  RG8I = 11 (requires_api: 1),
+  RGB565 = 12 (requires_api: 1),
+  RGB9_E5 = 13 (requires_api: 1),
+  RGB5_A1 = 14 (requires_api: 1),
+  RGBA4 = 15 (requires_api: 1),
+  DEPTH16 = 16 (requires_api: 1),
+  RGB8 = 17 (requires_api: 1),
+  SRGB8 = 18 (requires_api: 1),
+  RGB8_SNORM = 19 (requires_api: 1),
+  RGB8UI = 20 (requires_api: 1),
+  RGB8I = 21 (requires_api: 1),
+  DEPTH24 = 22 (requires_api: 1),
+  R32F = 23 (requires_api: 1),
+  R32UI = 24 (requires_api: 1),
+  R32I = 25 (requires_api: 1),
+  RG16F = 26 (requires_api: 1),
+  RG16UI = 27 (requires_api: 1),
+  RG16I = 28 (requires_api: 1),
+  R11F_G11F_B10F = 29 (requires_api: 1),
+  RGBA8 = 30 (requires_api: 1),
+  SRGB8_A8 = 31 (requires_api: 1),
+  RGBA8_SNORM = 32 (requires_api: 1),
+
+  // Value 33 is unused and reserved.
+  RGB10_A2 = 34 (requires_api: 1),
+  RGBA8UI = 35 (requires_api: 1),
+  RGBA8I = 36 (requires_api: 1),
+  DEPTH32F = 37 (requires_api: 1),
+  DEPTH24_STENCIL8 = 38 (requires_api: 1),
+  DEPTH32F_STENCIL8 = 39 (requires_api: 1),
+  RGB16F = 40 (requires_api: 1),
+  RGB16UI = 41 (requires_api: 1),
+  RGB16I = 42 (requires_api: 1),
+  RG32F = 43 (requires_api: 1),
+  RG32UI = 44 (requires_api: 1),
+  RG32I = 45 (requires_api: 1),
+  RGBA16F = 46 (requires_api: 1),
+  RGBA16UI = 47 (requires_api: 1),
+  RGBA16I = 48 (requires_api: 1),
+  RGB32F = 49 (requires_api: 1),
+  RGB32UI = 50 (requires_api: 1),
+  RGB32I = 51 (requires_api: 1),
+  RGBA32F = 52 (requires_api: 1),
+  RGBA32UI = 53 (requires_api: 1),
+  RGBA32I = 54 (requires_api: 1),
+  EAC_R11 = 55 (requires_api: 1),
+  EAC_R11_SIGNED = 56 (requires_api: 1),
+  EAC_RG11 = 57 (requires_api: 1),
+  EAC_RG11_SIGNED = 58 (requires_api: 1),
+  ETC2_RGB8 = 59 (requires_api: 1),
+  ETC2_SRGB8 = 60 (requires_api: 1),
+  ETC2_RGB8_A1 = 61 (requires_api: 1),
+  ETC2_SRGB8_A1 = 62 (requires_api: 1),
+  ETC2_EAC_RGBA8 = 63 (requires_api: 1),
+  ETC2_EAC_SRGBA8 = 64 (requires_api: 1),
+  DXT1_RGB = 65 (requires_api: 1),
+  DXT1_RGBA = 66 (requires_api: 1),
+  DXT3_RGBA = 67 (requires_api: 1),
+  DXT5_RGBA = 68 (requires_api: 1),
+  DXT1_SRGB = 69 (requires_api: 1),
+  DXT1_SRGBA = 70 (requires_api: 1),
+  DXT3_SRGBA = 71 (requires_api: 1),
+  DXT5_SRGBA = 72 (requires_api: 1),
+  RGBA_ASTC_4x4 = 73 (requires_api: 1),
+  RGBA_ASTC_5x4 = 74 (requires_api: 1),
+  RGBA_ASTC_5x5 = 75 (requires_api: 1),
+  RGBA_ASTC_6x5 = 76 (requires_api: 1),
+  RGBA_ASTC_6x6 = 77 (requires_api: 1),
+  RGBA_ASTC_8x5 = 78 (requires_api: 1),
+  RGBA_ASTC_8x6 = 79 (requires_api: 1),
+  RGBA_ASTC_8x8 = 80 (requires_api: 1),
+  RGBA_ASTC_10x5 = 81 (requires_api: 1),
+  RGBA_ASTC_10x6 = 82 (requires_api: 1),
+  RGBA_ASTC_10x8 = 83 (requires_api: 1),
+  RGBA_ASTC_10x10 = 84 (requires_api: 1),
+  RGBA_ASTC_12x10 = 85 (requires_api: 1),
+  RGBA_ASTC_12x12 = 86 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_4x4 = 87 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_5x4 = 88 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_5x5 = 89 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_6x5 = 90 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_6x6 = 91 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_8x5 = 92 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_8x6 = 93 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_8x8 = 94 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_10x5 = 95 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_10x6 = 96 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_10x8 = 97 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_10x10 = 98 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_12x10 = 99 (requires_api: 1),
+  SRGB8_ALPHA8_ASTC_12x12 = 100 (requires_api: 1),
+  RED_RGTC1 = 101 (requires_api: 1),
+  SIGNED_RED_RGTC1 = 102 (requires_api: 1),
+  RED_GREEN_RGTC2 = 103 (requires_api: 1),
+  SIGNED_RED_GREEN_RGTC2 = 104 (requires_api: 1),
+  RGB_BPTC_SIGNED_FLOAT = 105 (requires_api: 1),
+  RGB_BPTC_UNSIGNED_FLOAT = 106 (requires_api: 1),
+  RGBA_BPTC_UNORM = 107 (requires_api: 1),
+  SRGB_ALPHA_BPTC_UNORM = 108 (requires_api: 1),
+}
+
 table ImageParams (requires_api: 1) {
   level:uint8 (id: 0, requires_api: 1);
-  format:uint8 (id: 1, requires_api: 1);
-  type:uint8 (id: 2, requires_api: 1);
+  format:PixelDataFormat (id: 1, requires_api: 1);
+  type:PixelDataType (id: 2, requires_api: 1);
   alignment:uint8 (id: 3, requires_api: 1);
   left:uint32 (id: 4, requires_api: 1);
   top:uint32 (id: 5, requires_api: 1);
@@ -187,9 +340,9 @@ table Texture (requires_api: 1) {
   id:uint64 (id: 0, requires_api: 1);
   width:uint32 (id: 1, requires_api: 1);
   height:uint32 (id: 2, requires_api: 1);
-  format:uint16 (id: 3, requires_api: 1);
+  format:TextureFormat (id: 3, requires_api: 1);
   levels:uint8 (id: 4, requires_api: 1);
-  sampler:uint8 (id: 5, requires_api: 1);
+  sampler:SamplerType (id: 5, requires_api: 1);
   mips:bool (id: 6, requires_api: 1);
   image_params:[ImageParams] (required, id: 7, requires_api: 1);
   pixel_buffers:[PixelBuffer] (required, id: 8, requires_api: 1);

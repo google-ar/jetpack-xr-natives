@@ -66,8 +66,32 @@ message ParticleConfig {
   Float3 acceleration = 8 [(imp.msg_default) = "{0.0f, 0.0f, 0.0f}"];
 }
 
+// Configuration describing the shape of the emitter.
+// Next ID: 3
+message EmitterShape {
+  // Emits particles from a single point, at the location of the emitter node.
+  // Next ID: 1
+  message PointShape {}
+
+  // Emits particles from a geometric plane centered at the emitter node.
+  // Next ID: 3
+  message PlaneShape {
+    // The width and length of the plane's extents, in local coordinates.
+    Float2 extents = 1 [(imp.msg_default) = "{1.0f, 1.0f}"];
+
+    // The normal vector representing the direction the plane faces.
+    Float3 normal = 2 [(imp.msg_default) = "{0.0f, 1.0f, 0.0f}"];
+  }
+
+  // The geometric representation of the emission area.
+  oneof shape {
+    PointShape point = 1;
+    PlaneShape plane = 2;
+  }
+}
+
 // Configuration information that describes how an emitter should behave.
-// Next ID: 5
+// Next ID: 6
 message EmitterConfig {
   // The length of time, in seconds, that the emitter should remain active.
   // Must not be negative.
@@ -82,6 +106,11 @@ message EmitterConfig {
 
   // Number of particles to emit (on average) per second.
   float particles_per_second = 4 [default = 1.0];
+
+  // The shape of the emitter. Since we don't have a way to specify a default
+  // value for a oneof field, the default behavior when a shape is not defined
+  // is to emit from a PointShape.
+  EmitterShape shape = 5;
 }
 
 // Configuration information that describes how particles should be created and

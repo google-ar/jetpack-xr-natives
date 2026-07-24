@@ -157,6 +157,7 @@ class NodeController {
   const float3& GetLocalScale() const { return local_scale_; }
 
   absl::string_view GetName() const { return name_; }
+  const char* GetNameCStr() const { return name_.c_str(); }
 
   void SetName(absl::string_view name);
 

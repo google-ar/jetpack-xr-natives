@@ -83,7 +83,6 @@ class RefCounter {
     void DecrementCount();
 
     SourceLocationTracker* tracker_ptr_ = nullptr;
-    TrackedRefs* tracked_refs_ = nullptr;
 
     friend class RefCounter;
   };

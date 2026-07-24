@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 namespace androidx::xr::openxr {
@@ -63,6 +64,10 @@ class OpenXrInstanceManager {
       std::vector<std::string>& enabled_exts)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Enumerates system extension properties for the device.
+  bool EnumerateSystemExtensionProperties()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Creates an OpenXR instance. The OpenXR runtime must first be loaded by
   // calling LoadOpenXr. Throws an exception of one of the extra extensions is
   // not supported.
@@ -75,10 +80,22 @@ class OpenXrInstanceManager {
   // Loads the OpenXR runtime.
   bool LoadOpenXr(jobject context) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Checks if the extension is supported by the system.
+  bool IsExtensionSupportedBySystem(absl::string_view extension_name)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   absl::Mutex mutex_;
   XrInstance instance_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrSystemId system_id_ ABSL_GUARDED_BY(mutex_) = XR_NULL_SYSTEM_ID;
   const std::vector<std::string> extra_extensions_;
+  std::vector<XrSystemExtensionPropertiesANDROID> system_extension_properties_
+      ABSL_GUARDED_BY(mutex_) = {};
+  bool has_enumerated_system_extension_properties_ ABSL_GUARDED_BY(mutex_) =
+      false;
+
+  PFN_xrEnumerateSystemExtensionPropertiesANDROID
+      xr_enumerate_system_extension_properties_ ABSL_GUARDED_BY(mutex_) =
+          nullptr;
 
   JNIEnv* java_env_ = nullptr;
   JavaVM* app_vm_ = nullptr;

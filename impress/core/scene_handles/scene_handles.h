@@ -168,8 +168,10 @@ class ComponentSceneHandle : public ComponentHandle<T>,
   // then it is unspecified which node will be referenced.
   ComponentSceneHandle(ComponentHandle<T> comp)
       : ComponentHandle<T>(comp),
-        scene_handle_helper_(SceneHandleInterface::Identifier(
-            std::string(comp.Get()->GetNode()->GetName()))) {}
+        scene_handle_helper_(comp.IsValid()
+                                 ? SceneHandleInterface::Identifier(std::string(
+                                       comp.Get()->GetNode()->GetName()))
+                                 : SceneHandleInterface::Identifier()) {}
 
   absl::Status AssignSceneHandleForIdentifier(
       NodeHandle identified_node, NodeHandle attached_node) override;

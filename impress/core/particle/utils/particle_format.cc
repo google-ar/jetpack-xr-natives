@@ -60,7 +60,7 @@ ParticleFormat::ParticleFormat(const ParticleConfig& config) {
   offsets_[static_cast<int>(AttributeType::kPosition)] = particle_data_size_;
   particle_data_size_ += 3;
 
-  if (config.initial_rotation || config.billboard) {
+  if (config.initial_rotation || config.billboard.Value()) {
     offsets_[static_cast<int>(AttributeType::kRotation)] = particle_data_size_;
     particle_data_size_ += 4;
   }

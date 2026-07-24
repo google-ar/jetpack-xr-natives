@@ -27,6 +27,7 @@
 #include "core/common/enum_flags.h"
 #include "core/editor/command.h"
 #include "core/editor/command_manager.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/editor.h"
 #include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
@@ -77,6 +78,11 @@ class TransformWidgetAspect : public imp::Component {
   // Returns whether the user is currently dragging the aspect.
   bool IsDragging() const { return dragging_; }
 
+  // Returns whether only a single node is selected and it is valid.
+  bool HasOneNodeSelected() const {
+    return selected_nodes_.size() == 1 && selected_nodes_[0].IsValid();
+  }
+
   // Computes the closest point between the ray projected by the cursor and the
   // axis this widget controls. (World-space)
   std::optional<float3> ComputeClosestPoint() const;
@@ -89,6 +95,7 @@ class TransformWidgetAspect : public imp::Component {
 
   virtual AspectType GetAspectType() const = 0;
   virtual float3 GetAxis() const = 0;
+  virtual float3 GetAxisFromState() const = 0;
   virtual bool IsCameraFacing() const { return false; }
   virtual void SetupMaterialParameters() {};
 
@@ -100,6 +107,8 @@ class TransformWidgetAspect : public imp::Component {
 
   // The nodes that are currently selected and being transformed.
   std::vector<NodeHandle> selected_nodes_;
+
+  bool use_local_space_ = true;
 
   // The pointer position when a drag starts. (Screen-space)
   float2 pointer_start_;
@@ -169,6 +178,7 @@ class TransformWidgetAspect : public imp::Component {
 
   // The active axes for this widget aspect.
   AxisFlags active_axes_;
+  PropertyBinding<float> transform_widget_scale_binding_;
 };
 
 }  // namespace imp::editor

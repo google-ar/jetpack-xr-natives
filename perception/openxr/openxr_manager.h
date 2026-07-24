@@ -305,13 +305,6 @@ class OpenXrManager {
                      XrTrackablePlaneANDROID& out_plane,
                      std::vector<XrVector2f>& out_vertices);
 
-  // Chooses a plane that fits the constraints from the vector of planes
-  // provided.  If no suitable plane is found, this will return false and
-  // out_trackable and out_plane will not be updated.
-  bool ChoosePlane(const PlaneConstraints& plane_constraints,
-                   XrTrackableANDROID* out_trackable,
-                   XrTrackablePlaneANDROID* out_plane);
-
   // Returns a vector containing tracked augmented images
   // from the trackable tracker.
   std::vector<XrTrackableANDROID> GetAugmentedImages();
@@ -372,18 +365,6 @@ class OpenXrManager {
                                           const XrPosef& relative_pose,
                                           XrSpace* out_anchor_space);
 
-  // Creates a trackable object anchor at a point relative to the center point
-  // of the provided trackable and object. If the object is null this will load
-  // the object from the trackable. This is thread safe. Returns a
-  // CreateAnchorResult enum corresponding to whether the anchor was loaded
-  // successfully and populated in out_anchor_space, or if the function
-  // encountered an error.
-  CreateAnchorResult CreateAnchorForObject(XrTrackableANDROID trackable,
-                                           XrTrackableObjectANDROID* object,
-                                           XrTime time,
-                                           const XrPosef& relative_pose,
-                                           XrSpace* out_anchor_space);
-
   // Returns the OpenXR location data associated with an anchor space at a
   // specified time. May return a location that is invalid or untracked, as
   // indicated by the flag bits. Returns true if successful and populates the
@@ -400,15 +381,6 @@ class OpenXrManager {
   // This is expected to be called from the jni thread through
   // CreateSemanticAnchor and possibly directly in the future.
   bool ExportAnchor(XrSpace anchor_space, AIBinder** out_anchor_token);
-
-  // Creates and exports an anchor on the center pose of a plane that fulfills
-  // the provided constraints. Returns true if successful and populates the
-  // out_anchor_token. Returns false if no suitable plane was found or there was
-  // an error creating or exporting the anchor. This is a public function that
-  // is expected to be called from the jni thread.
-  bool CreateSemanticAnchor(const PlaneConstraints& plane_constraints,
-                            AIBinder** out_anchor_token,
-                            XrSpace* out_anchor_space);
 
   // Destroys the XrSpace for the provided anchor and removes if from
   // anchor_map_. Returns false if there was an error destroying the anchor or
@@ -514,12 +486,6 @@ class OpenXrManager {
   // Gets eye tracking info.
   XrResult GetEyesInfo(XrTime time, XrEyesANDROID* out_eyes);
 
-  // Gets the smooth depth image from the depth swapchain. This is a public
-  // function that is expected to be called from the jni thread.
-  bool GetDepthImage(XrTime time, const float** out_smooth_depth_image,
-                     int* out_image_width, int* out_image_height)
-      ABSL_LOCKS_EXCLUDED(mutex_);
-
   // Gets the all depth images and confidence images from the depth swapchain
   // This is a public function that is expected to be called from the jni
   // thread.
@@ -534,9 +500,6 @@ class OpenXrManager {
   // Gets the height of the depth image. This is a public function that is
   // expected to be called from the jni thread.
   int GetDepthImageHeight() ABSL_LOCKS_EXCLUDED(mutex_);
-
-  // Returns whether or not geospatial APIs are supported on the current system.
-  bool IsGeospatialSupported() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Gets the geospatial state. This is a public function that is expected to be
   // called from the jni thread.
@@ -1055,7 +1018,6 @@ class OpenXrManager {
   PFN_xrGetSystem xr_get_system_ = nullptr;
   PFN_xrCreateSession xr_create_session_ = nullptr;
   PFN_xrDestroySession xr_destroy_session_ = nullptr;
-  PFN_xrGetSystemProperties xr_get_system_properties_ = nullptr;
   PFN_xrCreateReferenceSpace xr_create_reference_space_ = nullptr;
   PFN_xrDestroySpace xr_destroy_space_ = nullptr;
   PFN_xrLocateSpace xr_locate_space_ = nullptr;

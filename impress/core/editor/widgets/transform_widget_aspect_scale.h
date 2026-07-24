@@ -37,6 +37,7 @@ class TransformWidgetAspectScale : public TransformWidgetAspect {
   void UpdateAspect(bool commit,
                     std::vector<std::unique_ptr<Command>>& commands) override;
   float3 GetAxis() const override;
+  float3 GetAxisFromState() const override;
 
  private:
   TransformWidgetAspectScaleState state_;

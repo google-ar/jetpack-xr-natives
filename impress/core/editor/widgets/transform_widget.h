@@ -40,17 +40,22 @@ class TransformWidget : public imp::Component {
   // Cycles through translate, rotate, and scale modes.
   void CycleMode();
 
+  bool UseLocalSpace() const { return use_local_space_; }
+  void ToggleSpaceMode();
+
   static constexpr UpdateMode kUpdateMode = UpdateMode::kAlwaysUpdate;
   static constexpr UpdatePhase kUpdatePhase = UpdatePhase::kEnd;
 
  private:
   enum class Mode { kTranslate, kRotate, kScale };
   void SetMode(Mode mode);
+  void UpdateWidgetTransform();
 
   std::vector<NodeHandle> active_nodes_;
   int scale_level_ = 0;
   float scale_ = 1.0f;
   Mode mode_ = Mode::kTranslate;
+  bool use_local_space_ = true;
   TransformWidgetState state_;
 
  public:

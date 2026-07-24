@@ -78,16 +78,18 @@ class LayoutComposer {
  private:
   struct WidgetInfo {
     WidgetInfo(absl::string_view label, imp::Invocable<void()> draw_function,
-               bool force_focus = false)
+               bool force_focus = false, bool is_closeable = true)
         : label(label),
           draw_function(std::move(draw_function)),
-          force_focus(force_focus) {}
+          force_focus(force_focus),
+          is_closeable(is_closeable) {}
 
     // The label of the tab. This is used to name the dockable window of the
     // tab.
     std::string label;
     imp::Invocable<void()> draw_function;
     bool force_focus;
+    bool is_closeable;
   };
 
   // Helper functions for queuing widgets for docking layout, which is used for
@@ -114,7 +116,7 @@ class LayoutComposer {
 
   void DrawInLeftDock(absl::string_view tab_label,
                       imp::Invocable<void()> draw_function,
-                      bool force_focus = false);
+                      bool force_focus = false, bool is_closeable = true);
 
   // Queues the given Invocable to be drawn as its own tab in a dockable tabbed
   // window.
@@ -124,7 +126,7 @@ class LayoutComposer {
   void DrawAsDockableTab(absl::string_view tab_label,
                          imp::Invocable<void()> draw_function,
                          bool draw_before_previous_tabs = false,
-                         bool force_focus = false);
+                         bool force_focus = false, bool is_closeable = true);
 
   // Queues the given Invocable to be drawn as its own menu in the main menu
   // bar.
@@ -139,7 +141,8 @@ class LayoutComposer {
 
   // Queues the given Invocable to be drawn at the end after the layout.
   void DrawAfterLayout(absl::string_view label,
-                       imp::Invocable<void()> draw_function);
+                       imp::Invocable<void()> draw_function,
+                       bool is_closeable = true);
 
   // Draws a window for world layout. The window will be drawn from left to
   // right without overlapping.
@@ -177,15 +180,19 @@ class LayoutComposer {
   // Resisters or updates the sub-window for world layout.
   void UpdateSubWindowRegistration(absl::string_view label);
 
-  // Wraps an Invocable in a CollapsingHeader.
   imp::Invocable<void()> BuildHeaderDrawFunction(
       absl::string_view header_label, imp::Invocable<void()> draw_function,
       imp::Invocable<void()> on_close_button_pressed,
-      ImGuiTreeNodeFlags additional_flags = ImGuiTreeNodeFlags_None);
+      ImGuiTreeNodeFlags additional_flags = ImGuiTreeNodeFlags_None,
+      bool is_closeable = true);
 
   // Returns the safe display area excluding the overscan area.
   ImVec2 GetSafeDisplaySize() const;
   ImVec4 GetSafeDisplayBounds() const;
+
+  // Latches the focus request for the widget, also checking window
+  // configuration.
+  bool LatchFocusRequest(Widget* widget);
 
   std::vector<imp::Invocable<void()>> details_draw_functions_;
   std::vector<imp::Invocable<void()>> scene_draw_functions_;

@@ -401,6 +401,9 @@ Future<absl::Status> TextRenderer::UpdateMeshesAndMaterials() {
   if (state_.text_tracking.has_value()) {
     options.text_tracking = *state_.text_tracking;
   }
+  if (state_.locale.has_value()) {
+    options.locale = *state_.locale;
+  }
   force_non_separable_ = options.force_non_separable;
 
   // Load the material.
@@ -774,7 +777,7 @@ TextRenderer::CalculateGlyphVerticesAndVisualBounds(
   std::vector<float3> glyph_vertices(glyph_count * kQuadVertices.size());
 
   float2 visual_bounds_min = float2(std::numeric_limits<float>::max());
-  float2 visual_bounds_max = float2(std::numeric_limits<float>::min());
+  float2 visual_bounds_max = float2(std::numeric_limits<float>::lowest());
 
   std::vector<GlyphPlacement> glyph_placements =
       CalculateGlyphPlacements(glyphs);

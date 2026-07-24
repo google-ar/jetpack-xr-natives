@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -26,6 +27,7 @@
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
@@ -322,18 +324,23 @@ Future<absl::Status> TexturePipelineRenderer::Setup() {
           }
           if (resized) {
             GetNode()->Send(PostResizeEvent());
+            textures_marked_for_deletion_.clear();
           }
-        },
-        this);
-
-    GetView().GetDispatcher().Connect(
-        [this](const PostResizeEvent& post_resize_event) {
-          textures_marked_for_deletion_.clear();
         },
         this);
   }
 
   return result;
+}
+
+Future<absl::Status> TexturePipelineRenderer::Setup(
+    TexturePipelineRendererState state, int additional_color_attachments_count,
+    TexturePipelineRendererState::Texture::Format
+        additional_color_attachments_format) {
+  state_ = std::move(state);
+  additional_color_attachments_count_ = additional_color_attachments_count;
+  additional_color_attachments_format_ = additional_color_attachments_format;
+  return Setup();
 }
 
 bool TexturePipelineRenderer::IsRenderTargetStale(
@@ -397,6 +404,10 @@ absl::Status TexturePipelineRenderer::ResizePassTexture(size_t pass_index,
   if (!status.ok()) {
     return status;
   }
+
+  GetNode()->Send(PostResizeEvent());
+  textures_marked_for_deletion_.clear();
+
   return absl::OkStatus();
 }
 
@@ -459,6 +470,9 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
         color_texture_registration->Release());
     color_texture_registration = absl::nullopt;
   }
+
+  MarkAdditionalColorAttachmentsForDeletion(runtime_pass);
+
   std::optional<TextureRegistry::ScopedTextureRegistration>&
       depth_texture_registration = runtime_pass.depth_texture_registration;
   if (depth_texture_registration.has_value()) {
@@ -643,6 +657,14 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
   filament::RenderTarget::Builder render_target_builder;
   render_target_builder.texture(filament::RenderTarget::AttachmentPoint::COLOR,
                                 color_filament_texture);
+
+  absl::Status status = CreateAndAttachAdditionalColorAttachments(
+      pass, runtime_pass, render_target_builder, texture_size, is_multiview,
+      stereo_depth);
+  if (!status.ok()) {
+    return status;
+  }
+
   if (pass.color_texture_layer.has_value()) {
     if (color_filament_texture->getDepth() == 1) {
       return absl::FailedPreconditionError(
@@ -959,6 +981,98 @@ void TexturePipelineRenderer::SetProjectionQuad(
   }
 
   projection_quad_ = quad;
+}
+
+void TexturePipelineRenderer::MarkAdditionalColorAttachmentsForDeletion(
+    RuntimePass& runtime_pass) {
+  for (auto& reg : runtime_pass.additional_color_texture_registrations) {
+    textures_marked_for_deletion_.push_back(reg.Release());
+  }
+  runtime_pass.additional_color_texture_registrations.clear();
+}
+
+absl::Status TexturePipelineRenderer::CreateAndAttachAdditionalColorAttachments(
+    const TexturePipelineRendererState::Pass& pass, RuntimePass& runtime_pass,
+    filament::RenderTarget::Builder& render_target_builder, uint2 texture_size,
+    bool is_multiview, size_t stereo_depth) {
+  // Use the primary color texture's name as the base name for additional color
+  // attachments.
+  std::string base_name;
+  if (pass.color_texture()) {
+    base_name = pass.color_texture()->name;
+  } else if (pass.registered_color_texture()) {
+    base_name = *pass.registered_color_texture();
+  }
+
+  for (int i = 0; i < additional_color_attachments_count_; ++i) {
+    filament::Texture::InternalFormat format = FormatFromTexture(
+        additional_color_attachments_format_,
+        /*auto_format=*/TexturePipelineRendererState::Texture::RGBA8);
+    OwnedTexturePtr tex;
+    TextureSamplerOptions sampler_options;
+    if (is_multiview) {
+      sampler_options.sampler_type =
+          TextureSamplerOptions::SamplerType::SAMPLER_2D_ARRAY;
+      TextureFactory::TextureCreationSettings settings = {
+          .width = texture_size.x,
+          .height = texture_size.y,
+          .format = format,
+          .depth = stereo_depth,
+          .levels = 1,
+          .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                   filament::Texture::Usage::SAMPLEABLE,
+          .sampler_options = sampler_options,
+      };
+      tex = GetView().GetTextureFactory().CreateTexture(settings);
+    } else {
+      tex = GetView().GetTextureFactory().CreateTexture(
+          imp::TextureFactory::TextureCreationSettings{
+              .width = texture_size.x,
+              .height = texture_size.y,
+              .format = format,
+              .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                       filament::Texture::Usage::SAMPLEABLE,
+              .sampler_options = sampler_options,
+          });
+    }
+
+    if (!tex) {
+      return absl::InternalError(
+          absl::StrFormat("Failed to create additional color texture %d.", i));
+    }
+
+    std::string tex_name = absl::StrCat(base_name, "_color_attachment_", i + 1);
+    tex->SetName(tex_name);
+
+    runtime_pass.additional_color_texture_registrations.emplace_back(
+        GetView().GetTextureRegistry().RegisterTexture(tex_name,
+                                                       std::move(tex)));
+
+    filament::Texture* attachment_filament_texture =
+        runtime_pass.additional_color_texture_registrations.back()
+            .GetTexture()
+            ->GetTexture();
+
+    auto attachment_point =
+        static_cast<filament::RenderTarget::AttachmentPoint>(
+            static_cast<uint8_t>(
+                filament::RenderTarget::AttachmentPoint::COLOR0) +
+            i + 1);
+
+    render_target_builder.texture(attachment_point,
+                                  attachment_filament_texture);
+
+    if (pass.color_texture_layer.has_value()) {
+      render_target_builder.layer(attachment_point,
+                                  pass.color_texture_layer.value());
+    }
+    if (is_multiview) {
+      render_target_builder.multiview(
+          attachment_point, attachment_filament_texture->getDepth(), 0);
+    }
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace imp

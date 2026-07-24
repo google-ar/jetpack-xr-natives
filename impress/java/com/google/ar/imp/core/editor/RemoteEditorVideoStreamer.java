@@ -447,7 +447,6 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
 
       if (!newConfig.toString().equals(lastConfigSent)) {
         config = newConfig;
-        Log.i(TAG, "Sending config: " + config);
         // The server could be null if stopStreaming() was called after this callback was
         // queued but before it was processed. If streaming is inactive, we shouldn't
         // broadcast the config.
@@ -551,8 +550,16 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
 
   private void stopCodec() {
     if (mediaCodec != null) {
-      mediaCodec.stop();
-      mediaCodec.release();
+      try {
+        mediaCodec.stop();
+      } catch (RuntimeException e) {
+        Log.e(TAG, "Error calling mediaCodec.stop(): " + e.getMessage(), e);
+      }
+      try {
+        mediaCodec.release();
+      } catch (RuntimeException e) {
+        Log.e(TAG, "Error calling mediaCodec.release(): " + e.getMessage(), e);
+      }
       mediaCodec = null;
     }
   }

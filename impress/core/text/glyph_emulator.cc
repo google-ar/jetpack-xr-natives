@@ -524,6 +524,7 @@ GlyphEmulator::CanvasOptionsFromGlyphEmulatorOptions(
   canvas_options.render_scale = subpixel_render_ratio.value_or(float2{1.0f});
   canvas_options.force_non_separable = options.force_non_separable;
   canvas_options.precomputed_metrics = options.precomputed_metrics;
+  canvas_options.locale = options.locale;
   return canvas_options;
 }
 

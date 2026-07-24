@@ -72,6 +72,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:utils_hdrs",
     ] + if_dev_runtime([
+        "//core/editor:editor_info",
         "//core/editor/widgets/viewport:viewport_helpers",
     ]),
     alwayslink = 1,

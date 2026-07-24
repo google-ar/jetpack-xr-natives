@@ -17,8 +17,6 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_EVENTS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_EVENTS_H_
 
-#include <optional>
-
 #include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/node_handle.h"
 
@@ -57,19 +55,6 @@ struct ModelLoadedEvent : public Event {
 // Event sent when a node is clicked on using pixel-perfect filament pick.
 struct PixelPickEvent : public Event {};
 
-// Event sent when a previewer setting is changed.
-struct EditorSettingChangedEvent : public Event {
-  std::optional<bool> grid_enabled;
-  std::optional<bool> skybox_enabled;
-  std::optional<bool> show_all_bounds_enabled;
-  std::optional<bool> show_all_colliders_enabled;
-  std::optional<bool> show_all_origins_enabled;
-  std::optional<bool> show_physics_visualizer_enabled;
-  std::optional<bool> vertex_selection_enabled;
-  std::optional<bool> load_mesh_data_on_cpu_enabled;
-  std::optional<bool> bvh_mesh_collision_acceleration_enabled;
-};
-
 // Event that tells the editor to recreate all the component details widgets
 // for the selected node. Call this when you add/remove a component from the
 // selected node.
@@ -90,32 +75,11 @@ struct EditorEnabledEvent : public Event {
   bool enabled;
 };
 
-// Event sent to enable or disable inverting camera Y.
-struct InvertCameraYEvent : public Event {
-  explicit InvertCameraYEvent(bool invert_camera_y_enabled)
-      : enabled(invert_camera_y_enabled) {}
-  bool enabled;
-};
-
-// Event sent to enable or disable inverting mouse scroll.
-struct InvertMouseScrollEvent : public Event {
-  explicit InvertMouseScrollEvent(bool invert_mouse_scroll_enabled)
-      : enabled(invert_mouse_scroll_enabled) {}
-  bool enabled;
-};
-
-// Event sent to enable or disable legacy camera controls.
-struct UseLegacyCameraControlsEvent : public Event {
-  explicit UseLegacyCameraControlsEvent(bool use_legacy_camera_controls_enabled)
-      : enabled(use_legacy_camera_controls_enabled) {}
-  bool enabled;
-};
-
-// Event sent when the transform widget scale is changed.
-struct TransformWidgetScaleChangedEvent : public Event {
-  explicit TransformWidgetScaleChangedEvent(float new_scale)
-      : scale(new_scale) {}
-  float scale;
+// Event sent when local/worldspace mode of the transform widget is toggled.
+struct TransformWidgetSpaceModeChangedEvent : public Event {
+  explicit TransformWidgetSpaceModeChangedEvent(bool local_space_enabled)
+      : local_space(local_space_enabled) {}
+  bool local_space;
 };
 
 }  // namespace imp::editor

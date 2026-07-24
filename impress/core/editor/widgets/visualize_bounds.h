@@ -20,6 +20,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/widget.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
@@ -67,6 +68,7 @@ class VisualizeBounds : public editor::Widget, public imp::Rememberer {
   Mode mode_ = Mode::kShowSelectedBounds;
   absl::flat_hash_set<NodeHandle> selected_nodes_;
   absl::flat_hash_set<NodeHandle> visited_nodes_;
+  PropertyBinding<bool> show_all_bounds_binding_;
 };
 
 }  // namespace imp::editor

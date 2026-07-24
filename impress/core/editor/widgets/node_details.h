@@ -34,6 +34,7 @@ class NodeDetails : public editor::Widget, public imp::Rememberer {
   explicit NodeDetails(BaseView& base_view);
   void DrawImGui() override;
   absl::string_view GetName() const override { return kNodeWidgetHeaderName; }
+  bool IsCloseable() const override { return false; }
   bool HasContent() const override;
 
  private:

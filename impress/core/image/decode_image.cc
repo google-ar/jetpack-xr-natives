@@ -80,7 +80,7 @@ Future<std::unique_ptr<ImageContents>> DecodeImage(
 #elif IMP_PLATFORM(WASM)
   return details::WasmDecodeImage(name, resource);
 #else
-  image = details::StbDecodeImage(name, resource);
+  image = details::WImageDecodeImage(name, resource);
 #endif
   if (image.ok()) {
     return Future<std::unique_ptr<ImageContents>>(std::move(image.value()));

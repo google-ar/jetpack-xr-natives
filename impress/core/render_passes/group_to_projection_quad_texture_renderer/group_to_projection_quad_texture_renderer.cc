@@ -35,6 +35,7 @@
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
 #include "core/view/utils/frame_time.h"
 #include "core/view/utils/proto/render_settings.proto.imp.h"
+#include "core/window/filament_host.h"
 
 namespace imp {
 namespace {
@@ -113,23 +114,42 @@ GroupToProjectionQuadTextureRenderer::CreateTexturePipelineRenderer() {
   texture_pipeline_node_->SetEnabled(false);
   texture_pipeline_node_->SetName(
       "GroupToProjectionQuadTextureRenderer_TexturePipelineRenderer");
-  return texture_pipeline_node_
-      ->AddComponentWithState<imp::TexturePipelineRenderer>(renderer_state)
-      .Then(
-          [this](
-              absl::StatusOr<imp::ComponentHandle<imp::TexturePipelineRenderer>>
-                  status) mutable -> absl::Status {
-            if (!status.ok()) {
-              return absl::InternalError(absl::StrFormat(
-                  "GroupToProjectionQuadTextureRenderer::CreateTexturePipeline "
-                  "failed: failed to add texture pipeline renderer with the "
-                  "following error message \"%s\"",
-                  status.status().ToString()));
-            }
 
-            texture_pipeline_renderer_ = *status;
-            return UpdateTexturePipelineRendererProjectionQuad();
-          });
+  const bool is_in_xr =
+      GetView().GetHost() != nullptr && GetView().GetHost()->IsInXr();
+
+  Future<ComponentHandle<TexturePipelineRenderer>>
+      texture_pipeline_renderer_future;
+  if (is_in_xr) {
+    // Requesting for 7 additional RGBA32F color attachment to workaround issue
+    // outlined in (broken link).
+    // TODO: Switch back to use AddComponentWithState() without
+    // adding additional color attachment, once Qualcomm driver no longer
+    // requires this hack.
+    texture_pipeline_renderer_future =
+        texture_pipeline_node_->AddComponent<TexturePipelineRenderer>(
+            renderer_state, /*additional_color_attachments_count=*/7,
+            TexturePipelineRendererState::Texture::RGBA32F);
+  } else {
+    texture_pipeline_renderer_future =
+        texture_pipeline_node_->AddComponentWithState<TexturePipelineRenderer>(
+            renderer_state);
+  }
+
+  return texture_pipeline_renderer_future.Then(
+      [this](absl::StatusOr<imp::ComponentHandle<imp::TexturePipelineRenderer>>
+                 status) mutable -> absl::Status {
+        if (!status.ok()) {
+          return absl::InternalError(absl::StrFormat(
+              "GroupToProjectionQuadTextureRenderer::CreateTexturePipeline "
+              "failed: failed to add texture pipeline renderer with the "
+              "following error message \"%s\"",
+              status.status().ToString()));
+        }
+
+        texture_pipeline_renderer_ = *status;
+        return UpdateTexturePipelineRendererProjectionQuad();
+      });
 }
 
 imp::TexturePipelineRendererState::Pass

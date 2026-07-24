@@ -18,9 +18,9 @@
 #include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "core/collision/collision_flags.h"
-#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/config.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
@@ -34,15 +34,13 @@ namespace imp::editor {
 VisualizeColliders::VisualizeColliders(BaseView& view, bool use_view_dispatcher,
                                        std::optional<bool> show_all_colliders)
     : view_(view) {
-  PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
+  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   bool show_all = show_all_colliders.has_value()
                       ? *show_all_colliders
-                      : storage.GetBool(kShowAllCollidersEnabledKey,
-                                        kShowAllCollidersEnabledDefault);
+                      : editor.GetSettings().show_all_colliders_enabled.Get();
   mode_ = show_all ? Mode::kShowAllColliders
                    : Mode::kShowSelectedAndDescendantColliders;
 
-  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   selected_nodes_ = editor.GetSelectedNodes();
   Dispatcher& dispatcher =
       use_view_dispatcher ? view_.GetDispatcher() : editor.GetDispatcher();
@@ -54,20 +52,17 @@ VisualizeColliders::VisualizeColliders(BaseView& view, bool use_view_dispatcher,
       },
       this);
 
-  dispatcher.Connect(
-      [this](const EditorSettingChangedEvent& event) {
-        // Switch modes based on the "show all colliders" setting.
-        if (event.show_all_colliders_enabled.has_value()) {
-          if (*event.show_all_colliders_enabled) {
-            IMP_LOG(imp::INFO) << "Visualizing all colliders";
-            mode_ = Mode::kShowAllColliders;
-          } else {
-            IMP_LOG(imp::INFO) << "Visualizing selected colliders";
-            mode_ = Mode::kShowSelectedAndDescendantColliders;
-          }
-        }
-      },
-      this);
+  const auto change_mode = [this](bool enabled, bool /*old*/) {
+    if (enabled) {
+      IMP_LOG(imp::INFO) << "Visualizing all colliders";
+      mode_ = Mode::kShowAllColliders;
+    } else {
+      IMP_LOG(imp::INFO) << "Visualizing selected colliders";
+      mode_ = Mode::kShowSelectedAndDescendantColliders;
+    }
+  };
+  show_all_colliders_binding_ = PropertyBinding<bool>(
+      editor.GetSettings().show_all_colliders_enabled, change_mode);
 }
 
 void VisualizeColliders::DrawImGui() {

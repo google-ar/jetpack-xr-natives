@@ -14,12 +14,19 @@
 
 #include "core/view/framework/gestures/drag_gesture.h"
 
+#include <optional>
+
+#include "core/common/log.h"
+#include "absl/types/span.h"
 #include "absl/types/variant.h"
 #include "core/common/platform_helpers.h"
 #include "core/input/input_manager.h"
 #include "core/input/pointer_event.h"
 #include "core/math/math.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/view/framework/gestures/gesture.h"
 #include "core/view/framework/gestures/gesture_pointer_utils.h"
+#include "core/view/framework/input/pointer_input_handler.h"
 
 namespace imp {
 
@@ -37,11 +44,42 @@ DragGesture::DragGesture(Dispatcher* dispatcher,
 DragGesture::CreateFn DragGesture::GetCreateFunction(
     Dispatcher* dispatcher, GesturePointerUtils* pointer_utils) {
   return [dispatcher, pointer_utils](const PointerHitEvent& pointer_hit,
-                                     absl::Span<const DragGesture> gestures) {
-    return pointer_hit.event.Type() == PointerEventType::kDown
-               ? std::optional<DragGesture>(
-                     DragGesture(dispatcher, pointer_utils, pointer_hit))
-               : absl::nullopt;
+                                     absl::Span<const DragGesture> gestures)
+             -> std::optional<DragGesture> {
+    if (pointer_hit.event.Type() == PointerEventType::kDown) {
+      return std::optional<DragGesture>(
+          DragGesture(dispatcher, pointer_utils, pointer_hit));
+    }
+
+    if (pointer_hit.event.Type() == PointerEventType::kMove) {
+      // When a multi-touch gesture (e.g. PinchGesture) finishes by releasing a
+      // finger, it releases all pointers associated with that gesture. As the
+      // remaining finger continues to move across the screen, we should
+      // instantiate a new DragGesture to seamlessly resume dragging so that the
+      // user does not have to lift and re-press their finger.
+
+      // Only create a DragGesture if there are no existing active/unstarted
+      // gestures.
+      if (!gestures.empty()) {
+        return std::nullopt;
+      }
+
+      if (pointer_hit.event.ChangedPointerCount() == 0) {
+        return std::nullopt;
+      }
+
+      const Pointer& pointer = pointer_hit.event.GetChangedPointer(0);
+      // Do not create the gesture if the pointer is retained by another
+      // gesture.
+      if (pointer_utils->IsPointerRetained(pointer.id)) {
+        return std::nullopt;
+      }
+
+      return std::optional<DragGesture>(
+          DragGesture(dispatcher, pointer_utils, pointer_hit));
+    }
+
+    return std::nullopt;
   };
 }
 
@@ -108,8 +146,25 @@ bool DragGesture::TryStart(const PointerHitEvent& pointer_hit) {
 }
 
 void DragGesture::OnUpdate(const PointerHitEvent& pointer_hit) {
-  // Ignore if the pointer_hit doesn't include the pointer_id.
   PointerEvent event = pointer_hit.event;
+
+  // Cooperative Yielding: If a new pointer goes down (second finger), cancel
+  // this drag gesture to yield to multi-touch gestures (Pinch, Twist, etc.).
+  if (event.Type() == PointerEventType::kDown) {
+    bool has_other_pointer = false;
+    for (int i = 0; i < event.ChangedPointerCount(); ++i) {
+      if (event.GetChangedPointer(i).id != pointer_id_) {
+        has_other_pointer = true;
+        break;
+      }
+    }
+    if (has_other_pointer) {
+      Cancel(pointer_hit);
+      return;
+    }
+  }
+
+  // Ignore if the pointer_hit doesn't include the pointer_id.
   int move_index = event.GetIndexForChangedPointerId(pointer_id_);
   if (move_index > -1) {
     switch (event.Type()) {
@@ -138,7 +193,14 @@ void DragGesture::OnUpdate(const PointerHitEvent& pointer_hit) {
 
 void DragGesture::OnFinish(const PointerHitEvent& pointer_hit) {
   pointer_retainer_.ReleasePointer();
-  assert(pointer_hit.event.GetChangedPointer().id == pointer_id_);
+  // This check is for regular finishes (e.g. kUp) as opposed to cooperative
+  // yielding cancellations (where our pointer might not be in the changed
+  // pointers of the event triggering cancellation).
+  if (!Cancelled() &&
+      pointer_hit.event.GetIndexForChangedPointerId(pointer_id_) == -1) {
+    IMP_LOG(imp::ERROR) << "DragGesture finished but pointer_id " << pointer_id_
+               << " was not found in changed pointers.";
+  }
 
   // Do a final update of the position.
   // This will send a final UpdateEvent if the position has changed since

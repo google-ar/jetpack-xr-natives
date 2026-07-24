@@ -21,6 +21,7 @@
 #include <optional>
 #include <string>
 
+#include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/invocable.h"
@@ -48,6 +49,11 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
                                             absl::string_view data,
                                             absl::string_view description = "");
 
+  std::string AddResourceInCurrentDirectory(absl::string_view name,
+                                            absl::string_view type,
+                                            absl::Cord data,
+                                            absl::string_view description = "");
+
   void AddResourceAtPath(absl::string_view resource_path,
                          absl::string_view data,
                          absl::string_view description = "");
@@ -59,12 +65,17 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
   struct DynamicResource {
     std::string name;
     std::string type;
-    std::string data;
+    absl::Cord data;
     std::string description;
 
-    DynamicResource(absl::string_view name, absl::string_view type,
-                    absl::string_view data, absl::string_view description = "")
-        : name(name), type(type), data(data) {}
+    DynamicResource(std::string name, std::string type, absl::Cord data,
+                    std::string description = "")
+        : name(std::move(name)),
+          type(std::move(type)),
+          data(std::move(data)),
+          description(std::move(description)) {
+      this->data.Flatten();
+    }
   };
 
   // TODO: for long term, move the concept of "dynamic resources"
@@ -79,12 +90,15 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
 
   std::string RemoveHomeDirectoryFromPath(absl::string_view path) const;
 
+  std::optional<std::string> GetSelectedAsset() const;
+  void SetSelectedAsset(std::optional<std::string> asset);
+
  private:
   // A pending drag-and-dropped message resource to store in the library.
   struct PendingResource {
-    std::string type;
-    std::string data;
     std::string name;
+    std::string type;
+    absl::Cord data;
     std::string description;
 
     std::string saved_data;
@@ -96,7 +110,7 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
   void DrawTypeFilter();
   void DrawIsfPopupMenu(absl::string_view resource_path);
 
-  std::string AddResource(const PendingResource& pending_resource);
+  std::string AddResource(PendingResource pending_resource);
 
   void PrepareMaterialHandleDragAndDrop(const std::string& resource);
 
@@ -142,6 +156,8 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
   StringSet loading_materials_;
 
   Rememberer rememberer_;
+
+  std::optional<std::string> selected_asset_;
 };
 
 }  // namespace imp::editor

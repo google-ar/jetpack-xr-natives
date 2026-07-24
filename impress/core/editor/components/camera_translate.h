@@ -31,6 +31,8 @@
 
 namespace imp::editor {
 
+class Editor;
+
 // Translates the camera on the x/z plane based on drag gestures.
 class CameraTranslate : public Component {
  public:
@@ -45,7 +47,7 @@ class CameraTranslate : public Component {
 
   std::optional<float3> intersection_prev_;
   NodeHandle pivot_;
-  bool use_legacy_camera_controls_ = kUseLegacyCameraControlsDefault;
+  Editor* editor_ = nullptr;
 };
 
 }  // namespace imp::editor

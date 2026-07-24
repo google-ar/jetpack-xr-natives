@@ -26,9 +26,9 @@ android_library(
         "RemoteEditorWebSocketServer.java",
     ],
     deps = [
-        "//third_party/java/WebSocket:android",
         "@maven//:androidx_annotation_annotation",
         "@maven//:com_google_guava_guava",
+        "@maven//:org_java_websocket_Java_WebSocket",
         "@third_party//filament/android:filament_android_no_jni",
     ],
 )

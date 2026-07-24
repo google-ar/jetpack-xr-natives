@@ -228,7 +228,7 @@ absl::Status ProcessTextureInfoFromNode(
       // -1 is the Default material. Access the default material by passing
       // absl::nullopt into GetMaterial.
       const Material& m = model.GetMaterial(
-          material_index == -1 ? absl::nullopt
+          material_index == -1 ? std::nullopt
                                : absl::optional<uint32_t>(material_index));
 
       if (m.extensions.mask) {

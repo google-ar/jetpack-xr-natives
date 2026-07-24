@@ -18,6 +18,7 @@
 
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
+#include <time.h>
 
 #include <functional>
 #include <memory>
@@ -39,7 +40,6 @@
 #include "core/render/android/android_external_texture_surface.h"
 #include "core/render/texture.h"
 #include "core/view/framework/view.h"
-#include "split_engine/materials/texture_external_material.h"
 
 namespace imp::window {
 
@@ -65,7 +65,25 @@ OpenGLImGuiRenderer::OpenGLImGuiRenderer(BaseView& base_view,
 }
 
 OpenGLImGuiRenderer::~OpenGLImGuiRenderer() {
-  ImGui::DestroyContext(imgui_context_);
+  texture_ = OwnedOrBorrowedTexturePtr();
+  texture_surface_ptr_ = nullptr;
+
+  if (IsReady()) {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplAndroid_Shutdown();
+
+    eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                   EGL_NO_CONTEXT);
+    if (egl_surface_ != EGL_NO_SURFACE) {
+      eglDestroySurface(egl_display_, egl_surface_);
+    }
+    if (egl_context_ != EGL_NO_CONTEXT) {
+      eglDestroyContext(egl_display_, egl_context_);
+    }
+    if (window_) {
+      ANativeWindow_release(window_);
+    }
+  }
   imgui_context_ = nullptr;
 }
 
@@ -78,54 +96,56 @@ void OpenGLImGuiRenderer::Initialize(float2 texture_resolution) {
   io.DisplayFramebufferScale.y = 1.0f;
   flip_vertical_ = false;
 
-  surface_future_ = imp::AndroidExternalTextureSurface::CreateAsync(
-      base_view_, ContentSecurityLevel::kNone,
-      imp::kAndroidExternalTextureSurfaceConfigMono);
-  surface_future_
-      .Then([this, texture_resolution](
-                absl::StatusOr<
-                    std::unique_ptr<imp::AndroidExternalTextureSurface>>
-                    surface) {
-        if (!surface.ok()) {
-          return absl::InternalError(
-              "Failed to create AndroidExternalTextureSurface");
-        }
-        texture_surface_ptr_ = *std::move(surface);
+  surface_future_ =
+      imp::AndroidExternalTextureSurface::CreateAsync(
+          base_view_, ContentSecurityLevel::kNone,
+          imp::kAndroidExternalTextureSurfaceConfigMono)
+          .Then([this, texture_resolution](
+                    absl::StatusOr<
+                        std::unique_ptr<imp::AndroidExternalTextureSurface>>
+                        surface) {
+            if (!surface.ok()) {
+              return absl::InternalError(
+                  "Failed to create AndroidExternalTextureSurface");
+            }
+            texture_surface_ptr_ = *std::move(surface);
 
-        absl::Status status_resize = texture_surface_ptr_->SetDefaultBufferSize(
-            int2(texture_resolution.x, texture_resolution.y));
-        if (!status_resize.ok()) {
-          return absl::InternalError("Failed to set default buffer size: ");
-        }
+            absl::Status status_resize =
+                texture_surface_ptr_->SetDefaultBufferSize(
+                    int2(texture_resolution.x, texture_resolution.y));
+            if (!status_resize.ok()) {
+              return absl::InternalError("Failed to set default buffer size: ");
+            }
 
-        texture_ = texture_surface_ptr_->BorrowTexture();
-        if (!texture_) {
-          return absl::InternalError(
-              "Failed to get texture from AndroidExternalTextureSurface");
-        }
-        env_ = base_view_.GetContext().GetJniEnv();
-        jobject surface_reference =
-            texture_surface_ptr_->GetSurface()->Reference();
-        if (surface_reference == nullptr) {
-          return absl::InternalError("Failed to get surface reference");
-        }
-        window_ = ANativeWindow_fromSurface(env_, surface_reference);
-        ANativeWindow_acquire(window_);
-        if (!window_) {
-          return absl::InternalError(
-              "Failed to get ANativeWindow from AndroidExternalTextureSurface");
-        }
+            texture_ = texture_surface_ptr_->BorrowTexture();
+            if (!texture_) {
+              return absl::InternalError(
+                  "Failed to get texture from AndroidExternalTextureSurface");
+            }
+            env_ = base_view_.GetContext().GetJniEnv();
+            jobject surface_reference =
+                texture_surface_ptr_->GetSurface()->Reference();
+            if (surface_reference == nullptr) {
+              return absl::InternalError("Failed to get surface reference");
+            }
+            window_ = ANativeWindow_fromSurface(env_, surface_reference);
+            ANativeWindow_acquire(window_);
+            if (!window_) {
+              return absl::InternalError(
+                  "Failed to get ANativeWindow from "
+                  "AndroidExternalTextureSurface");
+            }
 
-        absl::Status status_ogl = InitializeOGL();
-        if (!status_ogl.ok()) {
-          return absl::InternalError(
-              "Failed to initialize OGL: trying to execute "
-              "AndroidExternalTextureSurfaceCleanup");
-        }
+            absl::Status status_ogl = InitializeOGL();
+            if (!status_ogl.ok()) {
+              return absl::InternalError(
+                  "Failed to initialize OGL: trying to execute "
+                  "AndroidExternalTextureSurfaceCleanup");
+            }
 
-        return absl::OkStatus();
-      })
-      .KeptBy(&base_view_);
+            return absl::OkStatus();
+          });
+  surface_future_.KeptBy(&rememberer_);
 }
 
 // resets the windows display size
@@ -142,12 +162,10 @@ void OpenGLImGuiRenderer::SetRenderTargetDisplaySize(int width, int height,
   flip_vertical_ = flip_vertical;
 }
 
-// run the main render loop and do lazy initialization of the OGL context, AET,
-// and the ImGui context
 void OpenGLImGuiRenderer::RenderImGui(float timeStepInSeconds,
                                       std::function<void()> render_imgui_fn) {
   // wait until the OGL context is initialized before rendering
-  if (!is_ogl_initialized_) {
+  if (!IsReady()) {
     return;
   }
 
@@ -155,6 +173,19 @@ void OpenGLImGuiRenderer::RenderImGui(float timeStepInSeconds,
     IMP_LOG(imp::ERROR) << "OpelGLImGuiHelper::RenderImGui: mImGuiContext is null";
     return;
   }
+
+  EGLDisplay prev_display = eglGetCurrentDisplay();
+  EGLSurface prev_draw_surface = eglGetCurrentSurface(EGL_DRAW);
+  EGLSurface prev_read_surface = eglGetCurrentSurface(EGL_READ);
+  EGLContext prev_context = eglGetCurrentContext();
+
+  if (eglMakeCurrent(egl_display_, egl_surface_, egl_surface_, egl_context_) !=
+      EGL_TRUE) {
+    IMP_LOG(imp::ERROR) << "OpenGLImGuiRenderer::RenderImGui: failed to make EGL "
+                  "context current";
+    return;
+  }
+
   ImGui::SetCurrentContext(imgui_context_);
   ImGuiIO& io = ImGui::GetIO();
   io.DeltaTime = timeStepInSeconds;
@@ -173,8 +204,28 @@ void OpenGLImGuiRenderer::RenderImGui(float timeStepInSeconds,
                kClearColor.z * kClearColor.w, kClearColor.w);
   glClear(GL_COLOR_BUFFER_BIT);
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-  eglSwapBuffers(egl_display_, egl_surface_);
-  // noop if not android
+
+  if (active_window_ != window_) {
+    static PFNEGLPRESENTATIONTIMEANDROIDPROC eglPresentationTimeANDROID =
+        (PFNEGLPRESENTATIONTIMEANDROIDPROC)eglGetProcAddress(
+            "eglPresentationTimeANDROID");
+    if (eglPresentationTimeANDROID) {
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC, &ts);
+      khronos_utime_nanoseconds_t nsecs =
+          (khronos_utime_nanoseconds_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+      eglPresentationTimeANDROID(egl_display_, egl_surface_, nsecs);
+    }
+  }
+
+  if (eglSwapBuffers(egl_display_, egl_surface_) != EGL_TRUE) {
+    IMP_LOG(imp::ERROR) << "eglSwapBuffers failed with error: 0x" << std::hex
+               << eglGetError();
+  }
+
+  // Restore the original thread-local EGL context
+  eglMakeCurrent(prev_display, prev_draw_surface, prev_read_surface,
+                 prev_context);
 }
 
 // Initialize the OGL context and ImGui.
@@ -191,12 +242,10 @@ absl::Status OpenGLImGuiRenderer::InitializeOGL() {
     IMP_LOG(imp::ERROR) << "eglInitialize() returned with an error";
     return absl::InternalError("eglInitialize() returned with an error");
   }
-  const EGLint egl_attributes[] = {EGL_BLUE_SIZE,    8,
-                                   EGL_GREEN_SIZE,   8,
-                                   EGL_RED_SIZE,     8,
-                                   EGL_DEPTH_SIZE,   24,
-                                   EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-                                   EGL_NONE};
+  const EGLint egl_attributes[] = {
+      EGL_BLUE_SIZE,  8, EGL_GREEN_SIZE, 8,  EGL_RED_SIZE,     8,
+      EGL_ALPHA_SIZE, 8, EGL_DEPTH_SIZE, 24, EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+      EGL_NONE};
   EGLint num_configs = 0;
   if (eglChooseConfig(egl_display_, egl_attributes, nullptr, 0, &num_configs) !=
       EGL_TRUE) {
@@ -204,22 +253,23 @@ absl::Status OpenGLImGuiRenderer::InitializeOGL() {
     return absl::InternalError("eglChooseConfig() returned with an error");
   }
   // Get the first matching config
-  EGLConfig egl_config;
-  eglChooseConfig(egl_display_, egl_attributes, &egl_config, 1, &num_configs);
+  eglChooseConfig(egl_display_, egl_attributes, &egl_config_, 1, &num_configs);
   EGLint egl_format;
-  eglGetConfigAttrib(egl_display_, egl_config, EGL_NATIVE_VISUAL_ID,
+  eglGetConfigAttrib(egl_display_, egl_config_, EGL_NATIVE_VISUAL_ID,
                      &egl_format);
   ANativeWindow_setBuffersGeometry(window_, 0, 0, egl_format);
   const EGLint egl_context_attributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3,
                                            EGL_NONE};
-  egl_context_ = eglCreateContext(egl_display_, egl_config, EGL_NO_CONTEXT,
+  egl_context_ = eglCreateContext(egl_display_, egl_config_, EGL_NO_CONTEXT,
                                   egl_context_attributes);
   if (egl_context_ == EGL_NO_CONTEXT) {
     IMP_LOG(imp::ERROR) << "eglCreateContext() returned EGL_NO_CONTEXT";
     return absl::InternalError("eglCreateContext() returned EGL_NO_CONTEXT");
   }
-  egl_surface_ =
-      eglCreateWindowSurface(egl_display_, egl_config, window_, nullptr);
+
+  active_window_ = window_;
+  egl_surface_ = eglCreateWindowSurface(egl_display_, egl_config_,
+                                        active_window_, nullptr);
   if (egl_surface_ == EGL_NO_SURFACE) {
     IMP_LOG(imp::ERROR) << "eglCreateWindowSurface() returned EGL_NO_SURFACE";
     return absl::InternalError(
@@ -229,7 +279,7 @@ absl::Status OpenGLImGuiRenderer::InitializeOGL() {
 
   ImGui::StyleColorsDark();
 
-  ImGui_ImplAndroid_Init(window_);
+  ImGui_ImplAndroid_Init(active_window_);
 
   ImGui_ImplOpenGL3_Init("#version 300 es");
   ImGuiIO& io = ImGui::GetIO();
@@ -239,11 +289,18 @@ absl::Status OpenGLImGuiRenderer::InitializeOGL() {
   ImGui::GetStyle().ScaleAllSizes(3.0f);
   io.Fonts->Build();
 
-  if (window_) {
-    if (notify_texture_ready_callback_ != nullptr) {
-      notify_texture_ready_callback_();
-    }
-    is_ogl_initialized_ = true;
+  if (!window_) {
+    return absl::InternalError(
+        "InitializeOGL: failed to initialize OGL, window_ is null");
+  }
+
+  if (notify_texture_ready_callback_ != nullptr) {
+    notify_texture_ready_callback_();
+  }
+
+  if (cached_remote_window_ != nullptr) {
+    SetRenderTargetWindow(cached_remote_window_);
+    cached_remote_window_ = nullptr;
   }
 
   return absl::OkStatus();
@@ -259,6 +316,55 @@ void OpenGLImGuiRenderer::SetTextureBufferSize(int width, int height) {
     IMP_LOG(imp::ERROR) << "Failed to set default buffer size: " << status_resize;
     return;
   }
+}
+
+void OpenGLImGuiRenderer::SetRenderTargetWindow(void* window) {
+  if (imgui_context_) {
+    ImGui::SetCurrentContext(imgui_context_);
+  }
+  if (!IsReady()) {
+    cached_remote_window_ = window;
+    return;
+  }
+
+  ANativeWindow* target_window = static_cast<ANativeWindow*>(window);
+  if (!target_window) {
+    target_window = window_;
+  }
+
+  if (active_window_ == target_window) {
+    return;
+  }
+
+  // Make EGL context not current
+  eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+  if (egl_surface_ != EGL_NO_SURFACE) {
+    eglDestroySurface(egl_display_, egl_surface_);
+    egl_surface_ = EGL_NO_SURFACE;
+  }
+
+  active_window_ = target_window;
+
+  // Set the buffers geometry of the new window to match our EGL config format
+  EGLint egl_format = 0;
+  eglGetConfigAttrib(egl_display_, egl_config_, EGL_NATIVE_VISUAL_ID,
+                     &egl_format);
+  ANativeWindow_setBuffersGeometry(active_window_, 0, 0, egl_format);
+
+  egl_surface_ = eglCreateWindowSurface(egl_display_, egl_config_,
+                                        active_window_, nullptr);
+  if (egl_surface_ == EGL_NO_SURFACE) {
+    IMP_LOG(imp::ERROR) << "eglCreateWindowSurface failed with error: 0x" << std::hex
+               << eglGetError();
+  }
+
+  // Restore current context
+  eglMakeCurrent(egl_display_, egl_surface_, egl_surface_, egl_context_);
+
+  // Reinitialize the dear imgui Android backend for the active window
+  ImGui_ImplAndroid_Shutdown();
+  ImGui_ImplAndroid_Init(active_window_);
 }
 
 }  // namespace imp::window

@@ -33,11 +33,16 @@ namespace imp::editor {
 class TransformWidgetAspectTranslate : public TransformWidgetAspect {
  protected:
   AspectType GetAspectType() const override { return AspectType::kTranslate; }
+  void UpdateWidgetTransform() override;
   void UpdateAspect(bool commit,
                     std::vector<std::unique_ptr<Command>>& commands) override;
   float3 GetAxis() const override;
+  float3 GetAxisFromState() const override;
 
  private:
+  float3 GetSingleAxisDelta(const float3& world_delta) const;
+  float3 GetDualAxisDelta(const float3& world_delta, const float3& axis) const;
+
   TransformWidgetAspectTranslateState state_;
 
  public:

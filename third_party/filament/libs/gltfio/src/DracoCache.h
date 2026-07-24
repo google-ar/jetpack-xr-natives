@@ -18,7 +18,6 @@
 #define GLTFIO_DRACO_CACHE_H
 
 #include "third_party/cgltf/cgltf.h"
-
 #include "robin_map/include/tsl/robin_map.h"
 
 #include <memory>

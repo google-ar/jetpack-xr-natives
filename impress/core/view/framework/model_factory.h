@@ -48,17 +48,17 @@ class ModelFactory {
   // invalid.
   Future<NodeHandle> LoadModel(
       const AssetDefinition& asset_definition,
-      std::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      std::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
   // Loads a gLTF model into a Node asynchronously from a url.
   Future<NodeHandle> LoadModel(
       absl::string_view asset_url,
-      std::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      std::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
   // Loads a gLTF model into a Node asynchronously from an absl::Cord.
   Future<NodeHandle> LoadModel(
       absl::Cord contents, absl::string_view asset_url,
-      std::optional<GltfAsset::LoadOptions> options = absl::nullopt);
+      std::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
  private:
   BaseView* view_;

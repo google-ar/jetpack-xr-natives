@@ -56,6 +56,9 @@ struct EditorInfo {
     kDefault,
     // The application is an XR application using SplitEngine.
     kXrSplitEngineApp,
+    // The application is a non-XR SplitEngine application (e.g. on Android
+    // phone).
+    kSplitEngineApp,
   };
 
   virtual ~EditorInfo() = default;
@@ -92,6 +95,9 @@ struct EditorInfo {
 
   // Returns true if the Editor has frames to step through.
   virtual bool HasFramesToStep() const = 0;
+
+  // Returns the current PlatformMode.
+  virtual PlatformMode GetPlatformMode() const = 0;
 };
 
 // Helper that returns true if the editor is enabled and either in edit mode or

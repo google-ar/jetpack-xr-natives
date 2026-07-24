@@ -91,7 +91,7 @@ utils::tribool ToTribool(
         VARIANT_FILTER_OPTION_INDETERMINATE:
     case imp::MaterialPreCompileOptions::MaterialPreCompileByView::
         VARIANT_FILTER_OPTION_UNSPECIFIED:
-      return utils::tribool(utils::tribool::Indeterminate);
+      return utils::tribool(utils::tribool::kIndeterminate);
   }
 }
 

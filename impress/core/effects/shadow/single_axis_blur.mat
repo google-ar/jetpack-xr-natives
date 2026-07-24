@@ -15,6 +15,13 @@
 material {
   name : "Contact Shadow Single Axis Blur",
   depthWrite: false,
+  constants : [
+    {
+      name : enableColorConversion,
+      type : bool,
+      default : false
+    }
+  ],
   parameters: [
     { type: sampler2d, name: renderTargetSampler },
     { type: float, name: sizeNormalized },

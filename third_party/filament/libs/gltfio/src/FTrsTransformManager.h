@@ -18,17 +18,18 @@
 #define GLTFIO_FTRSTRANSFORMMANAGER_H
 
 #include "downcast.h"
-#include "gltfio/math.h"
-#include "filament/libs/math/include/math/quat.h"
-#include "filament/libs/utils/include/utils/debug.h"
 
+#include <gltfio/math.h>
 #include <gltfio/TrsTransformManager.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/SingleInstanceComponentManager.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
+#include "filament/libs/utils/include/utils/SingleInstanceComponentManager.h"
 #include "filament/libs/utils/include/utils/Slice.h"
+
+#include "filament/libs/math/include/math/quat.h"
 
 namespace filament::gltfio {
 

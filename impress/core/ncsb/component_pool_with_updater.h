@@ -17,8 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_NCSB_COMPONENT_POOL_WITH_UPDATER_H_
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_COMPONENT_POOL_WITH_UPDATER_H_
 
+#include <cstddef>
+
 #include "core/common/trace.h"
 #include "core/config.h"
+#include "core/ncsb/base_component_pool.h"
 #include "core/ncsb/component_pool.h"
 #include "core/ncsb/update_system.h"
 #include "core/view/base_view.h"
@@ -86,28 +89,25 @@ void ComponentPoolWithUpdater<T>::UpdateUsingAllocator(
   // LINT.IfChange
   if constexpr (component_traits::kHasUpdateFunc<T>) {
     IMP_TRACE_NAME_TEMPLATED("Update", T);
-    this->allocator_->ForEach([&frame_time, this](T* component) {
+
+    constexpr size_t kSubset = (T::kUpdateMode == T::UpdateMode::kAlwaysUpdate)
+                                   ? BaseComponentPool::kSubsetReady
+                                   : BaseComponentPool::kSubsetActive;
 #if IMP_RUNTIME(DEV)
-      // Skip components that should not be updated in editor draft/pause mode.
-      if constexpr (!component_traits::kShouldRunInEditMode<T>) {
-        if (editor::ShouldNotUpdate(view_.GetRegistry()) &&
-            !component->IsEditorStaging()) {
-          return;
-        }
-      }
-#endif  // IMP_RUNTIME(DEV)
-      if constexpr (T::kUpdateMode == T::UpdateMode::kAlwaysUpdate) {
-        // Skip components where async setup is still running.
-        if (!component->IsRunningAsyncSetup()) {
+    this->allocator_->template ForEach<kSubset>(
+        [&frame_time, this](T* component) {
+          if constexpr (!component_traits::kShouldRunInEditMode<T>) {
+            if (editor::ShouldNotUpdate(view_.GetRegistry()) &&
+                !component->IsEditorStaging()) {
+              return;
+            }
+          }
           component->Update(frame_time);
-        }
-      } else {
-        // Component cannot be active until async setup is complete.
-        if (component->IsActive()) {
-          component->Update(frame_time);
-        }
-      }
-    });
+        });
+#else
+    this->allocator_->template ForEach<kSubset>(
+        [&frame_time](T* component) { component->Update(frame_time); });
+#endif
   }
   // LINT.ThenChange(//depot/google3/third_party/impress/core/ncsb/component_pool.h)
 }

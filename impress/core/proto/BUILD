@@ -350,7 +350,31 @@ cc_library(
     name = "proto_traits",
     hdrs = ["proto_traits.h"],
     deps = [
+        "//core/async:future",
+        "//core/common:copyable_ptr",
+        "//core/common:one_of",
+        "//core/common:optional_with_default",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:optional",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "async_preload_visitor",
+    hdrs = ["async_preload_visitor.h"],
+    copts = imp_copts(),
+    linkstatic = True,
+    deps = [
+        ":proto_common",
+        ":proto_traits",
+        "//core/async:future",
+        "//core/common:copyable_ptr",
+        "//core/common:one_of",
+        "//core/common:optional_with_default",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
     ],
     alwayslink = 1,
 )
@@ -375,7 +399,11 @@ imp_cc_proto_library(
 cc_library(
     name = "test_native_h",
     hdrs = ["test_native.h"],
-    deps = [":proto_common"],
+    deps = [
+        ":proto_common",
+        "//core/async:future",
+        "@com_google_absl//absl/status",
+    ],
     alwayslink = 1,
 )
 

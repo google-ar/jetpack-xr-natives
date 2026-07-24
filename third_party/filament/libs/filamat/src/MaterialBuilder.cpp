@@ -14,20 +14,9 @@
  * limitations under the License.
  */
 
-#include "filamat/MaterialBuilder.h"
-
-#include <filamat/Enums.h>
-#include <filamat/Package.h>
-
 #include "GLSLPostProcessor.h"
 #include "MaterialVariants.h"
 #include "PushConstantDefinitions.h"
-
-#include "sca/GLSLTools.h"
-
-#include "shaders/MaterialInfo.h"
-#include "shaders/ShaderGenerator.h"
-#include "shaders/UibGenerator.h"
 
 #include "eiff/BlobDictionary.h"
 #include "eiff/ChunkContainer.h"
@@ -40,6 +29,12 @@
 #include "eiff/MaterialTextChunk.h"
 #include "eiff/ShaderEntry.h"
 
+#include "sca/GLSLTools.h"
+
+#include "shaders/MaterialInfo.h"
+#include "shaders/ShaderGenerator.h"
+#include "shaders/UibGenerator.h"
+
 #include <private/filament/BufferInterfaceBlock.h>
 #include <private/filament/ConstantInfo.h>
 #include <private/filament/SamplerInterfaceBlock.h>
@@ -49,19 +44,23 @@
 #include <filament/MaterialChunkType.h>
 #include <filament/MaterialEnums.h>
 
+#include <filamat/Enums.h>
+#include <filamat/MaterialBuilder.h>
+#include <filamat/Package.h>
+
 #include <backend/DriverEnums.h>
 #include <backend/Program.h>
 
 #include "filament/libs/utils/include/utils/BitmaskEnum.h"
+#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Hash.h"
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Mutex.h"
-#include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/ostream.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 #include "filament/libs/math/include/math/vec3.h"
 
@@ -76,8 +75,8 @@
 #include <utility>
 #include <vector>
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 namespace filamat {
@@ -1383,6 +1382,13 @@ error:
         goto error;
     }
 
+    if (mProperties[size_t(Property::CLIP_SPACE_TRANSFORM)] &&
+        mProperties[size_t(Property::CLIP_SPACE_POSITION)]) {
+        LOG(WARNING) << "Warning: material \"" << mMaterialName.c_str()
+                     << "\" writes to both clipSpaceTransform and clipSpacePosition. "
+                     << "clipSpacePosition will take precedence and clipSpaceTransform will be ignored.";
+    }
+
     if (!runSemanticAnalysis(&info, semanticCodeGenParams)) {
         goto error;
     }
@@ -1512,10 +1518,10 @@ bool MaterialBuilder::checkMaterialLevelFeatures(MaterialInfo const& info) const
             }
             auto const& samplerList = info.sib.getSamplerInfoList();
             using SamplerInfo = SamplerInterfaceBlock::SamplerInfo;
-            if (std::any_of(samplerList.begin(), samplerList.end(),
-                    [](const SamplerInfo& sampler) {
-                        return sampler.type == SamplerType::SAMPLER_CUBEMAP_ARRAY;
-                    })) {
+            // TODO: can be replaced with std::ranges once client fully supports c++20
+            if (std::any_of(samplerList.begin(), samplerList.end(), [](const SamplerInfo& sampler) {
+                    return sampler.type == SamplerType::SAMPLER_CUBEMAP_ARRAY;
+                })) {
                 LOG(ERROR) << "Error: material \"" << mMaterialName.c_str()
                        << "\" has feature level " << +info.featureLevel
                        << " and uses a samplerCubemapArray.";

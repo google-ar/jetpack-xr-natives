@@ -32,6 +32,24 @@
  * this explicit rather than mysterious.
  */
 
+#include <viewer/AutomationEngine.h>
+#include <viewer/AutomationSpec.h>
+#include <viewer/Settings.h>
+#include <viewer/ViewerGui.h>
+
+#include <ktxreader/Ktx1Reader.h>
+#include <ktxreader/Ktx2Reader.h>
+
+#include <gltfio/Animator.h>
+#include <gltfio/AssetLoader.h>
+#include <gltfio/FilamentAsset.h>
+#include <gltfio/FilamentInstance.h>
+#include <gltfio/MaterialProvider.h>
+#include <gltfio/ResourceLoader.h>
+#include <gltfio/TextureProvider.h>
+
+#include <geometry/SurfaceOrientation.h>
+
 #include <filameshio/MeshReader.h>
 
 #include <filament/BufferObject.h>
@@ -56,39 +74,22 @@
 #include <filament/View.h>
 #include <filament/Viewport.h>
 
-#include <geometry/SurfaceOrientation.h>
-
-#include <viewer/ViewerGui.h>
-
 #include <camutils/Bookmark.h>
 #include <camutils/Manipulator.h>
 
-#include <gltfio/Animator.h>
-#include <gltfio/AssetLoader.h>
-#include <gltfio/FilamentAsset.h>
-#include <gltfio/FilamentInstance.h>
-#include <gltfio/MaterialProvider.h>
-#include <gltfio/ResourceLoader.h>
-#include <gltfio/TextureProvider.h>
+#include "filament/libs/utils/include/utils/EntityManager.h"
+#include "filament/libs/utils/include/utils/Log.h"
+#include "filament/libs/utils/include/utils/NameComponentManager.h"
 
-#include <materials/uberarchive.h>
-
-#include <ktxreader/Ktx1Reader.h>
-#include <ktxreader/Ktx2Reader.h>
-
+#include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/vec2.h"
 #include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/vec4.h"
-#include "filament/libs/math/include/math/mat4.h"
-
-#include "filament/libs/utils/include/utils/EntityManager.h"
-#include "filament/libs/utils/include/utils/NameComponentManager.h"
-#include "filament/libs/utils/include/utils/Log.h"
-
-#include <stb_image.h>
 
 #include <emscripten.h>
 #include <emscripten/bind.h>
+#include <materials/uberarchive.h>
+#include <stb_image.h>
 
 // Avoid warnings for deprecated Filament APIs.
 #pragma clang diagnostic push
@@ -295,6 +296,12 @@ value_array<filament::math::quat>("quat")
     .element(&filament::math::quat::y)
     .element(&filament::math::quat::z)
     .element(&filament::math::quat::w);
+
+value_array<filament::math::quatf>("quatf")
+    .element(&filament::math::quatf::x)
+    .element(&filament::math::quatf::y)
+    .element(&filament::math::quatf::z)
+    .element(&filament::math::quatf::w);
 
 value_array<Viewport>("Viewport")
     .element(&Viewport::left)
@@ -703,7 +710,9 @@ class_<Renderer>("Renderer")
     .function("getFrameToSkipCount", &Renderer::getFrameToSkipCount)
     .function("_setClearOptions", &Renderer::setClearOptions, allow_raw_pointers())
     .function("getClearOptions", &Renderer::getClearOptions)
-    .function("setPresentationTime", &Renderer::setPresentationTime)
+    .function("setPresentationTime", select_overload<void(int64_t)>(&Renderer::setPresentationTime))
+    .function("setDesiredPresentationTime", select_overload<void(int64_t)>(&Renderer::setDesiredPresentationTime))
+    .function("setRenderingDeadline", select_overload<void(int64_t)>(&Renderer::setRenderingDeadline))
     .function("setVsyncTime", &Renderer::setVsyncTime)
     .function("skipFrame", &Renderer::skipFrame)
     .function("shouldRenderFrame", &Renderer::shouldRenderFrame)
@@ -769,6 +778,7 @@ class_<View>("View")
     .function("getAntiAliasing", &View::getAntiAliasing)
     .function("setSampleCount", &View::setSampleCount)
     .function("getSampleCount", &View::getSampleCount)
+    .function("getVisibleRenderableCount", &View::getVisibleRenderableCount)
     .function("setRenderTarget", EMBIND_LAMBDA(void, (View* self, RenderTarget* renderTarget), {
         self->setRenderTarget(renderTarget);
     }), allow_raw_pointers())
@@ -1578,12 +1588,6 @@ class_<Texture>("Texture")
             Engine* engine, uint8_t level, PixelBufferDescriptor pbd), {
         self->setImage(*engine, level, std::move(*pbd.pbd));
     }), allow_raw_pointers())
-    .function("_setImageCube", EMBIND_LAMBDA(void, (Texture* self,
-            Engine* engine, uint8_t level, PixelBufferDescriptor pbd), {
-        uint32_t faceSize = pbd.pbd->size / 6;
-        Texture::FaceOffsets offsets(faceSize);
-        self->setImage(*engine, level, std::move(*pbd.pbd), offsets);
-    }), allow_raw_pointers())
     .function("_getWidth", EMBIND_LAMBDA(size_t, (Texture* self,
             Engine* engine, uint8_t level), {
         return self->getWidth(level);
@@ -1827,16 +1831,25 @@ class_<Ktx1Bundle>("Ktx1Bundle")
 
     .function("isCubemap", &Ktx1Bundle::isCubemap)
     .function("_getBlob", EMBIND_LAMBDA(BufferDescriptor, (Ktx1Bundle* self, KtxBlobIndex index), {
-        uint8_t* data;
-        uint32_t size;
-        self->getBlob(index, &data, &size);
+        uint8_t* data = nullptr;
+        uint32_t size = 0;
+        if (!self->getBlob(index, &data, &size)) {
+            utils::slog.e << "Missing or invalid KTX blob at mip level " << index.mipLevel
+                          << ", array index " << index.arrayIndex << ", face "
+                          << index.cubeFace << utils::io::endl;
+            return BufferDescriptor(nullptr, 0);
+        }
         return BufferDescriptor(data, size);
     }), allow_raw_pointers())
     .function("_getCubeBlob", EMBIND_LAMBDA(BufferDescriptor,
             (Ktx1Bundle* self, uint32_t miplevel), {
-        uint8_t* data;
-        uint32_t size;
-        self->getBlob({miplevel}, &data, &size);
+        uint8_t* data = nullptr;
+        uint32_t size = 0;
+        if (!self->getBlob({miplevel}, &data, &size)) {
+            utils::slog.e << "Missing or invalid KTX cubemap mip level " << miplevel
+                          << utils::io::endl;
+            return BufferDescriptor(nullptr, 0);
+        }
         return BufferDescriptor(data, size * 6);
     }), allow_raw_pointers())
 
@@ -2251,9 +2264,253 @@ class_<ResourceLoader>("gltfio$ResourceLoader")
 
 class_<Settings>("Settings");
 
+value_object<GenericToneMapperSettings>("GenericToneMapperSettings")
+    .field("contrast", &GenericToneMapperSettings::contrast)
+    .field("midGrayIn", &GenericToneMapperSettings::midGrayIn)
+    .field("midGrayOut", &GenericToneMapperSettings::midGrayOut)
+    .field("hdrMax", &GenericToneMapperSettings::hdrMax);
+
+value_object<AgxToneMapperSettings>("AgxToneMapperSettings")
+    .field("look", &AgxToneMapperSettings::look);
+
+value_object<ColorGradingSettings>("ColorGradingSettings")
+    .field("enabled", &ColorGradingSettings::enabled)
+    .field("linkedCurves", &ColorGradingSettings::linkedCurves)
+    .field("luminanceScaling", &ColorGradingSettings::luminanceScaling)
+    .field("gamutMapping", &ColorGradingSettings::gamutMapping)
+    .field("quality", &ColorGradingSettings::quality)
+    .field("toneMapping", &ColorGradingSettings::toneMapping)
+    .field("customLut", &ColorGradingSettings::customLut)
+    .field("agxToneMapper", &ColorGradingSettings::agxToneMapper)
+    .field("colorspace", &ColorGradingSettings::colorspace)
+    .field("genericToneMapper", &ColorGradingSettings::genericToneMapper)
+    .field("shadows", &ColorGradingSettings::shadows)
+    .field("midtones", &ColorGradingSettings::midtones)
+    .field("highlights", &ColorGradingSettings::highlights)
+    .field("ranges", &ColorGradingSettings::ranges)
+    .field("outRed", &ColorGradingSettings::outRed)
+    .field("outGreen", &ColorGradingSettings::outGreen)
+    .field("outBlue", &ColorGradingSettings::outBlue)
+    .field("slope", &ColorGradingSettings::slope)
+    .field("offset", &ColorGradingSettings::offset)
+    .field("power", &ColorGradingSettings::power)
+    .field("gamma", &ColorGradingSettings::gamma)
+    .field("midPoint", &ColorGradingSettings::midPoint)
+    .field("scale", &ColorGradingSettings::scale)
+    .field("exposure", &ColorGradingSettings::exposure)
+    .field("nightAdaptation", &ColorGradingSettings::nightAdaptation)
+    .field("temperature", &ColorGradingSettings::temperature)
+    .field("tint", &ColorGradingSettings::tint)
+    .field("contrast", &ColorGradingSettings::contrast)
+    .field("vibrance", &ColorGradingSettings::vibrance)
+    .field("saturation", &ColorGradingSettings::saturation);
+
+value_object<DynamicLightingSettings>("DynamicLightingSettings")
+    .field("zLightNear", &DynamicLightingSettings::zLightNear)
+    .field("zLightFar", &DynamicLightingSettings::zLightFar);
+
+value_object<FogSettings>("FogSettings")
+    // JavaScript binding for fogColorTexture is not yet supported, must use default value.
+    ;
+
+value_object<ViewSettings>("ViewSettings")
+    .field("antiAliasing", &ViewSettings::antiAliasing)
+    .field("dithering", &ViewSettings::dithering)
+    .field("shadowType", &ViewSettings::shadowType)
+    .field("postProcessingEnabled", &ViewSettings::postProcessingEnabled)
+    .field("ssao", &ViewSettings::ssao)
+    .field("screenSpaceReflections", &ViewSettings::screenSpaceReflections)
+    .field("bloom", &ViewSettings::bloom)
+    .field("dof", &ViewSettings::dof)
+    .field("dsr", &ViewSettings::dsr)
+    .field("fog", &ViewSettings::fog)
+    .field("msaa", &ViewSettings::msaa)
+    .field("renderQuality", &ViewSettings::renderQuality)
+    .field("taa", &ViewSettings::taa)
+    .field("vignette", &ViewSettings::vignette)
+    .field("vsmShadowOptions", &ViewSettings::vsmShadowOptions)
+    .field("guardBand", &ViewSettings::guardBand)
+    .field("stereoscopicOptions", &ViewSettings::stereoscopicOptions)
+    .field("colorGrading", &ViewSettings::colorGrading)
+    .field("dynamicLighting", &ViewSettings::dynamicLighting)
+    .field("fogSettings", &ViewSettings::fogSettings)
+    .field("blendMode", &ViewSettings::blendMode)
+    .field("stencilBufferEnabled", &ViewSettings::stencilBufferEnabled)
+    .field("visibleLayers", &ViewSettings::visibleLayers);
+
+value_object<LightDefinition>("LightDefinition")
+    .field("type", &LightDefinition::type)
+    .field("position", &LightDefinition::position)
+    .field("direction", &LightDefinition::direction)
+    .field("color", &LightDefinition::color)
+    .field("intensity", &LightDefinition::intensity)
+    .field("falloff", &LightDefinition::falloff)
+    .field("spotInner", &LightDefinition::spotInner)
+    .field("spotOuter", &LightDefinition::spotOuter)
+    .field("sunHaloSize", &LightDefinition::sunHaloSize)
+    .field("sunHaloFalloff", &LightDefinition::sunHaloFalloff)
+    .field("sunAngularRadiusDeg", &LightDefinition::sunAngularRadiusDeg)
+    .field("castShadows", &LightDefinition::castShadows)
+    .field("shadowOptions", &LightDefinition::shadowOptions);
+
+register_vector<LightDefinition>("LightDefinitionVector");
+
+value_object<LightSettings>("LightSettings")
+    .field("enableShadows", &LightSettings::enableShadows)
+    .field("enableSunlight", &LightSettings::enableSunlight)
+    .field("softShadowOptions", &LightSettings::softShadowOptions)
+    .field("iblIntensity", &LightSettings::iblIntensity)
+    .field("iblRotation", &LightSettings::iblRotation)
+    .field("sunlight", &LightSettings::sunlight)
+    .field("lights", &LightSettings::lights);
+
+value_object<CameraSettings>("CameraSettings")
+    .field("center", &CameraSettings::center)
+    .field("lookAt", &CameraSettings::lookAt)
+    .field("up", &CameraSettings::up)
+    .field("horizontalFov", &CameraSettings::horizontalFov)
+    .field("near", &CameraSettings::near)
+    .field("far", &CameraSettings::far)
+    .field("focalLength", &CameraSettings::focalLength)
+    .field("aperture", &CameraSettings::aperture)
+    .field("shutterSpeed", &CameraSettings::shutterSpeed)
+    .field("sensitivity", &CameraSettings::sensitivity)
+    .field("focusDistance", &CameraSettings::focusDistance)
+    .field("eyeOcularDistance", &CameraSettings::eyeOcularDistance)
+    .field("eyeToeIn", &CameraSettings::eyeToeIn)
+    .field("projection", &CameraSettings::projection)
+    .field("enabled", &CameraSettings::enabled)
+    .field("scaling", &CameraSettings::scaling)
+    .field("shift", &CameraSettings::shift);
+
+value_object<AnimationSettings>("AnimationSettings")
+    .field("enabled", &AnimationSettings::enabled)
+    .field("time", &AnimationSettings::time)
+    .field("speed", &AnimationSettings::speed);
+
+value_object<RenderSettings>("RenderSettings")
+    .field("clearOptions", &RenderSettings::clearOptions)
+    .field("frameRateOptions", &RenderSettings::frameRateOptions);
+
+value_object<ViewerOptions>("ViewerOptions")
+    .field("groundShadowStrength", &ViewerOptions::groundShadowStrength)
+    .field("groundPlaneEnabled", &ViewerOptions::groundPlaneEnabled)
+    .field("skyboxEnabled", &ViewerOptions::skyboxEnabled)
+    .field("backgroundColor", &ViewerOptions::backgroundColor)
+    .field("autoScaleEnabled", &ViewerOptions::autoScaleEnabled)
+    .field("autoInstancingEnabled", &ViewerOptions::autoInstancingEnabled);
+
+value_object<DebugOptions>("DebugOptions")
+    .field("skipFrames", &DebugOptions::skipFrames);
+
+value_object<Settings>("viewer$Settings")
+    .field("view", &Settings::view)
+    .field("lighting", &Settings::lighting)
+    .field("viewer", &Settings::viewer)
+    .field("camera", &Settings::camera)
+    .field("animation", &Settings::animation)
+    .field("render", &Settings::render)
+    .field("debug", &Settings::debug);
+
 class_<JsonSerializer>("JsonSerializer")
     .constructor<>()
-    .function("writeJson", &JsonSerializer::writeJson);
+    .function("writeJson", &JsonSerializer::writeJson)
+    .function("readJson", EMBIND_LAMBDA(bool, (JsonSerializer* self, std::string json, Settings* settings), {
+        return self->readJson(json.c_str(), json.length(), settings);
+    }), allow_raw_pointers());
+
+class_<AutomationSpec>("AutomationSpec")
+    .class_function("generate", EMBIND_LAMBDA(AutomationSpec*, (std::string json), {
+        return AutomationSpec::generate(json.c_str(), json.length());
+    }), allow_raw_pointers())
+    .class_function("generateDefaultTestCases", &AutomationSpec::generateDefaultTestCases, allow_raw_pointers())
+    .function("size", &AutomationSpec::size)
+    .function("get", &AutomationSpec::get, allow_raw_pointers())
+    .function("getName", EMBIND_LAMBDA(std::string, (AutomationSpec* self, size_t index), {
+        return std::string(self->getName(index));
+    }), allow_raw_pointers());
+
+value_object<AutomationEngine::Options>("AutomationEngine$Options")
+    .field("sleepDuration", &AutomationEngine::Options::sleepDuration)
+    .field("minFrameCount", &AutomationEngine::Options::minFrameCount)
+    .field("verbose", &AutomationEngine::Options::verbose)
+    .field("exportScreenshots", &AutomationEngine::Options::exportScreenshots)
+    .field("exportSettings", &AutomationEngine::Options::exportSettings)
+    .field("exportFormat", &AutomationEngine::Options::exportFormat);
+
+class_<AutomationEngine>("AutomationEngine")
+    .constructor<const AutomationSpec*, Settings*>(allow_raw_pointers())
+    .class_function("createFromJSON", EMBIND_LAMBDA(AutomationEngine*, (std::string json), {
+        return AutomationEngine::createFromJSON(json.c_str(), json.length());
+    }), allow_raw_pointers())
+    .class_function("createDefault", &AutomationEngine::createDefault, allow_raw_pointers())
+    .function("startRunning", &AutomationEngine::startRunning)
+    .function("startBatchMode", &AutomationEngine::startBatchMode)
+    .function("tick", (void (*) (AutomationEngine*, Engine*, val, float)) [] (AutomationEngine* self, Engine* engine, val content, float deltaTime) {
+        val materialsVal = content["materials"];
+        val assetLightsVal = content["assetLights"];
+        std::vector<MaterialInstance*> materials;
+        for (size_t i = 0, n = materialsVal["length"].as<size_t>(); i < n; ++i) {
+            materials.push_back(materialsVal[i].as<MaterialInstance*>(allow_raw_pointers()));
+        }
+        std::vector<utils::Entity> assetLights;
+        for (size_t i = 0, n = assetLightsVal["length"].as<size_t>(); i < n; ++i) {
+            assetLights.push_back(assetLightsVal[i].as<utils::Entity>());
+        }
+        AutomationEngine::ViewerContent nativeContent = {
+            .view = content["view"].as<View*>(allow_raw_pointers()),
+            .renderer = content["renderer"].as<Renderer*>(allow_raw_pointers()),
+            .materials = materials.data(),
+            .materialCount = materials.size(),
+            .lightManager = content["lightManager"].as<LightManager*>(allow_raw_pointers()),
+            .scene = content["scene"].as<Scene*>(allow_raw_pointers()),
+            .indirectLight = content["indirectLight"].as<IndirectLight*>(allow_raw_pointers()),
+            .sunlight = content["sunlight"].as<utils::Entity>(),
+            .assetLights = assetLights.data(),
+            .assetLightCount = assetLights.size()
+        };
+        self->tick(engine, nativeContent, deltaTime);
+    }, allow_raw_pointers())
+    .function("applySettings", (void (*) (AutomationEngine*, Engine*, std::string, val)) [] (AutomationEngine* self, Engine* engine, std::string json, val content) {
+        val materialsVal = content["materials"];
+        val assetLightsVal = content["assetLights"];
+        std::vector<MaterialInstance*> materials;
+        for (size_t i = 0, n = materialsVal["length"].as<size_t>(); i < n; ++i) {
+            materials.push_back(materialsVal[i].as<MaterialInstance*>(allow_raw_pointers()));
+        }
+        std::vector<utils::Entity> assetLights;
+        for (size_t i = 0, n = assetLightsVal["length"].as<size_t>(); i < n; ++i) {
+            assetLights.push_back(assetLightsVal[i].as<utils::Entity>());
+        }
+        AutomationEngine::ViewerContent nativeContent = {
+            .view = content["view"].as<View*>(allow_raw_pointers()),
+            .renderer = content["renderer"].as<Renderer*>(allow_raw_pointers()),
+            .materials = materials.data(),
+            .materialCount = materials.size(),
+            .lightManager = content["lightManager"].as<LightManager*>(allow_raw_pointers()),
+            .scene = content["scene"].as<Scene*>(allow_raw_pointers()),
+            .indirectLight = content["indirectLight"].as<IndirectLight*>(allow_raw_pointers()),
+            .sunlight = content["sunlight"].as<utils::Entity>(),
+            .assetLights = assetLights.data(),
+            .assetLightCount = assetLights.size()
+        };
+        self->applySettings(engine, json.c_str(), json.length(), nativeContent);
+    }, allow_raw_pointers())
+    .function("getColorGrading", &AutomationEngine::getColorGrading, allow_raw_pointers())
+    .function("getViewerOptions", &AutomationEngine::getViewerOptions)
+    .function("getSettings", &AutomationEngine::getSettings, allow_raw_pointers())
+    .function("signalBatchMode", &AutomationEngine::signalBatchMode)
+    .function("stopRunning", &AutomationEngine::stopRunning)
+    .function("terminate", &AutomationEngine::terminate)
+    .function("shouldClose", &AutomationEngine::shouldClose)
+    .function("getOptions", &AutomationEngine::getOptions)
+    .function("setOptions", &AutomationEngine::setOptions)
+    .function("isRunning", &AutomationEngine::isRunning)
+    .function("currentTest", &AutomationEngine::currentTest)
+    .function("testCount", &AutomationEngine::testCount)
+    .function("getStatusMessage", EMBIND_LAMBDA(std::string, (AutomationEngine* self), {
+        return std::string(self->getStatusMessage());
+    }), allow_raw_pointers());
 
 class_<ViewerGui>("ViewerGui")
     .constructor<Engine*, Scene*, View*, int>()

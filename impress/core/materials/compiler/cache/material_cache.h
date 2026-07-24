@@ -32,6 +32,7 @@
 #include "core/async/future.h"
 #include "core/common/context.h"
 #include "core/materials/compiler/cache/file_utilities.h"
+#include "core/materials/compiler/material_compiler_config.h"
 
 namespace imp {
 
@@ -48,7 +49,8 @@ class MaterialCache {
 
   // The caller is responsible for hashing, so that the same material only needs
   // to be hashed once for use with Get() and Store().
-  MaterialHash Hash(absl::string_view material_source);
+  MaterialHash Hash(absl::string_view material_source,
+                    const MaterialCompilerConfig& config);
 
   // Returns the compiled material bytes for the given material hash.
   absl::StatusOr<std::vector<uint8_t>> Get(const MaterialHash& hash);

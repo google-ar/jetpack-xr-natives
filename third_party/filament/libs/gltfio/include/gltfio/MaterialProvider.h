@@ -21,8 +21,8 @@
 #include <filament/Material.h>
 #include <filament/MaterialInstance.h>
 
-#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 
 #include <array>
 #include <string>

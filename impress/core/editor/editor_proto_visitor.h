@@ -19,7 +19,6 @@
 
 #include <cstddef>
 #include <map>
-#include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -802,9 +801,10 @@ class EditorProtoVisitor {
     (
         [&]() {
           constexpr FieldType field_type = types_array[I];
-          if constexpr (internal::kIsImpressProtoMessage<field_type, Tags>) {
+          if constexpr (internal::kIsImpressProtoMessage<field_type,
+                                                         typename Tags::Type>) {
             // Allow drag-and-drop from the Asset Library into this oneof.
-            Tags maybe_set;
+            typename Tags::Type maybe_set;
             bool should_set = CreateDragAndDropTargetForField(&maybe_set);
             if (should_set) {
               field->template Emplace<Tags>(std::move(maybe_set));

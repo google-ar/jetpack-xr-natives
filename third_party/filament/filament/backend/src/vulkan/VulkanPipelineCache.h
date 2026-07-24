@@ -28,6 +28,7 @@
 
 #include "filament/libs/utils/include/utils/bitset.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/Hash.h"
 
 #include "robin_map/include/tsl/robin_map.h"
@@ -269,6 +270,9 @@ private:
     CallbackManager mCallbackManager;
 
     [[maybe_unused]] VulkanContext const& mContext;
+
+    // Name of the bound program, used for perfetto tracing.
+    utils::CString mBoundProgram;
 };
 
 } // namespace filament::backend

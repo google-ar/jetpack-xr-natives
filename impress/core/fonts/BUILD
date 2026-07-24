@@ -12,10 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+cc_library(
+    name = "icon_font",
+    hdrs = ["icon_font.h"],
+    deps = ["@dear_imgui"],
+    alwayslink = 1,
+)
 
 exports_files(
     srcs = [
+        "MaterialSymbolsOutlined-Regular.ttf",
         "googlesans_arabic_medium.ttf",
         "googlesans_japanese_medium.ttf",
         "googlesans_medium.ttf",

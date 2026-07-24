@@ -446,7 +446,7 @@ class SessionHelper {
   // A Creator method that handles the Point trackable type.
   template <typename T, IfArPoint<T> = 0>
   ArPoint CreateImpTrackable(UniqueArTrackable trackable,
-                             std::optional<ArPose_*> pose = absl::nullopt) {
+                             std::optional<ArPose_*> pose = std::nullopt) {
     IMP_TRACE();
     // Getting a pose from point when using instant (kDistanceGuess) mode,
     // according to ArCore documentation  will get a point found with
@@ -482,7 +482,7 @@ class SessionHelper {
   template <typename T, IfArMagicalSurfacePoint<T> = 0>
   ArMagicalSurfacePoint CreateImpTrackable(
       UniqueArTrackable&& trackable,
-      std::optional<ArPose_*> pose = absl::nullopt) {
+      std::optional<ArPose_*> pose = std::nullopt) {
     IMP_TRACE();
     mat4f transform;
     // If no pose is provided, we have no way of updating the pose of a
@@ -511,7 +511,7 @@ class SessionHelper {
   // A creator method that handles the Plane trackable type.
   template <typename T, IfArPlane<T> = 0>
   ArPlane CreateImpTrackable(UniqueArTrackable trackable,
-                             std::optional<ArPose_*> pose = absl::nullopt) {
+                             std::optional<ArPose_*> pose = std::nullopt) {
     IMP_TRACE();
     mat4f transform;
     if (pose) {
@@ -863,7 +863,7 @@ absl::Status ArSessionNativeArCore::InternalInitialization() {
   }
   ar_camera_ = UniqueArCamera(ar_camera);
 
-  ar_pose_ = CreateUniqueArPose(ar_session_, absl::nullopt);
+  ar_pose_ = CreateUniqueArPose(ar_session_, std::nullopt);
 
   if (is_depth_supported) {
     if (!engine_) {
@@ -1155,7 +1155,7 @@ std::optional<ArHitResult> ArSessionNativeArCore::ConvertArHitResult(
   ArTrackable_getTrackingState(ar_session_.get(), trackable.get(),
                                &tracking_state);
   if (tracking_state != AR_TRACKING_STATE_TRACKING) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   ArTrackableId trackable_id(reinterpret_cast<int64_t>(trackable.get()));
@@ -1176,7 +1176,7 @@ std::optional<ArHitResult> ArSessionNativeArCore::ConvertArHitResult(
 
     if (orientation_mode !=
         AR_MAGICAL_SURFACE_POINT_ORIENTATION_ESTIMATED_SURFACE_NORMAL) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     // Get transform.

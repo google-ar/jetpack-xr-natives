@@ -140,6 +140,7 @@ cc_library(
         "//core/common:hash",
         "//core/common:holdable",
         "//core/common:invocable",
+        "//core/common:one_of",
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:owned_or_unowned_memory",
         "//core/common:owned_ptr",
@@ -157,9 +158,11 @@ cc_library(
         "//core/lighting:environment_light",
         "//core/math",
         "//core/proto:any_imp_proto",
+        "//core/proto:async_preload_visitor",
         "//core/proto:proto_common",
         "//core/proto:proto_differ",
         "//core/proto:proto_reader",
+        "//core/proto:proto_traits",
         "//core/proto:proto_writer",
         "//core/split_engine:split_engine_serializer",
         "//core/split_engine:split_engine_shared",
@@ -216,7 +219,10 @@ py_test(
 cc_library(
     name = "test_component_native",
     hdrs = ["test_component_native.h"],
-    deps = [":ncsb"],
+    deps = [
+        ":ncsb",
+        "@com_google_absl//absl/strings:string_view",
+    ],
     alwayslink = 1,
 )
 

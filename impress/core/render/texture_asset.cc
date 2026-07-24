@@ -49,6 +49,25 @@
 namespace imp {
 
 namespace {
+uint8_t GetMipmapLevels(uint32_t width, uint32_t height,
+                        TextureGenerationOptions options) {
+#if FILAMENT_ENABLE_FEATURE_LEVEL_0 == 1
+  bool is_power_of_two = width > 0 && (width & (width - 1)) == 0 &&
+                         height > 0 && (height & (height - 1)) == 0;
+  if (!is_power_of_two) {
+    return 1;
+  }
+#endif  // FILAMENT_ENABLE_FEATURE_LEVEL_0 == 1
+  if (options.generated_mipmap_levels.has_value()) {
+    return std::min(options.generated_mipmap_levels.value(),
+                    GetMipmapLevelCount(width, height));
+  } else if (options.generate_mipmaps) {
+    // We use the dimensions of the image to estimate the number of mip levels.
+    return GetMipmapLevelCount(width, height);
+  }
+  return 1;
+}
+
 TextureBuilder CreateHelper(BaseView* view, absl::string_view texture_name,
                             image::ImageContents& image_contents,
                             TextureGenerationOptions options) {
@@ -64,15 +83,8 @@ TextureBuilder CreateHelper(BaseView* view, absl::string_view texture_name,
       image_contents.GetTextureFormat()));
   texture_builder.Width(image_contents.GetWidth());
   texture_builder.Height(image_contents.GetHeight());
-  uint8_t levels = 1;
-  if (options.generated_mipmap_levels.has_value()) {
-    levels = std::min(options.generated_mipmap_levels.value(),
-                      GetMipmapLevelCount(image_contents.GetWidth(),
-                                          image_contents.GetHeight()));
-  } else if (options.generate_mipmaps) {
-    levels = GetMipmapLevelCount(image_contents.GetWidth(),
-                                 image_contents.GetHeight());
-  }
+  uint8_t levels = GetMipmapLevels(image_contents.GetWidth(),
+                                   image_contents.GetHeight(), options);
   texture_builder.Levels(levels);
   texture_builder.Image(*engine, image_contents, {});
   if (levels > 1) {
@@ -97,16 +109,8 @@ TextureBuilder CreateHelper(BaseView* view, absl::string_view texture_name,
   filament::Texture::InternalFormat format =
       options.texture_format_override.value_or(
           filament::Texture::InternalFormat::SRGB8_A8);
-  uint8_t levels = 1;
-  if (options.generated_mipmap_levels.has_value()) {
-    levels = std::min(options.generated_mipmap_levels.value(),
-                      GetMipmapLevelCount(texture_contents.GetWidth(),
-                                          texture_contents.GetHeight()));
-  } else if (options.generate_mipmaps) {
-    // We use the dimensions of the image to estimate the number of mip levels.
-    levels = GetMipmapLevelCount(texture_contents.GetWidth(),
-                                 texture_contents.GetHeight());
-  }
+  uint8_t levels = GetMipmapLevels(texture_contents.GetWidth(),
+                                   texture_contents.GetHeight(), options);
 
   if (levels > 1) {
     texture_builder.GenerateMipmaps(*engine);

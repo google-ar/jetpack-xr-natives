@@ -23,7 +23,6 @@
 #include <utility>
 
 #include "absl/status/status.h"
-#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Camera.h"
@@ -42,6 +41,7 @@
 #include "filament/libs/utils/include/utils/EntityManager.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/config.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/render/blit_assets.h"
@@ -77,10 +77,17 @@ static constexpr std::array<float3, kVertexCountForQuad> kBlitPositions = {
 
 // UV coordinates for the quad.
 static constexpr std::array<float2, kVertexCountForQuad> kBlitTexCoords = {
+#if IMP_MATERIAL_API(OPENGL)
     float2{0.f, 1.f},
     float2{1.f, 1.f},
     float2{1.f, 0.f},
     float2{0.f, 0.f},
+#else
+    float2{0.f, 0.f},
+    float2{1.f, 0.f},
+    float2{1.f, 1.f},
+    float2{0.f, 1.f},
+#endif
 };
 
 }  // namespace
@@ -90,7 +97,7 @@ Future<std::unique_ptr<Blitter>> Blitter::Create(BaseView& view) {
       .LoadMaterial(blit_assets::kBlitMaterialCmat)
       .Then([&view](absl::StatusOr<AssetPtr<MaterialAsset>> asset)
                 -> absl::StatusOr<std::unique_ptr<Blitter>> {
-        MP_RETURN_IF_ERROR(asset.status());
+        if (!asset.ok()) return asset.status();
 
         OwnedMaterialPtr blit_material =
             view.GetMaterialFactory().CreateMaterial(*asset);

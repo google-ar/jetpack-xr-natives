@@ -47,7 +47,7 @@ Future<OwnedMaterialPtr> ParticleEmitter::GetMaterialFuture(
   if (emitter_state.particle_config->material_asset.HasValue()) {
     return emitter_node->GetView()
         .GetAssetManager()
-        .LoadMaterial(emitter_state.particle_config->material_asset.Value())
+        .LoadMaterial(*(emitter_state.particle_config->material_asset))
         .Then([emitter_node](AssetPtr<MaterialAsset> material_asset) mutable
                   -> OwnedMaterialPtr {
           if (material_asset) {
@@ -66,22 +66,21 @@ ParticleEmitter::ParticleEmitter(
     std::unique_ptr<CustomParticleBehavior> custom_particle_behavior,
     AssetPtr<GltfAsset> gltf_asset, OwnedMaterialPtr material_instance)
     : emitter_node_(emitter_node),
-      particle_pool_(emitter_state.particle_config.Value(),
-                     emitter_state.emitter_config->max_particles.Value(),
+      particle_pool_(*(emitter_state.particle_config),
+                     *(emitter_state.emitter_config->max_particles),
                      emitter_node),
-      particle_behavior_(emitter_node, emitter_state.particle_config.Value(),
+      particle_behavior_(emitter_node, emitter_state,
                          std::move(custom_particle_behavior)),
       gltf_asset_(gltf_asset),
       material_instance_(std::move(material_instance)),
       emitter_duration_finite_(
-          emitter_state.emitter_config->duration_in_seconds.Value() > 0.0f),
+          *(emitter_state.emitter_config->duration_in_seconds) > 0.0f),
       remaining_emitter_duration_(
-          emitter_state.emitter_config->duration_in_seconds.Value()),
-      emitter_duration_(
-          emitter_state.emitter_config->duration_in_seconds.Value()),
-      looping_(emitter_state.emitter_config->loop.Value()),
+          *(emitter_state.emitter_config->duration_in_seconds)),
+      emitter_duration_(*(emitter_state.emitter_config->duration_in_seconds)),
+      looping_(*(emitter_state.emitter_config->loop)),
       particles_per_second_(
-          emitter_state.emitter_config->particles_per_second.Value()) {}
+          *(emitter_state.emitter_config->particles_per_second)) {}
 
 void ParticleEmitter::UpdateEmitterBehavior(const FrameTime& frame_time) {
   // Update the remaining duration.
@@ -145,17 +144,17 @@ std::string ParticleEmitter::ValidateEmitterState(
   }
 
   // Particles must be emitted.
-  if (emitter_state.emitter_config->particles_per_second.Value() <= 0.0f) {
+  if (*(emitter_state.emitter_config->particles_per_second) <= 0.0f) {
     return "ParticleEmitter - particles per second must be > 0!";
   }
 
   // There must be an allowance for the maximum number of particles.
-  if (emitter_state.emitter_config->max_particles.Value() <= 0) {
+  if (*(emitter_state.emitter_config->max_particles) <= 0) {
     return "ParticleEmitter - max particles must be > 0!";
   }
 
   // The duration must be non-negative.
-  if (emitter_state.emitter_config->duration_in_seconds.Value() < 0.0f) {
+  if (*(emitter_state.emitter_config->duration_in_seconds) < 0.0f) {
     return "ParticleEmitter - duration in seconds must be >= 0!";
   }
 

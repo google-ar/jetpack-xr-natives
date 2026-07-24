@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/InternPool.h"
 #include "filament/libs/utils/include/utils/Slice.h"
+
+#include <gtest/gtest.h>
 
 using namespace utils;
 
@@ -64,7 +64,7 @@ TEST(InternPoolTest, ReleaseByValue) {
     InternPool<int> pool;
 
     FixedCapacityVector<int> value = { 1, 3, 3, 7 };
-    Slice<const int> interned = pool.acquire(value);
+    pool.acquire(value);
 
     EXPECT_FALSE(pool.empty());
 

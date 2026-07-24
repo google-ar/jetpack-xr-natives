@@ -58,7 +58,7 @@ class ArFrame {
           intptr_t camera_texture_id, mat4 projection_matrix,
           mat4f model_matrix, TrackableTuple&& updated_trackables,
           std::unique_ptr<ArFrame::YUV420Image> yuv_image = nullptr,
-          absl::optional<mat4f> camera_node_matrix = absl::nullopt)
+          absl::optional<mat4f> camera_node_matrix = std::nullopt)
       : timestamp_(timestamp),
         camera_texture_(camera_texture),
         camera_texture_id_(camera_texture_id),

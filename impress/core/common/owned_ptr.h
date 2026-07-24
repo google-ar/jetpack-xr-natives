@@ -649,7 +649,7 @@ void OwnedPtr<T, Deleter>::AssertSafeToRelinquish() {
         description, additional_fields_.GetRefCounter().GetCount(),
         borrowed_locations);
 
-    // It would be cleaner to use IMP_LOG(imp::LEVEL(severity)) instead of a switch
+    // It would be cleaner to use IMP_LOG(IMP_LEVEL(severity)) instead of a switch
     // statement, but we can't because it doesn't currently work in the bazel
     // version of Impress.
     switch (GetOwnedPtrLogSeverity()) {

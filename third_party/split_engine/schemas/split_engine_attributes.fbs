@@ -3,3 +3,5 @@ namespace android_xr.schemas;
 attribute "requires_api";
 
 attribute "unstable_api";
+
+attribute "preview_api";

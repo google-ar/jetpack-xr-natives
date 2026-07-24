@@ -25,6 +25,7 @@ bzl_library(
     srcs = ["postprocess_metal_shaders.bzl"],
     deps = [
         "//third_party/bazel_rules/apple_support/lib:apple_support",
+        "//third_party/bazel_rules/apple_support/xcode:providers",
         "@bazel_skylib//lib:dicts",
         "@third_party//filament:filament_bzl",
     ],

@@ -73,6 +73,14 @@ filament::Texture* BuildAndFillTexture(
     InflightCreation* inflight_creation,
     std::optional<absl::string_view> name = std::nullopt);
 
+// Textures are built and filled simultaneously because their image data must
+// be encoded before the texture can be built.
+Future<filament::Texture*> BuildAndFillTextureAsync(
+    BaseView& view, filament::Engine* engine, const schemas::TextureInfo* info,
+    std::unique_ptr<image::ImageContents> image,
+    InflightCreation* inflight_creation,
+    std::optional<absl::string_view> name = std::nullopt);
+
 }  // namespace imp::loader::details
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_LOADER_CREATOR_RESOURCE_BUILDERS_H_

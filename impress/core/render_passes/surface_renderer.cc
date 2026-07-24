@@ -23,6 +23,7 @@
 #include "filament/filament/include/filament/Camera.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Viewport.h"
+#include "core/camera/camera_state.proto.imp.h"
 #include "core/view/framework/camera/camera_component.h"
 #include "core/view/utils/render_setting_utils.h"
 #include "core/view/view_events.h"
@@ -219,6 +220,11 @@ void SurfaceRenderer::Render() {
 
   filament_view_->setScene(scene);
 
+  if (!camera_) {
+    IMP_LOG(imp::ERROR) << "SurfaceRenderer::Render: camera_ is invalid.";
+    return;
+  }
+
   filament::Camera* camera = camera_->GetCamera();
   double fov = camera->getFieldOfViewInDegrees(filament::Camera::Fov::VERTICAL);
   double near = camera->getNear();
@@ -226,7 +232,11 @@ void SurfaceRenderer::Render() {
   double original_aspect_ratio =
       GetView().GetSize().x * 1.0 / GetView().GetSize().y;
 
-  if (view_port_size_.has_value()) {
+  const bool should_override_projection =
+      view_port_size_.has_value() &&
+      camera_->GetProjectionType() == CameraState::ProjectionType::PERSPECTIVE;
+
+  if (should_override_projection) {
     // If a custom view port size is set, change the camera's aspect ratio to
     // refect the viewport's aspect ratio.
     camera->setProjection(fov,
@@ -238,7 +248,7 @@ void SurfaceRenderer::Render() {
   renderer->render(filament_view_);
   renderer->endFrame();
 
-  if (view_port_size_.has_value()) {
+  if (should_override_projection) {
     // Set the camera's aspect ratio back to original value.
     camera->setProjection(fov, original_aspect_ratio, near, far,
                           filament::Camera::Fov::VERTICAL);

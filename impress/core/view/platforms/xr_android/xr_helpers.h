@@ -149,9 +149,8 @@ bool AreXrQuaternionfsEqual(const XrQuaternionf& quaternion_1,
 
 // Returns a projection matrix representing the frustum that encompasses the
 // frustums of both the left and right eyes.
-// This calculation assumes symmetry between eyes and will otherwise fatal.
-// Eyes should be side-by-side and facing perpendicularly with identical FOV
-// - see diagram.
+// Supports asymmetric per-eye FOVs (e.g. for Aura hardware profiles).
+// Eyes should be side-by-side and facing parallel forward.
 mat4 GetEncompassingProjectionMatrix(const XrView& left_eye_view,
                                      const XrView& right_eye_view,
                                      float near_plane, float far_plane);

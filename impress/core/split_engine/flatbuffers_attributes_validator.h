@@ -156,8 +156,10 @@ class MemoryAlignedCachingSchemaProvider {
 // equal to the maximum API level.
 class ApiLevelValidator {
  public:
-  explicit ApiLevelValidator(int32_t max_api_level)
-      : max_api_level_(max_api_level) {}
+  explicit ApiLevelValidator(int32_t max_api_level,
+                             bool allow_preview_apis = false)
+      : max_api_level_(max_api_level),
+        allow_preview_apis_(allow_preview_apis) {}
 
   absl::Status operator()(
       const flatbuffers::Vector<
@@ -166,8 +168,10 @@ class ApiLevelValidator {
 
  private:
   static constexpr std::string_view kRequiresApiAttrName = "requires_api";
+  static constexpr std::string_view kPreviewApiAttrName = "preview_api";
 
   int32_t max_api_level_;
+  bool allow_preview_apis_;
 };
 
 // A validator that checks that the `unstable_api` attribute is not present
@@ -276,6 +280,7 @@ absl::StatusOr<const reflection::Object* /*absl_nullable*/ > GetUnionChildObject
 // Options for the `FlatbuffersAttributesValidator`.
 struct FlatbuffersAttributesValidatorOptions {
   std::optional<int32_t> max_api_level;
+  bool allow_preview_apis = false;
   bool allow_unstable_apis = false;
 };
 
@@ -300,8 +305,8 @@ class FlatbuffersAttributesValidator {
     entries_.reserve(kInitialEntriesCapacity);
     visited_objects_.reserve(kInitialEntriesCapacity);
     if (options.max_api_level.has_value()) {
-      attribute_validators_.push_back(
-          ApiLevelValidator{*options.max_api_level});
+      attribute_validators_.push_back(ApiLevelValidator{
+          *options.max_api_level, options.allow_preview_apis});
     }
     if (!options.allow_unstable_apis) {
       attribute_validators_.push_back(UnstableApiAttributeValidator{});

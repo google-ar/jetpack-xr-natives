@@ -26,6 +26,7 @@
 
 #include "details/SwapChain.h"
 
+#include <filament/FrameHistoryStream.h>
 #include <filament/Renderer.h>
 #include <filament/Viewport.h>
 
@@ -49,6 +50,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
+#ifndef FILAMENT_LOG_FRAME_INFO
+#define FILAMENT_LOG_FRAME_INFO 0
+#endif
 
 namespace filament {
 
@@ -92,7 +97,12 @@ public:
     // renders a single standalone view. The view must have a a custom rendertarget.
     void renderStandaloneView(FView const* view);
 
-    void setPresentationTime(int64_t monotonic_clock_ns) const;
+    void setPresentationTime(int64_t monotonic_clock_ns) noexcept;
+    void setPresentationTime(std::chrono::steady_clock::time_point monotonic_clock) noexcept;
+    void setDesiredPresentationTime(int64_t monotonic_clock_ns) noexcept;
+    void setDesiredPresentationTime(std::chrono::steady_clock::time_point monotonic_clock) noexcept;
+    void setRenderingDeadline(int64_t monotonic_clock_ns) noexcept;
+    void setRenderingDeadline(std::chrono::steady_clock::time_point monotonic_clock) noexcept;
 
     void setVsyncTime(uint64_t steadyClockTimeNano) noexcept;
 
@@ -163,6 +173,14 @@ public:
         return MAX_FRAMETIME_HISTORY;
     }
 
+    // This is for testing only. Wait until all FrameInfo jobs are fully processed.
+    // Note that we do not wish for this to be called from Engine's flushAndWait() because
+    // flushAndWait() is typically used at engine shutdown, and there is no need to wait for
+    // frame history to complete at shutdown.
+    void waitForFrameHistory() {
+        mFrameInfoManager.waitForGpu();
+    }
+
 private:
     friend class Renderer;
     using Command = RenderPass::Command;
@@ -209,6 +227,9 @@ private:
     size_t mCommandsHighWatermark = 0;
     uint32_t mFrameId = 1; // id 0 is reserved for standalone views
     FrameInfoManager mFrameInfoManager;
+#if FILAMENT_LOG_FRAME_INFO
+    FrameHistoryStream mFrameHistoryStream;
+#endif
     backend::TextureFormat mHdrTranslucent;
     backend::TextureFormat mHdrQualityMedium;
     backend::TextureFormat mHdrQualityHigh;
@@ -227,6 +248,9 @@ private:
     tsl::robin_set<FRenderTarget*> mPreviousRenderTargets;
     std::function<void()> mBeginFrameInternal;
     uint64_t mVsyncSteadyClockTimeNano = 0;
+    std::chrono::steady_clock::time_point mRenderingDeadline{};
+    std::chrono::steady_clock::time_point mPresentationTime{};
+    std::chrono::steady_clock::time_point mDesiredPresentationTime{};
     std::unique_ptr<TextureCache> mResourceAllocator{};
     int64_t mLastFrameId = -1;
 };

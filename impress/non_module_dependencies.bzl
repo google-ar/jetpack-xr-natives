@@ -382,6 +382,16 @@ def non_module_dependencies():
         url = "https://github.com/google/perfetto/archive/refs/tags/v54.0.tar.gz",
     )
 
+    # Not in Bazel Central Registry as of 6/2026
+    # Adds support for loading gsplat compressed SPZ files
+    http_archive(
+        name = "spz",
+        build_file = "//:bazel/build_files/spz.BUILD",
+        url = "https://github.com/nianticlabs/spz/archive/refs/tags/v3.0.0.tar.gz",
+        strip_prefix = "spz-3.0.0",
+        sha256 = "266c144fddb87f428495bbe1e44748fc3f1e5bfaa9e354a5d0d0284c4f8946cc",
+    )
+
 def _non_module_repos_impl(_ctx):
     """Wrapper for converting non_module_dependencies to a module_extension."""
     non_module_dependencies()

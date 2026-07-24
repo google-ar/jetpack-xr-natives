@@ -751,9 +751,9 @@ void WasmAsyncCanvasSource::WasmScopedCanvas::SetTextOptions(
         *static_cast<std::string*>(text_options.font_holder->GetPlatformFont());
   }
 
-  platform_canvas_wrapper_->SetTextOptions(text_options.size_pixels,
-                                           font_family, font_weight, text_style,
-                                           text_options.text_tracking);
+  platform_canvas_wrapper_->SetTextOptions(
+      text_options.size_pixels, font_family, font_weight, text_style,
+      text_options.text_tracking, text_options.locale.value_or(""));
 }
 
 }  // namespace imp

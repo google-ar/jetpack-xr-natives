@@ -26,6 +26,7 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
+#include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 #include "core/assets/material/material_helpers.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
@@ -75,6 +76,43 @@ filament::Material::UboBatchingMode ToFilamentUboBatchingMode(
   }
 }
 
+MaterialPreCompileOptions FilterUnsupportedVariants(
+    const filament::Material* filament_material,
+    const MaterialPreCompileOptions& material_pre_compile_options) {
+  MaterialPreCompileOptions filtered_options = material_pre_compile_options;
+  using VariantFilterBit = filament::UserVariantFilterBit;
+  using VariantPreCompileMode =
+      MaterialPreCompileVariants::VariantPreCompileMode;
+  auto merge_variant = [&](VariantFilterBit bit,
+                           VariantPreCompileMode options_variant) {
+    return (filament_material->getSupportedVariants() &
+            static_cast<filament::UserVariantFilterMask>(bit))
+               ? options_variant
+               : VariantPreCompileMode::EXCLUDED;
+  };
+  filtered_options.variants.directional_lighting =
+      merge_variant(VariantFilterBit::DIRECTIONAL_LIGHTING,
+                    material_pre_compile_options.variants.directional_lighting);
+  filtered_options.variants.dynamic_lighting =
+      merge_variant(VariantFilterBit::DYNAMIC_LIGHTING,
+                    material_pre_compile_options.variants.dynamic_lighting);
+  filtered_options.variants.shadow_receiver =
+      merge_variant(VariantFilterBit::SHADOW_RECEIVER,
+                    material_pre_compile_options.variants.shadow_receiver);
+  filtered_options.variants.skinning =
+      merge_variant(VariantFilterBit::SKINNING,
+                    material_pre_compile_options.variants.skinning);
+  filtered_options.variants.fog = merge_variant(
+      VariantFilterBit::FOG, material_pre_compile_options.variants.fog);
+  filtered_options.variants.vsm = merge_variant(
+      VariantFilterBit::VSM, material_pre_compile_options.variants.vsm);
+  filtered_options.variants.ssr = merge_variant(
+      VariantFilterBit::SSR, material_pre_compile_options.variants.ssr);
+  filtered_options.variants.ste = merge_variant(
+      VariantFilterBit::STE, material_pre_compile_options.variants.ste);
+  return filtered_options;
+}
+
 Future<std::unique_ptr<MaterialAsset>> CreateMaterialFromResource(
     BaseView* view, MaterialPreCompileOptions material_pre_compile_options,
     resources::Resource resource) {
@@ -112,9 +150,14 @@ Future<std::unique_ptr<MaterialAsset>> CreateMaterialFromResource(
     // from split engine.
     if (!IsPlaceholderSplitEngineMaterial(filament_material) &&
         !material_source.empty()) {
+      // Get the supported variants from the material to avoid requesting
+      // variants that are not supported.
+      MaterialPreCompileOptions modified_options = FilterUnsupportedVariants(
+          filament_material, material_pre_compile_options);
+
       Future<absl::Status> request_material_status =
           view->GetSplitEngineSerializer()->RequestCustomFilamentMaterial(
-              material_source, filament_material, material_pre_compile_options);
+              material_source, filament_material, modified_options);
 
       return request_material_status.Then(
           [material_asset = std::move(material_asset)]() mutable {

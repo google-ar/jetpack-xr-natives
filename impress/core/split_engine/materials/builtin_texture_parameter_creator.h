@@ -34,8 +34,12 @@ namespace imp::split_engine {
 class SplitEngineTextureSamplerCreator {
  public:
   using TextureSampler = android_xr::schemas::TextureSampler;
-  static constexpr auto CreateTextureSampler =
-      android_xr::schemas::CreateTextureSampler;
+  template <typename... Args>
+  static flatbuffers::Offset<TextureSampler> CreateTextureSampler(
+      Args&&... args) {
+    return android_xr::schemas::CreateTextureSampler(
+        std::forward<Args>(args)...);
+  }
 
   using MinFilter = android_xr::schemas::MinFilter;
   using MagFilter = android_xr::schemas::MagFilter;

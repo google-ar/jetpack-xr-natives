@@ -15,6 +15,7 @@
 #include "core/window/default_dev_mode_extension.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -45,9 +46,12 @@
 #include "core/editor/editor.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/events.h"
+#include "core/fonts/icon_font.h"
 #include "core/input/key_codes.h"
 #include "core/math/vec.h"
+#include "core/render/blitter.h"
 #include "core/view/base_view.h"
+#include "core/view/view_events.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filagui_imgui_renderer.h"
 #include "core/window/filament_host.h"
@@ -67,6 +71,10 @@ constexpr float kWheelTravelMultiplier = 0.2f;
 // ImGui asserts that the frame delta must be > 0, so this is used as a minimum.
 constexpr float kMinimumImGuiFrameDelta = 0.001f;
 constexpr absl::string_view kGoogleSansMediumName = "GoogleSans-Medium-18";
+
+constexpr int32_t kDefaultFontSize = 18;
+constexpr int32_t kIconFontSize = 24;
+constexpr ImVec2 kIconFontGlyphOffset = ImVec2(0, 6);
 
 struct ImGuiMouseInputProcessor {
   ImGuiIO& io;
@@ -100,7 +108,7 @@ DefaultDevModeExtension::DefaultDevModeExtension(BaseView& view)
     : base_view_(view) {}
 
 ImFont* DefaultDevModeExtension::LoadFont(const BufferAccess& font_data,
-                                          const char* font_name, int size) {
+                                          const char* font_name, int32_t size) {
   ImFontConfig font_config;
   font_config.FontDataOwnedByAtlas = false;
   font_config.OversampleH = 3;
@@ -110,6 +118,27 @@ ImFont* DefaultDevModeExtension::LoadFont(const BufferAccess& font_data,
   return io.Fonts->AddFontFromMemoryTTF(
       const_cast<char*>(reinterpret_cast<const char*>(font_data.Data())),
       font_data.Size(), size, &font_config);
+}
+
+ImFont* DefaultDevModeExtension::MergeFont(const BufferAccess& font_data,
+                                           const ImWchar* glyph_ranges,
+                                           int32_t size, ImVec2 glyph_offset) {
+  // Verify that there is a valid ImFont to merge glyphs into.
+  ImGuiIO& io = ImGui::GetIO();
+  if (io.Fonts->Fonts.empty()) {
+    return nullptr;
+  }
+
+  // Set config to merge glyphs into current ImFont.
+  ImFontConfig font_config;
+  font_config.MergeMode = true;
+  font_config.FontDataOwnedByAtlas = false;
+  font_config.OversampleH = 3;
+  font_config.OversampleV = 3;
+  font_config.GlyphOffset = glyph_offset;
+  return io.Fonts->AddFontFromMemoryTTF(
+      const_cast<char*>(reinterpret_cast<const char*>(font_data.Data())),
+      font_data.Size(), size, &font_config, glyph_ranges);
 }
 
 absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
@@ -124,13 +153,23 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
   ImGuiIO& io = ImGui::GetIO();
   io.Fonts->Clear();
 
+  // Load default font
   BufferAccess font_data;
   MP_RETURN_IF_ERROR(LoadPackagedFile("googlesans_medium.ttf", &font_data));
 
   if (fonts_.Append<FontId>(LoadFont(font_data, kGoogleSansMediumName.data(),
-                                     18)) != kDefaultFont) {
+                                     kDefaultFontSize)) != kDefaultFont) {
     return absl::InternalError(
         absl::StrFormat("Font error loading %s", kGoogleSansMediumName));
+  }
+
+  // Merge select icons from MaterialSymbols into default font
+  MP_RETURN_IF_ERROR(
+      LoadPackagedFile("MaterialSymbolsOutlined-Regular.ttf", &font_data));
+
+  if (MergeFont(font_data, kIconGlyphRanges, kIconFontSize,
+                kIconFontGlyphOffset) != fonts_[kDefaultFont]) {
+    return absl::InternalError("Font error merging MaterialSymbols");
   }
 
   RegisterExtraFonts(fonts_);
@@ -145,8 +184,11 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
     imgui_renderer_ =
         std::make_unique<OpenGLImGuiRenderer>(base_view_, "", imgui_context_);
 #else
-    IMP_LOG(imp::WARNING) << "Editor rendering for SplitEngine App is only supported on "
-                    "Android with OpenGL backend.";
+    IMP_LOG(imp::WARNING)
+        << "OpenGLImGuiRenderer for SplitEngine App is only supported on "
+           "Android with OpenGL backend. Falling back to FilaguiImGuiRenderer.";
+    imgui_renderer_ = std::make_unique<FilaguiImGuiRenderer>(
+        ui_view_.Get(), base_view_, "", imgui_context_);
 #endif
   } else {
     imgui_renderer_ = std::make_unique<FilaguiImGuiRenderer>(
@@ -165,9 +207,29 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
   debug_draw_ = std::make_unique<debug_draw::Fixture>(
       host_->GetEngine(), host_->GetScene(), custom_debug_draw_material_);
 
+  // Pre-load the blitter so it's ready if/when we need it for remote editor
+  // blitting.
+  imp::Blitter::Create(base_view_)
+      .Then([this](absl::StatusOr<std::unique_ptr<imp::Blitter>> blitter) {
+        if (blitter.ok()) {
+          blitter_ = std::move(*blitter);
+        } else {
+          IMP_LOG(imp::ERROR) << "Failed to load blitter: " << blitter.status();
+        }
+      })
+      .KeptBy(this);
+
+  // Destroy the blitter when the view is cleaned up otherwise Filament will
+  // panic due to AssetManager trying to destroy the Blit material when it's
+  // still in use by the blitter.
+  view_cleanup_connection_ =
+      base_view_.GetDispatcher().Connect([this](const ViewCleanupEvent& event) {
+        if (blitter_) {
+          blitter_.reset();
+        }
+      });
   return absl::OkStatus();
 }
-
 
 void DefaultDevModeExtension::PreCleanup() {
   if (imgui_renderer_) {
@@ -176,6 +238,7 @@ void DefaultDevModeExtension::PreCleanup() {
 }
 
 void DefaultDevModeExtension::Cleanup() {
+  ClearRemembered();
   if (debug_draw_) {
     debug_draw_.reset();
   }
@@ -269,15 +332,9 @@ void DefaultDevModeExtension::ApplyTextureRenderTarget(
 }
 
 void DefaultDevModeExtension::OffscreenRender() {
-#if IMP_PLATFORM(IOS)
   if (ShouldRenderOnRemoteScreen() || !IsEnabled()) {
     return;
   }
-#else
-  if (!IsEnabled()) {
-    return;
-  }
-#endif
   // Rendering happens in Render() if no render target is being used.
   if (!render_target_texture_) {
     return;
@@ -301,6 +358,18 @@ void DefaultDevModeExtension::Render() {
   }
 }
 
+void DefaultDevModeExtension::Blit(
+    filament::RenderTarget* src, filament::RenderTarget* dest,
+    std::optional<filament::Viewport> dest_viewport) {
+  if (!blitter_) return;
+
+  const absl::Status status = blitter_->Blit(src, dest, dest_viewport);
+
+  if (status.ok()) return;
+
+  IMP_LOG(imp::ERROR) << "Failed to blit: " << status;
+}
+
 void DefaultDevModeExtension::UpdateCameraAndViewport(uint2 screen_size,
                                                       float2 subpixel_ratio) {
 
@@ -312,10 +381,14 @@ void DefaultDevModeExtension::UpdateCameraAndViewport(uint2 screen_size,
                    render_target_texture_->getHeight()};
   }
 
-  if (!std::min(screen_size.x, screen_size.y)) {
+  if (screen_size.x == 0 || screen_size.y == 0 || subpixel_ratio.x == 0.0f ||
+      subpixel_ratio.y == 0.0f) {
     return;
   }
   uint2 virtual_size = uint2{screen_size / subpixel_ratio};
+  if (virtual_size.x == 0 || virtual_size.y == 0) {
+    return;
+  }
 
   const auto viewport = filament::Viewport{0, 0, screen_size.x, screen_size.y};
   ui_view_.Get()->setViewport(viewport);

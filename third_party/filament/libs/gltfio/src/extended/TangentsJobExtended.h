@@ -18,6 +18,7 @@
 #define GLTFIO_TANGENTS_JOB_EXTENDED_H
 
 #include <gltfio/MaterialProvider.h> // for UvMap
+
 #include "filament/libs/math/include/math/vec4.h"
 
 #include "third_party/cgltf/cgltf.h"

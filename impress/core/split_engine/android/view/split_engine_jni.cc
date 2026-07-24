@@ -21,43 +21,39 @@
 
 #include <cassert>
 #include <cstdint>
-#include <functional>
+#include <limits>
 #include <memory>
 #include <string>  // IWYU pragma: keep
 #include <utility>
 #include <vector>
 
-#include "absl/log/check.h"
-#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/time/time.h"
 #include "filament/filament/include/filament/Engine.h"
-#include "core/async/executor.h"
-#include "core/common/buffer_access.h"
 #include "core/common/enum_flags.h"
 #include "core/common/jni_helpers.h"
 #include "core/common/owned_ptr.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/registry.h"
+#include "core/config.h"
 #include "core/math/transform.h"
 #include "core/split_engine/android/extensions/split_engine_bridge.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/android/split_engine_android_external_texture_surface_service.h"
 #include "core/split_engine/android/split_engine_android_shared_memory_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_sender.h"
 #include "core/split_engine/android/view/view_update_params.h"
 #include "core/split_engine/material_requester_legacy_impl.h"
-#include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_serializer_impl.h"
 #include "core/split_engine/split_engine_serializer_transport_legacy_impl.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/camera/camera_manager.h"
+#include "core/view/framework/camera/camera_manager.h"  // IWYU pragma: keep
 #include "core/view/framework/render/renderable_manager_wrapper.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_helpers.h"
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 
 #if __ANDROID_API__ >= 34
 #include "core/split_engine/android/split_engine_shared_memory_bridge_service.h"
@@ -143,7 +139,8 @@ extern "C" {
 // LINT.IfChange(api)
 JNI_METHOD_ACTIVITY(void, nSetup)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle,
- jobject split_engine_bridge, jlong bridge_buffer_size_bytes, jint api_level) {
+ jobject split_engine_bridge, jlong bridge_buffer_size_bytes, jint api_level,
+ jint preview_api_level) {
   // Make the isolated process slightly lower priority than the main thread.
   imp::SetThreadNiceness(GetThreadId(), GetThreadNiceness(GetThreadId()) + 5);
 
@@ -171,8 +168,17 @@ JNI_METHOD_ACTIVITY(void, nSetup)
   view->SetRenderableManager(
       std::make_unique<imp::RenderableManagerWrapper>(*view));
 
+  int32_t effective_api_level = api_level;
+  if (preview_api_level > 0) {
+    if (preview_api_level == std::numeric_limits<int32_t>::max()) {
+      effective_api_level = android_xr::kSplitEngineExperimentalApiLevel;
+    } else {
+      effective_api_level = android_xr::kSplitEnginePreviewApiLevel;
+    }
+  }
+
 #ifdef IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS
-  api_level = android_xr::kSplitEngineExperimentalApiLevel;
+  effective_api_level = android_xr::kSplitEngineExperimentalApiLevel;
 #endif
 
   auto material_requester =
@@ -180,7 +186,7 @@ JNI_METHOD_ACTIVITY(void, nSetup)
 
   auto split_engine_serializer =
       std::make_unique<imp::split_engine::SplitEngineSerializerImpl>(
-          *view, api_level,
+          *view, effective_api_level,
           imp::MakeOwned<
               imp::split_engine::SplitEngineSerializerTransportLegacyImpl>(
               std::move(bridge), std::move(bridge_sender)),

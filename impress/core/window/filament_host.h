@@ -303,6 +303,8 @@ class FilamentHost {
     virtual void ApplyTextureRenderTarget(filament::Texture* texture) {}
     // Returns true if the ImGui-specific view has a render target.
     virtual bool HasRenderTarget() { return false; }
+    // Returns true if the UI should be rendered on a remote screen.
+    virtual bool ShouldRenderOnRemoteScreen() { return false; }
     // Called during rendering. Used for rendering to render targets.
     virtual void OffscreenRender() {}
     // Renders the next frame.
@@ -310,6 +312,13 @@ class FilamentHost {
     // Informs the extension of the current viewport dimensions.
     virtual void UpdateCameraAndViewport(uint2 actual_size,
                                          float2 subpixel_ratio) = 0;
+
+    // Blits a render target to another render target using the blitter utility.
+    // `dest_viewport` optionally specifies a sub-region within the destination
+    // render target to draw into. If nullopt, it defaults to the full dest.
+    virtual void Blit(
+        filament::RenderTarget* src, filament::RenderTarget* dest,
+        std::optional<filament::Viewport> dest_viewport = std::nullopt) {}
 
     // Queues an ImGui callback to be executed during RenderDev.
     virtual void QueueImGuiCommandBlock(ImGuiCommand cmd) = 0;
@@ -594,8 +603,8 @@ class FilamentHost {
   LifeCycleState life_cycle_state_ = LifeCycleState::kNone;
   detail::FilamentView render_view_;
   absl::Duration legacy_time_cursor_ = absl::ZeroDuration();
-  uint2 dimensions_;
-  uint2 pixel_dimensions_;
+  uint2 dimensions_ = {0, 0};
+  uint2 pixel_dimensions_ = {0, 0};
   uint4 margins_;
   float2 subpixel_ratio_ = {1.0f, 1.0f};
   std::vector<detail::MouseInput> pending_mouse_inputs_;

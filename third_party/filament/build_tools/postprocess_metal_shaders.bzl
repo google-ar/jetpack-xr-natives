@@ -1,17 +1,21 @@
 """Rule to postprocess a compiled material using matedit, converting all MSL shaders to LLVM bitcode."""
 
 load("//third_party/bazel_rules/apple_support/lib:apple_support.bzl", "apple_support")
+load("//third_party/bazel_rules/apple_support/xcode:providers.bzl", "XcodeVersionInfo")
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@third_party//filament:filament.bzl", "by_backend")
 
 def _platform_is_simulator(ctx):
-    return (ctx.fragments.apple.single_arch_platform.name_in_plist == "iPhoneSimulator")
+    return (apple_support.platform_info_from_rule_ctx(
+        ctx,
+        fail_on_missing_constraint = False,
+    ).platform.name_in_plist == "iPhoneSimulator")
 
 def _get_minimum_ios_version(ctx):
     if ctx.attr.minimum_ios_version:
         return ctx.attr.minimum_ios_version
 
-    return ctx.attr._xcode_config[apple_common.XcodeVersionConfig].minimum_os_for_platform_type(
+    return ctx.attr._xcode_config[XcodeVersionInfo].minimum_os_for_platform_type(
         apple_common.platform_type.ios,
     )
 
@@ -19,7 +23,7 @@ def _get_minimum_macos_version(ctx):
     if ctx.attr.minimum_macos_version:
         return ctx.attr.minimum_macos_version
 
-    return ctx.attr._xcode_config[apple_common.XcodeVersionConfig].minimum_os_for_platform_type(
+    return ctx.attr._xcode_config[XcodeVersionInfo].minimum_os_for_platform_type(
         apple_common.platform_type.macos,
     )
 
@@ -64,8 +68,11 @@ def _emit_matedit_action(ctx):
 
     apple_support.run(
         actions = ctx.actions,
-        apple_fragment = ctx.fragments.apple,
-        xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig],
+        apple_platform_info = apple_support.platform_info_from_rule_ctx(
+            ctx,
+            fail_on_missing_constraint = False,
+        ),
+        xcode_config = ctx.attr._xcode_config[XcodeVersionInfo],
         executable = ctx.executable.matedit_tool,
         arguments = [args],
         tools = [ctx.executable.matedit_tool, ctx.executable.script_tool],
@@ -103,6 +110,7 @@ def _postprocess_metal_shaders_impl(ctx):
 _postprocess_metal_shaders_rule = rule(
     attrs = dicts.add(
         apple_support.action_required_attrs(),
+        apple_support.platform_constraint_attrs(),
         {
             "input_material": attr.label(allow_single_file = True),
             "output_material": attr.output(),
@@ -127,7 +135,6 @@ _postprocess_metal_shaders_rule = rule(
             "script_verbose": attr.bool(),
         },
     ),
-    fragments = ["apple"],
     exec_groups = {
         "default": exec_group(),
         "macos": exec_group(

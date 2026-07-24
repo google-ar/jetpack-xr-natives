@@ -43,9 +43,10 @@ void WindowWidget::DrawImGui() {
     bool show_window = window_configuration_.IsWindowVisible(window_name);
     if (ImGui::MenuItem(window_name.data(), nullptr, &show_window)) {
       window_configuration_.SetWindowVisibility(
-          window_name, show_window
-                           ? WindowConfiguration::WindowVisibility::kVisible
-                           : WindowConfiguration::WindowVisibility::kHidden);
+          window_name,
+          show_window ? WindowConfiguration::WindowVisibility::kVisible
+                      : WindowConfiguration::WindowVisibility::kHidden,
+          /*request_focus=*/show_window);
     }
     are_all_windows_using_initial_visibility &=
         window_configuration_.GetWindowInitialVisibility(window_name) ==

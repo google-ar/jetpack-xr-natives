@@ -1,5 +1,5 @@
 diff --git a/filament/backend/src/opengl/platforms/PlatformCocoaTouchGL.mm b/filament/backend/src/opengl/platforms/PlatformCocoaTouchGL.mm
-index ea974e4290..a77727b38a 100644
+index b3baa2ca4..3350e5f66 100644
 --- a/filament/backend/src/opengl/platforms/PlatformCocoaTouchGL.mm
 +++ b/filament/backend/src/opengl/platforms/PlatformCocoaTouchGL.mm
 @@ -41,7 +41,6 @@ using namespace backend;
@@ -7,10 +7,10 @@ index ea974e4290..a77727b38a 100644
      EAGLContext* mGLContext = nullptr;
      CAEAGLLayer* mCurrentGlLayer = nullptr;
 -    std::vector<CAEAGLLayer*> mHeadlessGlLayers;
-     // TODO: to be converted to utils::Mutex/utils::LockGuard
-     // mutable utils::Mutex mAdditionalContextsLock;
-     mutable std::mutex mAdditionalContextsLock;
-@@ -142,28 +141,10 @@ Platform::SwapChain* PlatformCocoaTouchGL::createSwapChain(void* nativewindow, u
+     mutable utils::Mutex mAdditionalContextsLock;
+     std::vector<EAGLContext*> mAdditionalContexts UTILS_GUARDED_BY(mAdditionalContextsLock);
+     CGRect mCurrentGlLayerRect;
+@@ -140,28 +139,10 @@ Platform::SwapChain* PlatformCocoaTouchGL::createSwapChain(void* nativewindow, u
  }
  
  Platform::SwapChain* PlatformCocoaTouchGL::createSwapChain(uint32_t width, uint32_t height, uint64_t flags) noexcept {

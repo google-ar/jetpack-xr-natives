@@ -35,6 +35,7 @@
 #include "core/image/image_contents.h"
 #include "core/render/image_asset.h"
 #include "core/split_engine/flatbuffer_size_calculator.h"
+#include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
@@ -60,10 +61,16 @@ class SplitEngineTextureSerializerImpl : public SplitEngineTextureSerializer {
     if (state_.name.has_value()) {
       name_offset = fbb.CreateString(*state_.name);
     }
+    const absl::StatusOr<android_xr::schemas::TextureFormat> format =
+        Pack(state_.format);
+    if (!format.ok()) {
+      IMP_LOG(imp::ERROR) << "SplitEngineTextureSerializerImpl::SerializeTexture: "
+                 << format.status();
+      return {};
+    }
     return android_xr::schemas::CreateTexture(
-        fbb, state_.texture_id, state_.width, state_.height,
-        static_cast<uint16_t>(state_.format), state_.levels,
-        static_cast<uint8_t>(state_.sampler), state_.mips,
+        fbb, state_.texture_id, state_.width, state_.height, *format,
+        state_.levels, Pack(state_.sampler), state_.mips,
         CreateFlatbufferImageParams(fbb), CreateFlatbufferPixelBuffers(fbb),
         name_offset);
   }
@@ -105,10 +112,28 @@ class SplitEngineTextureSerializerImpl : public SplitEngineTextureSerializer {
     for (int level = 0; level < num_levels; ++level) {
       const filament::backend::PixelBufferDescriptor& image =
           state_.image_descriptors[level];
+      android_xr::schemas::PixelDataFormat image_format;
+      if (image.type == filament::backend::PixelDataType::COMPRESSED) {
+        // When the texture is compressed, Filament's `format` field shares a
+        // union with `compressedFormat` in `PixelBufferDescriptor`, so it
+        // contains garbage or aliased data. The `format` field is ignored by
+        // the backend for compressed textures, so it is safe to assign a
+        // default valid enum here.
+        image_format = android_xr::schemas::PixelDataFormat::R;
+      } else {
+        const absl::StatusOr<android_xr::schemas::PixelDataFormat>
+            packed_image_format = Pack(image.format);
+        if (!packed_image_format.ok()) {
+          IMP_LOG(imp::ERROR) << "SplitEngineTextureSerializerImpl::"
+                        "CreateFlatbufferImageParams: "
+                     << packed_image_format.status();
+          return {};
+        }
+        image_format = *packed_image_format;
+      }
       image_params[level] = android_xr::schemas::CreateImageParams(
-          fbb, level, static_cast<uint8_t>(image.format),
-          static_cast<uint8_t>(image.type), image.alignment, image.left,
-          image.top, image.stride);
+          fbb, level, image_format, Pack(image.type), image.alignment,
+          image.left, image.top, image.stride);
     }
     return fbb.CreateVector(image_params);
   }
@@ -210,9 +235,8 @@ SplitEngineTextureBuilder& SplitEngineTextureBuilder::Name(
   // If it remains experimental, update this assert to expect the new production
   // API level to unblock the build.
   //
-  static_assert(android_xr::kSplitEngineProductionApiLevel == 1,
-                "Production API level bumped. Verify if texture naming should "
-                "be promoted to production or remain experimental.");
+  SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+      /*production_api_level=*/1);
   if (serializer_->GetApiLevel() ==
       android_xr::kSplitEngineExperimentalApiLevel) {
     state_.name = name;

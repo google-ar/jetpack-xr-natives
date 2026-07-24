@@ -20,11 +20,10 @@
 #include "core/collision/collision_helpers.h"
 #include "core/collision/plane.h"
 #include "core/collision/ray.h"
-#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/components/grid_asset.h"
 #include "core/editor/editor.h"
-#include "core/editor/events.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
@@ -62,17 +61,15 @@ Future<absl::Status> Grid::Setup() {
       .Then([this, &editor](
                 ComponentHandle<PrimitiveShapeRenderer> primitive_renderer) {
         grid_renderer_ = primitive_renderer;
-        PlatformStorage& storage =
-            *GetView().GetRegistry().Get<PlatformStorage>();
-        grid_renderer_->SetEnabled(
-            storage.GetBool(kGridEnabledKey, kGridEnabledDefault));
-        editor.GetDispatcher().Connect(
-            [this](const EditorSettingChangedEvent& event) mutable {
-              if (event.grid_enabled.has_value()) {
-                grid_renderer_->SetEnabled(*event.grid_enabled);
-              }
-            },
-            this);
+
+        const auto set_enabled = [this](bool enabled, bool /*old*/) {
+          if (!grid_renderer_) return;
+          grid_renderer_->SetEnabled(enabled);
+        };
+
+        grid_enabled_binding_ =
+            PropertyBinding<bool>(editor.GetSettings().show_grid, set_enabled,
+                                  BindingMode::kBindAndFire);
         return absl::OkStatus();
       });
 }

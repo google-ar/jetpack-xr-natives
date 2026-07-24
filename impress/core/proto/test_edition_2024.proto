@@ -126,3 +126,14 @@ message OneofMessage2024 {
     TestEdition2024Message.TestNestedMessage msg = 4;
   }
 }
+
+message PreloadOneofStateProto2024 {
+  oneof variant {
+    PreloadFieldProto field = 1;
+    int32 other = 2;
+  }
+}
+
+message PreloadOptionalStateProto2024 {
+  PreloadFieldProto field = 1;
+}

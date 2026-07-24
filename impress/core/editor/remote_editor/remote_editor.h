@@ -23,6 +23,7 @@
 #include "core/editor/editor_info.h"
 #include "core/editor/layout/layout_composer.h"
 #include "core/editor/remote_editor/remote_editor_info.h"
+#include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {

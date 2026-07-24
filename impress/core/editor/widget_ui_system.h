@@ -89,7 +89,7 @@ class WidgetUiSystem : public System {
 
  private:
   void ProcessPendingRemoves();
-  void AddWindowConfiguration(absl::string_view name,
+  void AddWindowConfiguration(Widget* widget,
                               const WidgetLayoutInfo& layout_info);
 
   bool ShouldDrawWidget(const WidgetLayoutInfo& layout_info,
@@ -122,7 +122,7 @@ T* WidgetUiSystem::AddWidget(const WidgetLayoutInfo& layout_info,
   widgets_.push_back({std::move(widget), layout_info});
   type_hashes_.push_back(type_traits::kTypeHash<T>);
 
-  AddWindowConfiguration(widget_ptr->GetName(), layout_info);
+  AddWindowConfiguration(widget_ptr, layout_info);
   return widget_ptr;
 }
 

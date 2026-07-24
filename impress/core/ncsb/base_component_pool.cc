@@ -16,7 +16,6 @@
 
 #include <cassert>
 #include <cstddef>
-#include <optional>
 #include <utility>
 
 #include "absl/log/check.h"
@@ -25,7 +24,6 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "core/async/future.h"
-#include "core/common/base_pool_allocator.h"
 #include "core/common/holdable.h"
 #include "core/common/invocable.h"
 #include "core/common/rememberer.h"
@@ -137,9 +135,9 @@ void BaseComponentPool::ComponentStore::TryDensifyComponentsVector() {
   free_indices_count_ = 0;
 }
 
-BaseComponentPool::BaseComponentPool(BaseView& view,
-                                     BasePoolAllocator<>* base_allocator,
-                                     ComponentId component_id)
+BaseComponentPool::BaseComponentPool(
+    BaseView& view, BaseComponentPool::BaseAllocator* base_allocator,
+    ComponentId component_id)
     : view_(view),
       base_allocator_(base_allocator),
       component_id_(component_id),
@@ -191,6 +189,10 @@ Component* BaseComponentPool::Add(NodeHandle node) noexcept {
 void BaseComponentPool::PostSetup(Component& component,
                                   bool should_enable_component) noexcept {
   
+
+  if (base_allocator_) {
+    base_allocator_->SetSubsetBit(kSubsetReady, &component, true);
+  }
 
   if (should_enable_component) {
     component.SetEnabled(true);

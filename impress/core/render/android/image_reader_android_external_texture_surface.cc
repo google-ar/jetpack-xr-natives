@@ -393,8 +393,26 @@ ImageReaderAndroidExternalTextureSurface::GetMediaColorSpace() const {
 
   // We set colorspace metadata in `UpdateTexture`, which will hand off
   // the linearization to the hardware.
+  const AHardwareBuffer* buffer = latest_images_.front()->GetHardwareBuffer();
+  if (buffer == nullptr) {
+    return absl::InternalError("No hardware buffer available to describe.");
+  }
+
+  AHardwareBuffer_Desc desc;
+  AHardwareBuffer_describe(buffer, &desc);
+
+  // The GPU hardware sampler only supports HW linearization for 8-bit RGB/A
+  // UNORM formats. This also matches the Filament behavior in
+  // google3/third_party/filament/filament/backend/src/BackendUtilsAndroid.cpp
+  // (search for "mapToFilamentFormat").
+  bool format_supports_hw_linearization =
+      (desc.format == AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM ||
+       desc.format == AHARDWAREBUFFER_FORMAT_R8G8B8X8_UNORM ||
+       desc.format == AHARDWAREBUFFER_FORMAT_R8G8B8_UNORM);
+
   MediaColorSpace color_space = MediaColorSpace(*data_space);
-  if (color_space.GetTransfer() == MediaColorSpace::Transfer::kSRGB) {
+  if (color_space.GetTransfer() == MediaColorSpace::Transfer::kSRGB &&
+      format_supports_hw_linearization) {
     color_space.SetHardwareLinearized(true);
   }
 

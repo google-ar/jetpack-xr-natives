@@ -64,6 +64,10 @@ class ImGuiRenderer {
   virtual ImGuiRenderer* GetImGuiRenderer() = 0;
 
   virtual uint2 GetTextureSize() const = 0;
+
+  // Sets the target native window for rendering (switching EGL
+  // targets).
+  virtual void SetRenderTargetWindow(void* window) {}
 };
 
 }  // namespace imp::window

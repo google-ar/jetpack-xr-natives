@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 
 package(
@@ -39,4 +40,26 @@ cc_binary(
         "@com_google_impress//util/task:status",
         "@flatbuffers",
     ],
+)
+
+cc_binary(
+    name = "gen_flatbuffer_size_calculator",
+    srcs = ["gen_flatbuffer_size_calculator.cc"],
+    deps = [
+        "@com_google_absl//absl/base:log_severity",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/flags:parse",
+        "@com_google_absl//absl/flags:usage",
+        "@com_google_absl//absl/log:globals",
+        "@com_google_absl//absl/log:initialize",
+        "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
+        "@flatbuffers",
+    ],
+)
+
+bzl_library(
+    name = "gen_flatbuffer_size_calculator_bzl",
+    srcs = ["gen_flatbuffer_size_calculator.bzl"],
+    deps = ["@rules_cc//cc:core_rules"],
 )

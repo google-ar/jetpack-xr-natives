@@ -147,6 +147,18 @@ const int kQrCodeDataSize = 8;
 }  // namespace
 
 extern "C" {
+
+const std::vector<XrExtensionProperties> kSystemExtensionProperties = {
+    {XR_TYPE_EXTENSION_PROPERTIES, /*next=*/nullptr,
+     XR_ANDROID_DEPTH_TEXTURE_EXTENSION_NAME, XR_VERSION_1_0},
+    {XR_TYPE_EXTENSION_PROPERTIES, /*next=*/nullptr,
+     XR_ANDROID_EYE_TRACKING_EXTENSION_NAME, XR_VERSION_1_0},
+    {XR_TYPE_EXTENSION_PROPERTIES, /*next=*/nullptr,
+     XR_EXT_HAND_TRACKING_EXTENSION_NAME, XR_VERSION_1_0},
+    {XR_TYPE_EXTENSION_PROPERTIES, /*next=*/nullptr,
+     XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, XR_VERSION_1_0},
+};
+
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrInitializeLoaderKHR(
     const XrLoaderInitInfoBaseHeaderKHR* loaderInitInfo) {
   return XR_SUCCESS;
@@ -952,6 +964,33 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetTrackableQrCodeANDROID(
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrEnumerateSystemExtensionPropertiesANDROID(
+    XrInstance instance, XrSystemId systemId, uint32_t propertyCapacityInput,
+    uint32_t* propertyCountOutput,
+    XrSystemExtensionPropertiesANDROID* properties) {
+  if (systemId == XR_NULL_SYSTEM_ID) {
+    return XR_ERROR_SYSTEM_INVALID;
+  }
+  if (propertyCapacityInput == 0) {
+    *propertyCountOutput = kSystemExtensionProperties.size();
+    return XR_SUCCESS;
+  } else if (properties == nullptr) {
+    return XR_ERROR_VALIDATION_FAILURE;
+  } else if (propertyCapacityInput < kSystemExtensionProperties.size()) {
+    return XR_ERROR_SIZE_INSUFFICIENT;
+  }
+  for (int i = 0; i < kSystemExtensionProperties.size(); ++i) {
+    properties[i] = {
+        .type = XR_TYPE_SYSTEM_EXTENSION_PROPERTIES_ANDROID,
+        .next = nullptr,
+        .properties = kSystemExtensionProperties[i],
+        .isSupported = true,
+    };
+  }
+  return XR_SUCCESS;
+}
+
 }  // extern "C"
 
 namespace {
@@ -1109,6 +1148,8 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrDestroyTrackableImageDatabaseANDROID)},
     {"xrGetTrackableQrCodeANDROID",
      ToXrVoidFunction(Internal_xrGetTrackableQrCodeANDROID)},
+    {"xrEnumerateSystemExtensionPropertiesANDROID",
+     ToXrVoidFunction(Internal_xrEnumerateSystemExtensionPropertiesANDROID)},
 });
 
 }  // namespace

@@ -580,8 +580,8 @@ FlatbufferSizeCalculator::AddRequestCustomFilamentMaterial(
   }
   // Vector of references to constants
   AddReferenceVector(options.constants.size());
-  // MaterialPrecompileOptions table: constants(4)
-  AddTable({4});
+  // MaterialPrecompileOptions table: constants(4), variant_filter(4)
+  AddTable({4, 4});
 
   // source string
   AddVector(material_source_length + 1, 1);

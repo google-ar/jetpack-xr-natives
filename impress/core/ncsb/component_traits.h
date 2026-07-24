@@ -20,10 +20,15 @@
 #include <type_traits>
 #include <utility>
 
-#include "core/view/async/future.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "core/async/future.h"
+#include "core/proto/proto_traits.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp {
+
+class BaseView;
 
 template <typename T>
 class ComponentHandle;
@@ -163,7 +168,7 @@ using SetupMethodReturnType =
 
 // Compile-time check to see if a Setup method is asynchronous for a given
 // type of component. The Setup overload is determined by the Args.
-// If T has a Setup method overlad with the provided Args that returns
+// If T has a Setup method overload with the provided Args that returns
 // Future<absl::Status> this check will be true, otherwise false.
 template <typename T, typename... Args>
 static constexpr bool kIsSetupAsync =
@@ -172,7 +177,7 @@ static constexpr bool kIsSetupAsync =
 
 // Compile-time check to see if a Setup method returns absl::Status or not for a
 // given type of component. The Setup overload is determined by the Args. If T
-// has a Setup method overlad with the provided Args that returns absl::Status
+// has a Setup method overload with the provided Args that returns absl::Status
 // this check will be true, otherwise false.
 template <typename T, typename... Args>
 static constexpr bool kIsSetupReturnTypeStatus =
@@ -233,6 +238,22 @@ static constexpr bool kHasPreSaveFunc = internal::HasPreSaveFunc<Comp>(0);
 template <typename Comp>
 static constexpr bool kHasUpdateFunc = internal::HasUpdateFunc<Comp>(0);
 
+// Compile-time check to see if a component has a nested type named IsfInfo
+// defined.
+template <typename T>
+static constexpr bool kIsIsfInfoDefined = internal::IsIsfInfoDefined<T>(0);
+
+template <typename T>
+static constexpr bool kComponentRequiresAsyncPreload = []() {
+  if constexpr (kIsIsfInfoDefined<T>) {
+    using StateT = typename T::IsfInfo::StateT;
+    if constexpr (!std::is_same_v<StateT, void>) {
+      return proto_traits::StateRequiresAsyncPreload<StateT>::value;
+    }
+  }
+  return false;
+}();
+
 // The result returned when adding a component if the Setup method called
 // is asynchronous.
 template <typename T>
@@ -253,14 +274,10 @@ using AddResult = typename std::conditional_t<
 // See Component::AddWithStateResult for documentation.
 template <typename T, typename... Args>
 using AddWithStateResult = typename std::conditional_t<
-    kIsSetupWithStateAsync<T, Args...>, AsyncResult<T>,
+    kComponentRequiresAsyncPreload<T> || kIsSetupWithStateAsync<T, Args...>,
+    AsyncResult<T>,
     std::conditional_t<kIsSetupWithStateReturnTypeStatus<T, Args...>,
                        StatusResult<T>, ComponentHandle<T>>>;
-
-// Compile-time check to see if a component has a nested type named IsfInfo
-// defined.
-template <typename T>
-static constexpr bool kIsIsfInfoDefined = internal::IsIsfInfoDefined<T>(0);
 
 // Compile-time check to see if T has a nested type named
 // CleanupDependencies defined.

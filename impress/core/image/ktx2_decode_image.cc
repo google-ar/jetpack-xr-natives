@@ -265,8 +265,8 @@ absl::StatusOr<CompressedImageContents> Ktx2DecodeImage(
   absl::optional<ktx2::BasisLzGlobalData> basis_lz_global_data;
 
   // Initializes the transcoder according to color model.
-  absl::variant<basist::basisu_lowlevel_uastc_ldr_4x4_transcoder,
-                basist::basisu_lowlevel_etc1s_transcoder>
+  std::variant<basist::basisu_lowlevel_uastc_ldr_4x4_transcoder,
+               basist::basisu_lowlevel_etc1s_transcoder>
       transcoder;
   if (basic_data_format_descriptor_block.header.color_model ==
       kDescriptorFormatColorModelEtc1S) {

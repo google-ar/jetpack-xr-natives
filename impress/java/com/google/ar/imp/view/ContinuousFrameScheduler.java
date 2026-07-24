@@ -34,13 +34,8 @@ public final class ContinuousFrameScheduler extends FrameScheduler {
   public static class Factory implements FrameScheduler.Factory {
     @Override
     public FrameScheduler create(ThreadMode threadMode, String threadName) {
-      if (instance == null) {
-        instance = new ContinuousFrameScheduler(threadMode, threadName);
-      }
-      return instance;
+      return new ContinuousFrameScheduler(threadMode, threadName);
     }
-
-    private static ContinuousFrameScheduler instance = null;
   }
 
   private static final class ContinuousFrameHandler extends Handler {

@@ -18,11 +18,13 @@
 
 #include "AssetLoaderExtended.h"
 #include "TangentSpaceMeshWrapper.h"
-#include "../GltfEnums.h"
+
 #include "../FFilamentAsset.h"
+#include "../GltfEnums.h"
 #include "../Utility.h"
 
 #include <geometry/TangentSpaceMesh.h>
+
 #include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/StructureOfArrays.h"

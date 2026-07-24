@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_IMAGE_WASM_DECODE_IMAGE_H_
 #define THIRD_PARTY_IMPRESS_CORE_IMAGE_WASM_DECODE_IMAGE_H_
 
+#include <cstdint>
 #include <memory>
 
 #include "absl/strings/string_view.h"

@@ -36,6 +36,7 @@
 #include "absl/status/statusor.h"
 #include "dear_imgui/backends/imgui_impl_android.h"
 #include "core/async/future.h"
+#include "core/common/rememberer.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
@@ -44,7 +45,6 @@
 #include "core/render/texture.h"
 #include "core/view/base_view.h"
 #include "core/window/imgui_renderer.h"
-#include "split_engine/materials/texture_external_material.h"
 
 struct ImGuiContext;
 
@@ -86,7 +86,7 @@ class OpenGLImGuiRenderer : public ImGuiRenderer {
   // Indiicates whether the imgui renderer is ready to render. This is true
   // when the surface_future_ is ready and the OGL is initialized.
   bool IsReady() override {
-    return surface_future_.Ready() && is_ogl_initialized_;
+    return surface_future_.Ready() && surface_future_.Get().ok();
   }
 
   // returns a pointer to the ImGuiRenderer interface.
@@ -102,6 +102,8 @@ class OpenGLImGuiRenderer : public ImGuiRenderer {
 
   BorrowedTexturePtr GetTexture() override { return texture_.Borrow(); }
 
+  void SetRenderTargetWindow(void* window) override;
+
  private:
   absl::Status InitializeOGL();
 
@@ -115,19 +117,28 @@ class OpenGLImGuiRenderer : public ImGuiRenderer {
   EGLDisplay egl_display_ = EGL_NO_DISPLAY;
   EGLContext egl_context_ = EGL_NO_CONTEXT;
   EGLSurface egl_surface_ = EGL_NO_SURFACE;
+  EGLConfig egl_config_ = nullptr;
 
   ImGuiContext* imgui_context_ = nullptr;
   OwnedOrBorrowedTexturePtr texture_;
   std::unique_ptr<AndroidExternalTextureSurface> texture_surface_ptr_;
   BaseView& base_view_;
   JNIEnv* env_ = nullptr;
-  ANativeWindow* window_;
 
-  std::unique_ptr<android_xr::TextureExternalMaterial> material_;
-  imp::NodeHandle node_;
-  Future<std::unique_ptr<imp::AndroidExternalTextureSurface>> surface_future_;
+  // The local on-screen window created from the AndroidExternalTextureSurface.
+  ANativeWindow* window_ = nullptr;
 
-  bool is_ogl_initialized_ = false;
+  // The target window currently active for EGL operations and ImGui input
+  // rendering. Can be either the local window_ or a remote client window.
+  ANativeWindow* active_window_ = nullptr;
+
+  // Caches a remote client window if SetRenderTargetWindow is called before
+  // OpenGL ES initialization is complete. Applied once initialization finishes.
+  void* cached_remote_window_ = nullptr;
+
+  Future<absl::Status> surface_future_;
+  imp::Rememberer rememberer_;
+
   float2 texture_size_ = {1, 1};
 };
 

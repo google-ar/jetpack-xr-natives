@@ -39,6 +39,7 @@
 #include "core/config.h"
 #include "core/editor/camera_defaults.h"
 #include "core/editor/command_manager.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/components/camera_rotate.h"
 #include "core/editor/components/camera_translate.h"
 #include "core/editor/components/camera_zoom.h"
@@ -50,6 +51,8 @@
 #include "core/editor/editor_info.h"
 #include "core/editor/editor_input_handler.h"
 #include "core/editor/editor_plugin.h"
+#include "core/editor/editor_settings.h"
+#include "core/editor/editor_settings_storage.h"
 #include "core/editor/editor_style.h"
 #include "core/editor/events.h"
 #include "core/editor/file_loader_helper.h"
@@ -57,7 +60,6 @@
 #include "core/editor/layout/editor_panel_ids.h"
 #include "core/editor/layout/layout_composer.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
-#include "core/editor/widgets/input_settings_widget_constants.h"
 #include "core/editor/selection_controller.h"
 #include "core/editor/selection_controller_impl.h"
 #include "core/editor/visualizers/camera_visualizer.h"
@@ -76,6 +78,7 @@
 #include "core/editor/widgets/event_injector.h"
 #include "core/editor/widgets/filament_view_settings_widget.h"
 #include "core/editor/widgets/file_drag_and_drop.h"
+#include "core/editor/widgets/gltf_asset_details_widget.h"
 #include "core/editor/widgets/hierarchy.h"
 #include "core/editor/widgets/material_editor_widget.h"
 #include "core/editor/widgets/materials_widget.h"
@@ -207,6 +210,8 @@ class EditorImpl : public Editor {
   // Returns the rect of the viewport in pixels.
   std::optional<Rect> GetViewportRect() const override;
 
+  EditorSettings& GetSettings() noexcept override { return settings_; }
+
  private:
   // Used to provide access to EditorInformation without needing to access the
   // actual full Editor. This is useful to avoid circular dependencies with the
@@ -220,6 +225,7 @@ class EditorImpl : public Editor {
     bool IsPaused() const override;
     bool HasFramesToStep() const override;
     EditorInfo::DisplayMode GetDisplayMode() const override;
+    EditorInfo::PlatformMode GetPlatformMode() const override;
 
    private:
     EditorImpl& editor_;
@@ -238,9 +244,6 @@ class EditorImpl : public Editor {
 
   // Enables EditorClipboard functionality (cut/copy/paste).
   void EnableEditorClipboard(Dispatcher& dispatcher);
-
-  // Registers a handler for dealing with changes made through "Settings" menu.
-  void RegisterEditorSettingChangedEventHandler();
 
   // Forwards UpdateSystem::PreComponentsUpdateEvent and
   // UpdateSystem::PostComponentsUpdateEvent from the app dispatcher to the
@@ -272,6 +275,9 @@ class EditorImpl : public Editor {
 
   // Prints the instructions for the camera controls.
   void PrintCameraInstructions() const;
+
+  // Binds editor settings to their corresponding components or settings.
+  void BindEditorSettings();
 
   // Applies the given setting of camera mode and input mode to the Editor.
   void ApplyEditorState(EditorState editor_state);
@@ -324,7 +330,12 @@ class EditorImpl : public Editor {
   std::vector<NodeHandle> sandbox_nodes_;
   GltfAsset::LoadOptions gltf_load_options_;
   EditorInfo::PlatformMode platform_mode_ = EditorInfo::PlatformMode::kDefault;
-  bool use_legacy_camera_controls_ = kUseLegacyCameraControlsDefault;
+  EditorSettings settings_;
+  std::unique_ptr<EditorSettingsStorage> settings_storage_;
+  PropertyBinding<bool> use_legacy_camera_controls_binding_;
+  PropertyBinding<bool> vertex_selection_binding_;
+  PropertyBinding<bool> load_mesh_data_on_cpu_binding_;
+  PropertyBinding<bool> bvh_mesh_collision_acceleration_binding_;
 };
 
 EditorImpl::EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
@@ -372,8 +383,8 @@ void EditorImpl::Initialize() {
   PlatformStorage& storage = *GetView().GetRegistry().Get<PlatformStorage>();
   GetView().GetRegistry().Register<SelectionController>(
       std::make_unique<SelectionControllerImpl>(&GetView()));
-  use_legacy_camera_controls_ = storage.GetBool(
-      kUseLegacyCameraControlsKey, kUseLegacyCameraControlsDefault);
+  settings_storage_ =
+      std::make_unique<EditorSettingsStorage>(storage, settings_);
   editor_root_node_ = GetView().CreateNode();
   editor_root_node_->SetEnabled(false);
 #if IMP_RUNTIME(DEV)
@@ -383,12 +394,18 @@ void EditorImpl::Initialize() {
   // TODO: Find a way to distinguish between SplitEngine app on
   // mobile and Xr.
   if (GetView().GetSplitEngineSerializer()) {
-    platform_mode_ = EditorInfo::PlatformMode::kXrSplitEngineApp;
+    // Distinguish between SplitEngine app on mobile (phone) and XR.
+    if (GetView().GetHost() != nullptr && GetView().GetHost()->IsInXr()) {
+      platform_mode_ = EditorInfo::PlatformMode::kXrSplitEngineApp;
+    } else {
+      platform_mode_ = EditorInfo::PlatformMode::kSplitEngineApp;
+    }
   }
 
   InitializeWidgetUiSystem();
 
-  if (platform_mode_ != EditorInfo::PlatformMode::kXrSplitEngineApp) {
+  if ((platform_mode_ != EditorInfo::PlatformMode::kXrSplitEngineApp) &&
+      (platform_mode_ != EditorInfo::PlatformMode::kSplitEngineApp)) {
     visualizer_manager_ = std::make_unique<VisualizerManager>(&GetView());
     visualizer_manager_->RegisterVisualizer<LightComponent, LightVisualizer>();
     if (GetCameraConfiguration() !=
@@ -492,17 +509,27 @@ void EditorImpl::Initialize() {
   editor_clipboard.EnableDispatcherEvents(dispatcher_);
   editor_clipboard.EnableDispatcherEvents(app_dispatcher);
 
-  // Allows loading mesh data on CPU.
-  // Allows Vertex Selection functionality for meshes loaded on CPU.
-  RegisterEditorSettingChangedEventHandler();
+  BindEditorSettings();
 
   // Forward UpdateSystem::PreComponentsUpdateEvent& and
   // UpdateSystem::PostComponentsUpdateEvent& to Editor dispatcher.
   EnableUpdateSystemEventForwarding();
 
 #if IMP_PLATFORM(ANDROID)
-  if (platform_mode_ == EditorInfo::PlatformMode::kXrSplitEngineApp) {
-    SpawnWorldSpaceEditor();
+  if (platform_mode_ == EditorInfo::PlatformMode::kXrSplitEngineApp ||
+      platform_mode_ == EditorInfo::PlatformMode::kSplitEngineApp) {
+    split_engine::SplitEngineSerializer* serializer =
+        GetView().GetSplitEngineSerializer();
+    // TODO: Remove this check once custom material is supported
+    // for non-experimental builds.
+    if (serializer && serializer->GetApiLevel() ==
+                          split_engine::kSplitEngineExperimentalApiLevel) {
+      SpawnWorldSpaceEditor();
+    } else {
+      IMP_LOG(imp::ERROR)
+          << "Not spawning WorldSpaceEditorUi because SplitEngineApiLevel "
+             "is not set to experimental.";
+    }
   }
 #endif
 
@@ -690,6 +717,10 @@ void EditorImpl::InitializeWidgetUiSystem() {
   asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
       WidgetLayoutInfo(PanelId::kTabBar, WidgetPresence::kOnlyIn2DLargeScreen),
       view);
+  widget_ui_system_.AddWidget<GltfAssetDetailsWidget>(
+      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kOnlyIn2DLargeScreen,
+                       WidgetVisibility::kHidden),
+      view, asset_library_);
   widget_ui_system_.AddWidget<SettingsWidget>(
       WidgetLayoutInfo(PanelId::kMenuBar, WidgetPresence::kOnlyIn2DLargeScreen),
       GetView());
@@ -703,7 +734,7 @@ void EditorImpl::InitializeWidgetUiSystem() {
       WidgetLayoutInfo(PanelId::kFreeform), view);
   widget_ui_system_.AddWidget<VisualizeOrigins>(
       WidgetLayoutInfo(PanelId::kFreeform), view);
-  if (!use_legacy_camera_controls_) {
+  if (!settings_.use_legacy_camera_controls.Get()) {
     widget_ui_system_.AddWidget<BoxSelectionWidget>(
         WidgetLayoutInfo(PanelId::kFreeform), view);
   }
@@ -874,52 +905,45 @@ void EditorImpl::EnableUndoAndRedo(Dispatcher& dispatcher) {
       this);
 }
 
-void EditorImpl::RegisterEditorSettingChangedEventHandler() {
-  dispatcher_.Connect(
-      [this](const EditorSettingChangedEvent& event) {
-        if (event.vertex_selection_enabled.has_value()) {
-          if (*event.vertex_selection_enabled) {
-            widget_ui_system_.AddWidget<VertexSelectWidget>(
-                WidgetLayoutInfo(PanelId::kFreeform), GetView(), dispatcher_,
-                editor_root_node_);
-          } else {
-            widget_ui_system_.RemoveWidget<VertexSelectWidget>();
-          }
-        }
+void EditorImpl::BindEditorSettings() {
+  const auto change_vertex_selection = [this](bool enabled, bool /*old*/) {
+    if (!enabled) {
+      widget_ui_system_.RemoveWidget<VertexSelectWidget>();
+      return;
+    }
 
-        std::optional<bool> load_mesh_data_on_cpu_enabled =
-            event.load_mesh_data_on_cpu_enabled;
-        if (load_mesh_data_on_cpu_enabled.has_value()) {
-          if (*load_mesh_data_on_cpu_enabled) {
-            gltf_load_options_.collider_mode =
-                GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH;
-          } else {
-            gltf_load_options_.collider_mode =
-                GltfState::ColliderMode::GLTF_COLLIDER_BOUNDS_PER_MESH_DEFAULT;
-          }
-        }
+    widget_ui_system_.AddWidget<VertexSelectWidget>(
+        WidgetLayoutInfo(PanelId::kFreeform), GetView(), dispatcher_,
+        editor_root_node_);
+  };
+  vertex_selection_binding_ =
+      PropertyBinding<bool>(settings_.vertex_selection_enabled,
+                            change_vertex_selection, BindingMode::kBindAndFire);
 
-        std::optional<bool> bvh_mesh_collision_acceleration_enabled =
-            event.bvh_mesh_collision_acceleration_enabled;
-        if (bvh_mesh_collision_acceleration_enabled.has_value()) {
-          if (*bvh_mesh_collision_acceleration_enabled) {
-            gltf_load_options_.collider_mode = GltfState::ColliderMode::
-                GLTF_COLLIDER_MESH_COLLISION_ACCELERATOR;
-          } else {
-            gltf_load_options_.collider_mode =
-                GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH;
-          }
-        }
-      },
-      this);
+  const auto change_load_mesh_data_on_cpu = [this](bool enabled, bool /*old*/) {
+    gltf_load_options_.collider_mode =
+        enabled
+            ? GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH
+            : GltfState::ColliderMode::GLTF_COLLIDER_BOUNDS_PER_MESH_DEFAULT;
+  };
+  load_mesh_data_on_cpu_binding_ = PropertyBinding<bool>(
+      settings_.load_mesh_data_on_cpu_enabled, change_load_mesh_data_on_cpu,
+      BindingMode::kBindAndFire);
 
-  dispatcher_.Connect(
-      [this](const UseLegacyCameraControlsEvent& event) {
-        if (use_legacy_camera_controls_ == event.enabled) return;
+  const auto change_bvh_mesh_collision_acceleration = [this](bool enabled,
+                                                             bool /*old*/) {
+    gltf_load_options_.collider_mode =
+        enabled
+            ? GltfState::ColliderMode::GLTF_COLLIDER_MESH_COLLISION_ACCELERATOR
+            : GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH;
+  };
+  bvh_mesh_collision_acceleration_binding_ = PropertyBinding<bool>(
+      settings_.bvh_mesh_collision_acceleration_enabled,
+      change_bvh_mesh_collision_acceleration, BindingMode::kBindAndFire);
 
-        use_legacy_camera_controls_ = event.enabled;
-
-        if (use_legacy_camera_controls_) {
+  use_legacy_camera_controls_binding_ = PropertyBinding<bool>(
+      settings_.use_legacy_camera_controls, [this](bool enabled, bool /*old*/) {
+        if (enabled) {
           widget_ui_system_.RemoveWidget<BoxSelectionWidget>();
         } else {
           widget_ui_system_.AddWidget<BoxSelectionWidget>(
@@ -929,10 +953,8 @@ void EditorImpl::RegisterEditorSettingChangedEventHandler() {
         if (current_state_.camera_mode != CameraMode::kEditor) return;
 
         PrintCameraInstructions();
-      },
-      this);
+      });
 }
-
 void EditorImpl::EnableUpdateSystemEventForwarding() {
   GetView().GetDispatcher().Connect(
       [this](const UpdateSystem::PreComponentsUpdateEvent& event) {
@@ -1254,7 +1276,7 @@ bool EditorImpl::HasFramesToStep() { return has_frames_to_step_; }
 
 void EditorImpl::PrintCameraInstructions() const {
   IMP_LOG(imp::INFO) << "Camera Controls:";
-  if (use_legacy_camera_controls_) {
+  if (settings_.use_legacy_camera_controls.Get()) {
     IMP_LOG(imp::INFO) << "Left Click & Drag to rotate the camera.";
     IMP_LOG(imp::INFO) << "Right Click & Drag to move the camera.";
     IMP_LOG(imp::INFO) << "Rotate the scroll wheel to zoom the camera in & out.";
@@ -1285,9 +1307,16 @@ void EditorImpl::SetViewportRect(std::optional<Rect> rect) {
   if (rect) {
     render_target = viewport_widget_render_target_->GetRenderTarget();
 
-    const float2 size = rect->half_extent * 2.0f * pixel_ratio;
-    viewport = filament::Viewport{0, 0, static_cast<uint32_t>(size.x),
-                                  static_cast<uint32_t>(size.y)};
+    // If the Remote Editor is enabled we want to use the device size for the
+    // viewport rather than the widget size.
+    if (display_mode_ == EditorInfo::DisplayMode::kRemoteScreen) {
+      const uint2 device_size = GetView().GetHost()->GetPixelDimensions();
+      viewport = filament::Viewport{0, 0, device_size.x, device_size.y};
+    } else {
+      const float2 size = rect->half_extent * 2.0f * pixel_ratio;
+      viewport = filament::Viewport{0, 0, static_cast<uint32_t>(size.x),
+                                    static_cast<uint32_t>(size.y)};
+    }
   }
 
   GetView().GetHost()->SetEditorViewportOverride({}, viewport);
@@ -1296,7 +1325,12 @@ void EditorImpl::SetViewportRect(std::optional<Rect> rect) {
   // Ensure the active camera's projection matches the viewport aspect ratio.
   if (viewport_widget_rect_ != rect) {
     viewport_widget_rect_ = rect;
-    UpdateActiveCamera();
+
+    // Do not update the camera projection in Remote Editor mode, as the camera
+    // should maintain the device's aspect ratio.
+    if (display_mode_ != EditorInfo::DisplayMode::kRemoteScreen) {
+      UpdateActiveCamera();
+    }
   }
 }
 
@@ -1425,6 +1459,10 @@ bool EditorImpl::Info::HasFramesToStep() const {
 
 EditorInfo::DisplayMode EditorImpl::Info::GetDisplayMode() const {
   return editor_.GetDisplayMode();
+}
+
+EditorInfo::PlatformMode EditorImpl::Info::GetPlatformMode() const {
+  return editor_.platform_mode_;
 }
 
 }  // namespace imp::editor

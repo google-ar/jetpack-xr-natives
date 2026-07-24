@@ -43,6 +43,7 @@
 #include "core/async/future.h"
 #include "core/common/context.h"
 #include "core/materials/compiler/cache/file_utilities.h"
+#include "core/materials/compiler/material_compiler_config.h"
 #include "third_party/openssl/sha2.h"
 
 namespace {
@@ -98,11 +99,23 @@ MaterialCache::MaterialCache(std::unique_ptr<FileUtilities> file_utils)
 // wrong material. If we wanted to use a simpler hash function, we could get the
 // application name from the bridge and store materials in a folder per app to
 // avoid the issue of hash collision across apps.
-MaterialHash MaterialCache::Hash(absl::string_view material_source) {
-  const uint8_t* data =
-      reinterpret_cast<const uint8_t*>(material_source.data());
+// NOTE 2: We need to incorporate platform, target api, and variant filter for
+// generating hash otherwise a material compiled with different configuration
+// will be wrongfully returned which then fails to render (causing filament
+// postcondition panic).
+MaterialHash MaterialCache::Hash(absl::string_view material_source,
+                                 const MaterialCompilerConfig& config) {
+  uint64_t source_size = static_cast<uint64_t>(material_source.size());
+
+  SHA256_CTX ctx;
+  SHA256_Init(&ctx);
+  SHA256_Update(&ctx, &source_size, sizeof(source_size));
+  SHA256_Update(&ctx, material_source.data(), material_source.size());
+  SHA256_Update(&ctx, &config.platform, sizeof(config.platform));
+  SHA256_Update(&ctx, &config.target_api, sizeof(config.target_api));
+  SHA256_Update(&ctx, &config.variant_filter, sizeof(config.variant_filter));
   MaterialHash hash;
-  SHA256(data, material_source.size(), hash.data());
+  SHA256_Final(hash.data(), &ctx);
   return hash;
 }
 

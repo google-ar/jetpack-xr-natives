@@ -261,7 +261,9 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":fbs",
+        ":flatbuffer_utils",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
@@ -691,6 +693,7 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":flatbuffer_size_calculator",
+        ":flatbuffer_utils",
         ":split_engine_serializer",
         ":split_engine_texture_serializer",
         "//core/assets",
@@ -856,9 +859,12 @@ cc_library(
         "//core/assets/material:material_load_options_proto_cc",
         "//core/math",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
+        "@third_party//filament/filament/backend:driver_enums",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ],
@@ -874,7 +880,8 @@ cc_library(
     deps = [
         "//core/math",
         "//core/model/mesh:mesh_data",
-        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/types:span",
     ],
     alwayslink = 1,
 )
@@ -1041,10 +1048,11 @@ cc_library(
     hdrs = ["flatbuffers_fuzzing_domains.h"],
     deps = [
         "//testing/fuzzing:domains",
-        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/base:nullability",
+        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/random:bit_gen_ref",
         "@com_google_absl//absl/random:distributions",
@@ -1052,6 +1060,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
+        "@com_google_impress//core/common:log",
         "@flatbuffers",
     ],
     alwayslink = 1,
