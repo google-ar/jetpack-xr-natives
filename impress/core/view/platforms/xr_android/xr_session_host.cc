@@ -357,6 +357,14 @@ absl::Status XrSessionHost::PreBeginRender() {
       MP_RETURN_IF_ERROR(SetActiveSwapChain(swap_chain_standard_));
   }
 
+  // Update the QueuedFrameInfo with all the composition layers that are
+  // potentially going to be submitted to OpenXR. NOTE: This must be done after
+  // Update() because that is when quad layers finalize whether they will be
+  // submitted or not. This also must be done before all render passes so that
+  // QueuedFrameInfo is complete by the time those render passes are set off.
+  UpdateQueuedCompositionLayers();
+  // Triggers composition layer render passes.
+  GetView()->GetDispatcher().Send(XrCompositionLayerRenderEvent{});
   return absl::OkStatus();
 }
 
@@ -615,6 +623,7 @@ absl::Status XrSessionHost::AdvanceFrame() {
   
 
   sync_destruction_queue_.Flush(GetEngine());
+  swap_chain_destruction_queue_.Flush(GetEngine());
 
   if (init_state_ == XrInitState::kWaitingForSystem) {
     auto system_id_or = ObtainSystemId();
@@ -757,11 +766,18 @@ absl::Status XrSessionHost::AdvanceFrame() {
     absl::MutexLock lock(frame_queue_mutex_);
     imp::output::Xr("Adding time %i to queue",
                     frame_state.predictedDisplayTime);
-    frame_queue_.push(
-        {.display_time = frame_state.predictedDisplayTime,
-         .views = locate_views_result.views,
-         .should_render_varjo_foveation = use_varjo_foveation_this_frame_,
-         .sync = nullptr});
+
+    // Composition layer data is omitted here because this is before the
+    // Update() call, so we don't yet know which composition layers are enabled,
+    // nor if the main projection layer is enabled for this frame.
+    QueuedFrameInfo info = {
+        .display_time = frame_state.predictedDisplayTime,
+        .views = locate_views_result.views,
+        .should_render_varjo_foveation = use_varjo_foveation_this_frame_,
+        .sync = nullptr,
+        .foreground_executor = Executor::ForegroundExecutor()};
+
+    frame_queue_.push(std::move(info));
     if (prev_filament_thread_duration_) {
       filament_thread_timing_->AddSample(*prev_filament_thread_duration_);
       prev_filament_thread_duration_.reset();
@@ -1975,18 +1991,33 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
 
   IMP_TRACE();
 
+  // Count down the number of pending renders for each frame. Once the count
+  // reaches zero, we end the frame.
   QueuedFrameInfo frame_info;
+  bool is_last_render = false;
   {
     absl::MutexLock lock(frame_queue_mutex_);
-    frame_info = std::move(frame_queue_.front());
-    imp::output::Xr("Calling Xr end frame. displayTime=%i, queueSize=%i",
-                    frame_info.display_time, frame_queue_.size());
-    frame_queue_.pop();
-    prev_filament_thread_duration_ = filament_thread_duration_;
-    filament_thread_duration_.reset();
-    if (frame_info.before_end_frame_callback) {
-      frame_info.before_end_frame_callback();
+
+    if (frame_queue_.empty()) {
+      IMP_LOG(imp::FATAL) << "Frame queue unexpectedly empty in EndFrame.";
     }
+    QueuedFrameInfo& front_info = frame_queue_.front();
+    is_last_render = --frame_queue_.front().pending_renders <= 0;
+
+    if (is_last_render) {
+      frame_info = std::move(front_info);
+      frame_queue_.pop();
+      prev_filament_thread_duration_ = filament_thread_duration_;
+      filament_thread_duration_.reset();
+      if (frame_info.before_end_frame_callback) {
+        frame_info.before_end_frame_callback();
+      }
+    }
+  }
+
+  if (!is_last_render) {
+    // We only want to call xrEndFrame once per frame.
+    return absl::OkStatus();
   }
 
   std::vector<XrCompositionLayerBaseHeader*> layers;
@@ -1999,7 +2030,9 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
   // (might) get populated.
   XrCompositionLayerDepthTestFB depth_test;
 
-  if (is_main_projection_layer_enabled_) {
+  // It's possible that the main projection layer is disabled, and we are either
+  // only submitting quad layers, or submitting no layers.
+  if (frame_info.is_main_projection_layer_enabled) {
     layer_depth_infos_.clear();
     layer_depth_infos_.reserve(frame_info.views.size());
     int32_t x_offset = 0;
@@ -2078,7 +2111,7 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
   }
 
   // Add non-projection composition layers.
-  for (auto& [layer, weight] : composition_layers_) {
+  for (auto& [layer, weight] : frame_info.composition_layers) {
     layers.push_back(layer);
   }
 
@@ -2087,20 +2120,20 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
   // beginning of the array.
   std::sort(
       layers.begin(), layers.end(),
-      [&layer, this](XrCompositionLayerBaseHeader* a,
-                     XrCompositionLayerBaseHeader* b) {
+      [&layer, &frame_info](XrCompositionLayerBaseHeader* a,
+                            XrCompositionLayerBaseHeader* b) {
         int a_weight;
         int b_weight;
         // If the layer is our projection layer, treat it's weight as 0;
         if (a == reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer)) {
           a_weight = 0;
         } else {
-          a_weight = composition_layers_[a];
+          a_weight = frame_info.composition_layers[a];
         }
         if (b == reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer)) {
           b_weight = 0;
         } else {
-          b_weight = composition_layers_[b];
+          b_weight = frame_info.composition_layers[b];
         }
         // Using > so that smaller weights are drawn later
         return a_weight > b_weight;
@@ -2306,13 +2339,39 @@ void XrSessionHost::PerformRender(filament::View* view,
                                   ViewHost::RenderPassOptions options) {
   IMP_TRACE();
 
-  uint8_t previous_layers = 0xFF;
-  if (!is_main_projection_layer_enabled_) {
-    // We disable the main projection layer by hiding all layers rather than
-    // skipping it outright. This allows the main projection layer to drive the
-    // call to xrEndFrame and maintain the frame lifecycle, even in the presence
-    // of quad layers, for example.
-    previous_layers = view->getVisibleLayers();
+  bool is_main_projection_layer_enabled = true;
+  bool force_empty_main_render = false;
+  {
+    absl::MutexLock lock(frame_queue_mutex_);
+    if (frame_queue_.empty()) {
+      IMP_LOG(imp::FATAL) << "Frame queue unexpectedly empty in PerformRender.";
+    }
+    QueuedFrameInfo& frame_info = frame_queue_.back();
+    // If there are no pending renders, force an empty main render to drive the
+    // frame loop.
+    if (frame_info.pending_renders == 0) {
+      force_empty_main_render = true;
+      frame_info.pending_renders = 1;
+      // TODO According to the OpenXR spec it should be safe to
+      // flip this bit to false. This would result in Impress acquiring and
+      // releasing the swapchain, but not submitting it in xrEndFrame. We keep
+      // it true for now because currently there is a bug in the OpenXR runtime
+      // where if we acquire and release a swapchain, but do not submit it in
+      // xrEndFrame, the OpenXR runtime will hang.
+      frame_info.is_main_projection_layer_enabled = true;
+    }
+    is_main_projection_layer_enabled =
+        frame_info.is_main_projection_layer_enabled;
+  }
+
+  // We can only skip the main render if there is a layer driving the frame
+  // loop.
+  if (!force_empty_main_render && !is_main_projection_layer_enabled) {
+    return;
+  }
+
+  uint8_t old_visible_layers = view->getVisibleLayers();
+  if (force_empty_main_render) {
     view->setVisibleLayers(0xFF, 0x00);
   }
 
@@ -2324,8 +2383,8 @@ void XrSessionHost::PerformRender(filament::View* view,
     PerformNaiveStereoscopicRender(view);
   }
 
-  if (!is_main_projection_layer_enabled_) {
-    view->setVisibleLayers(0xFF, previous_layers);
+  if (force_empty_main_render) {
+    view->setVisibleLayers(0xFF, old_visible_layers);
   }
 }
 
@@ -2628,6 +2687,11 @@ void XrSessionHost::SetAfterEndFrameCallback(Invocable<void(int)> callback) {
   frame_queue_.back().after_end_frame_callback = std::move(callback);
 }
 
+void XrSessionHost::DeferSwapChainDestruction(
+    filament::SwapChain* swap_chain_to_destroy) {
+  swap_chain_destruction_queue_.Push(swap_chain_to_destroy);
+}
+
 void XrSessionHost::MarkPostRenderAndCreateSync() {
 #if IMP_PLATFORM(ANDROID)
   absl::MutexLock lock(frame_queue_mutex_);
@@ -2668,8 +2732,11 @@ RobinSet<std::string> XrSessionHost::GetEnabledExtensions() const {
 }
 
 void XrSessionHost::AddCompositionLayer(XrCompositionLayerBaseHeader* layer,
-                                        int weight) {
+                                        int weight, bool expect_render) {
   composition_layers_[layer] = weight;
+  if (expect_render) {
+    rendering_composition_layers_.insert(layer);
+  }
 }
 
 void XrSessionHost::RemoveCompositionLayer(
@@ -2679,6 +2746,61 @@ void XrSessionHost::RemoveCompositionLayer(
     return;
   }
   composition_layers_.erase(it);
+  auto it2 = rendering_composition_layers_.find(layer);
+  if (it2 == rendering_composition_layers_.end()) {
+    return;
+  }
+  rendering_composition_layers_.erase(it2);
+}
+
+void XrSessionHost::UpdateQueuedCompositionLayers() {
+  absl::MutexLock lock(frame_queue_mutex_);
+
+  // Copy the composition layers by value to lock in the current state.
+  QueuedFrameInfo& frame_info = frame_queue_.back();
+
+  frame_info.composition_layers.reserve(composition_layers_.size());
+  frame_info.copied_quad_layers.reserve(composition_layers_.size());
+  for (auto& [layer, weight] : composition_layers_) {
+    XrCompositionLayerBaseHeader* layer_ptr = layer;
+    if (layer->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
+      auto* quad = reinterpret_cast<XrCompositionLayerQuad*>(layer);
+      frame_info.copied_quad_layers.push_back(*quad);
+      layer_ptr = reinterpret_cast<XrCompositionLayerBaseHeader*>(
+          &frame_info.copied_quad_layers.back());
+    }
+    frame_info.composition_layers[layer_ptr] = weight;
+  }
+
+  frame_info.is_main_projection_layer_enabled =
+      is_main_projection_layer_enabled_;
+
+  int expected_renders = 0;
+  for (XrCompositionLayerBaseHeader* layer : rendering_composition_layers_) {
+    if (composition_layers_.contains(layer)) {
+      expected_renders++;
+    }
+  }
+
+#if IMP_MATERIAL_API(OPENGL)
+  // OpenGL always calls EndFrame for the main projection layer even if render()
+  // is not called.
+  expected_renders++;
+#else
+  if (frame_info.is_main_projection_layer_enabled) {
+    expected_renders++;
+  }
+#endif
+
+  frame_info.pending_renders = expected_renders;
+}
+
+void XrSessionHost::MarkCompositionLayerRenderSkipped() {
+  absl::MutexLock lock(frame_queue_mutex_);
+  if (!frame_queue_.empty()) {
+    QueuedFrameInfo& frame_info = frame_queue_.back();
+    frame_info.pending_renders--;
+  }
 }
 
 }  // namespace imp

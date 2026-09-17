@@ -37,4 +37,8 @@ message CacheConfig {
   optional int32 model_assets_retained = 6;
   // Overrides default_assets_retained for texture assets.
   optional int32 texture_assets_retained = 7;
+  // Max number of compiled shader entries to retain. The default value is set
+  // internally (see ShaderCacheSystem). Each entry is roughly 20-25KB.
+  // This entry count limit applies to both in-memory and on-disk cache.
+  optional int32 shader_cache_retained = 8;
 }

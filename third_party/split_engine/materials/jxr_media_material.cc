@@ -215,20 +215,20 @@ static_assert(
 // android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget enums match.
 static_assert(DoEnumsMatchUnsafe(
                   imp::RenderEyeTarget::kBoth,
-                  android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget ::
+                  android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget::
                       DEFAULT_BOTH),
               "Enum mismatch");
 
 static_assert(
-    DoEnumsMatchUnsafe(imp::RenderEyeTarget::kLeftOnly,
-                       android_xr::schemas::
-                           BuiltInMaterial1b616c8aRenderEyeTarget ::LEFT_ONLY),
+    DoEnumsMatchUnsafe(
+        imp::RenderEyeTarget::kLeftOnly,
+        android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget::LEFT_ONLY),
     "Enum mismatch");
 
 static_assert(
     DoEnumsMatchUnsafe(imp::RenderEyeTarget::kRightOnly,
                        android_xr::schemas::
-                           BuiltInMaterial1b616c8aRenderEyeTarget ::RIGHT_ONLY),
+                           BuiltInMaterial1b616c8aRenderEyeTarget::RIGHT_ONLY),
     "Enum mismatch");
 
 }  // namespace
@@ -270,9 +270,7 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
   builder_.add_use_super_sampling(&use_super_sampling_packed);
 
   int api_level = view.GetSplitEngineSerializer()->GetApiLevel();
-
-  if (api_level == android_xr::kSplitEngineExperimentalApiLevel) {
-    // We're accessing unreleased features.
+  if (api_level >= 4) {
     builder_.add_render_eye_target(
         static_cast<
             android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget>(
@@ -366,7 +364,8 @@ flatbuffers::Offset<void> JxrMediaMaterial::SerializeParameters(
              media_color_space_parameters,
              imp::split_engine::PointerFromOptional(corner_radius_),
              imp::split_engine::PointerFromOptional(sub_view_rect_left_),
-             imp::split_engine::PointerFromOptional(sub_view_rect_right_))
+             imp::split_engine::PointerFromOptional(sub_view_rect_right_),
+             imp::split_engine::PointerFromOptional(tint_color_))
       .Union();
 }
 
@@ -414,14 +413,13 @@ void JxrMediaMaterial::SetFeatherRadius(imp::float2 feather_radius) {
 
 void JxrMediaMaterial::SetCornerRadius(imp::float2 corner_radius) {
   // TODO: (broken link) - Update these checks when the API is released.
-  if (spatial_api_level_ == android_xr::kSplitEngineExperimentalApiLevel) {
-    // We can't send these fields to older API levels
+  if (spatial_api_level_ >= 4) {
     corner_radius_ = imp::split_engine::Pack(corner_radius);
     MarkParametersDirty();
   } else if (corner_radius.x != 0 || corner_radius.y != 0) {
     IMP_LOG(imp::ERROR) << "SetCornerRadius: Non-Zero Corner radius is unsupported on "
                   "API level "
-               << spatial_api_level_;
+               << spatial_api_level_ << " - requires API level 4+.";
   }
 }
 
@@ -429,7 +427,7 @@ void JxrMediaMaterial::SetSubViewConfig(imp::float4 sub_view_rect_left,
                                         imp::float4 sub_view_rect_right) {
   constexpr imp::float4 kMonoViewRect = {0.0f, 0.0f, 1.0f, 1.0f};
   // TODO: (broken link) - Update these checks when the API is released.
-  if (spatial_api_level_ == android_xr::kSplitEngineExperimentalApiLevel) {
+  if (spatial_api_level_ >= 4) {
     sub_view_rect_left_ = imp::split_engine::Pack(sub_view_rect_left);
     sub_view_rect_right_ = imp::split_engine::Pack(sub_view_rect_right);
     MarkParametersDirty();
@@ -439,7 +437,20 @@ void JxrMediaMaterial::SetSubViewConfig(imp::float4 sub_view_rect_left,
     // running instances of the material which process stereo_mode directly.
     IMP_LOG(imp::ERROR) << "SetSubViewConfig: Non-Default sub view rect is unsupported "
                   "on API level "
-               << spatial_api_level_;
+               << spatial_api_level_ << " - requires API level 4+.";
+  }
+}
+
+void JxrMediaMaterial::SetTintColor(imp::float4 tint_color) {
+  // TODO: (broken link) - Update these checks when the API is released.
+  if (spatial_api_level_ >= 4) {
+    tint_color_ = imp::split_engine::Pack(tint_color);
+    MarkParametersDirty();
+  } else if (tint_color.x != 1.f || tint_color.y != 1.f ||
+             tint_color.z != 1.f || tint_color.w != 1.f) {
+    IMP_LOG(imp::ERROR) << "SetTintColor: Non-Default Tint color is unsupported on "
+                  "API level "
+               << spatial_api_level_ << " - requires API level 4+.";
   }
 }
 

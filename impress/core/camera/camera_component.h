@@ -229,6 +229,10 @@ class CameraComponent : public Component {
   // in the range [0, 1], the result will be inside the viewport.
   float2 PixelFromUVPoint(const float2& uv_point) const;
 
+  // Returns the size of the viewport in pixels, taking into account any editor
+  // overrides and physical pixel ratio.
+  float2 GetViewportSize() const;
+
   // Returns true if the given box is intersected in the camera's view frustum.
   bool IntersectsFrustum(const Box& world_bounds) const;
 
@@ -282,10 +286,6 @@ class CameraComponent : public Component {
   // If true, the aspect ratio is set to a fixed value and locked.
   bool IsAspectRatioLocked() const;
   float GetAspectRatio(float2 scale = kOne2) const;
-
-  // Returns the size of the viewport in pixels, taking into account any editor
-  // overrides and physical pixel ratio.
-  float2 GetViewportSize() const;
 
   imp::mat4 GetOrthographicProjection() const;
 

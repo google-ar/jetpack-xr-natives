@@ -38,11 +38,10 @@ namespace imp {
 XrOpenGLSwapChainImageHandler::XrOpenGLSwapChainImageHandler(
     XrPlatformType* platform, XrSessionHost* host,
     std::unique_ptr<SwapchainLayers> layers,
-    ContentSecurityLevel content_security_level, bool should_end_frame)
+    ContentSecurityLevel content_security_level)
     : platform_(platform),
       host_(host),
       layers_(std::move(layers)),
-      should_end_frame_(should_end_frame),
       content_security_level_(content_security_level) {
   layers_->active_color = host->ShouldRenderVarjoFoveationThisFrame()
                               ? &layers_->varjo_foveation_color
@@ -85,11 +84,7 @@ absl::Status XrOpenGLSwapChainImageHandler::Commit(uint32_t fbo) {
     }
     xr_frames_acquired_ = false;
   }
-  if (should_end_frame_) {
-    return host_->EndFrame(layers_->active_color->handle,
-                           layers_->depth.handle);
-  }
-  return absl::OkStatus();
+  return host_->EndFrame(layers_->active_color->handle, layers_->depth.handle);
 }
 
 absl::StatusOr<

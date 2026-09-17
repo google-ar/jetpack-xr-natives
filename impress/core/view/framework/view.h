@@ -52,6 +52,7 @@
 #include "core/render/texture_factory.h"
 #include "core/render/texture_registry.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/store/render_stores.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -185,6 +186,8 @@ class View : public BaseView {
 
   // Returns a factory to create materials.
   MaterialFactory& GetMaterialFactory() noexcept override;
+
+  MaterialStore& GetMaterialStore() noexcept override;
 
   // Returns a factory to create models.
   ModelFactory& GetModelFactory() noexcept override;
@@ -455,6 +458,14 @@ class View : public BaseView {
   // before the UpdateSystem is.
   UpdateSystem update_system_;
   TextureRegistry texture_registry_;
+
+  // Used to automatically manage material lifetimes.
+  //
+  // Stores OwnedMaterialPtr and provides BorrowedMaterialPtr, automatically
+  // evicting the OwnedMaterialPtr at the end of the frame when no more
+  // BorrowedMaterialPtr references exist.
+  MaterialStore material_store_;
+
   ComponentManager component_manager_;
   SceneSystem scene_system_;
   ShaderCacheSystem shader_cache_system_;

@@ -20,7 +20,6 @@
 #include <openxr/openxr_reflection.h>
 #include <openxr/public/all_extensions.h>
 #include <openxr/public/xr_android_geospatial_anchor.h>
-#include <openxr/public/xr_androidx2_geospatial_streetscape.h>
 #include <stdbool.h>
 #include <sys/types.h>
 
@@ -83,7 +82,7 @@ const std::array<std::string, 13> kRequiredExtensions = {
 
 // Extensions must be listed after their dependencies.
 // LINT.IfChange
-const std::array<OpenXrExtension, 10> kOptionalExtensions = {{
+const std::array<OpenXrExtension, 9> kOptionalExtensions = {{
     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -92,8 +91,6 @@ const std::array<OpenXrExtension, 10> kOptionalExtensions = {{
      {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, XR_EXT_FUTURE_EXTENSION_NAME,
       XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME,
       XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
-    {XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME,
-     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME}},
     {XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME,
      {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
     {XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME,
@@ -106,10 +103,9 @@ const std::array<OpenXrExtension, 10> kOptionalExtensions = {{
 }};
 // LINT.ThenChange(//depot/google3/third_party/jetpack_xr_natives/openxr_runtime/openxr_instance_manager.cc)
 
-const std::array<std::string, 7> kGeospatialExtensions = {
+const std::array<std::string, 6> kGeospatialExtensions = {
     XR_ANDROID_GEOSPATIAL_EXTENSION_NAME,
     XR_ANDROID_GEOSPATIAL_ANCHOR_EXTENSION_NAME,
-    XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME,
     XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME,
     XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
     XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME,
@@ -1904,6 +1900,10 @@ XrResult OpenXrManager::ConfigureFaceTracking(FaceTrackingMode mode) {
 }
 
 XrResult OpenXrManager::ConfigureGeospatialTracking(GeospatialMode mode) {
+  if (mode == GeospatialMode::kEnabled && !geospatial_exts_loaded_) {
+    return XR_ERROR_FEATURE_UNSUPPORTED;
+  }
+
   switch (mode) {
     case GeospatialMode::kDisabled: {
       CleanupGeospatial();

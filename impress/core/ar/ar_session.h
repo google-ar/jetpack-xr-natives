@@ -187,7 +187,7 @@ class ArSession {
   // static_cast to a GLuint. On iOS, it is a CVPixelBufferRef.
   virtual const absl::optional<intptr_t> camera_texture_id() const {
     return frame_ ? std::make_optional(frame_->camera_texture_id())
-                  : absl::nullopt;
+                  : std::nullopt;
   }
 
   // Checks if the session has valid frame data. Empty frame data means the
@@ -196,7 +196,7 @@ class ArSession {
 
   // Gets the time stamp of the current frame.
   virtual absl::optional<absl::Time> Timestamp() const {
-    return frame_ ? std::make_optional(frame_->timestamp()) : absl::nullopt;
+    return frame_ ? std::make_optional(frame_->timestamp()) : std::nullopt;
   }
 
   // Gets all trackables in the session.
@@ -383,7 +383,7 @@ class ArSession {
   static constexpr mat4 kDefaultProjectionMatrix = mat4();
   static constexpr mat4f kDefaultCameraModelMatrix = mat4f();
   static constexpr absl::optional<mat4f> kDefaultCameraNodeMatrix =
-      absl::nullopt;
+      std::nullopt;
 };
 
 }  // namespace ar

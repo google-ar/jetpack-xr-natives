@@ -85,6 +85,17 @@ struct OpenXrGenericEvent : public Event {
       : event_data_(event_data) {}
   const XrEventDataBuffer& event_data_;
 };
+
+// An event sent after the Update() call on the ViewHost but before any
+// render passes. Composition layers should use this event as a cue to render.
+// We can't use ViewPostFrameUpdateEvent in place of this event, because it
+// doesn't allow a window for XrSessionHost to mark which composition layers
+// to expect to render before issuing the asynchronous render commands.
+// We also can't use ViewPreRenderEvent, because that is sent between the begin
+// and end of the main render pass, which would result in an unsupported nested
+// Filament render.
+struct XrCompositionLayerRenderEvent : public Event {};
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_XR_OPENXR_EVENTS_H_

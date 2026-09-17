@@ -97,4 +97,7 @@ message XrSetupParams {
   bool create_session_on_render_thread = 21 [default = false];
   // When building for XR, whether or not to use the Spatial Trackpad extension.
   bool use_spatial_trackpad_extension = 22 [default = false];
+  // Whether to continue running if we encounter an OpenXr failure when
+  // attempting to advance frame.
+  bool is_openxr_failure_permissive = 23 [default = false];
 }

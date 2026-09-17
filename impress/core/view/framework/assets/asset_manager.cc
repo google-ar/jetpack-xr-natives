@@ -23,7 +23,6 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
@@ -43,7 +42,7 @@
 #include "core/config.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/loader/loader_creator.h"
-#include "core/ncsb/component_handle.h"
+#include "core/material_library/material_package.h"
 #include "core/ncsb/node.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture_asset.h"
@@ -68,7 +67,7 @@ constexpr absl::string_view kDataUriPrefix = "data:";
 constexpr absl::string_view kDataUriImageHeaderPrefix = "data:image/";
 constexpr absl::string_view kBase64Encoded = "base64,";
 std::vector<std::string>* kSupportedImageTypes =
-    new std::vector<std::string>({"jpeg;", "png;"});
+    new std::vector<std::string>({"jpeg;", "png;", "webp;"});
 
 // Returns the length of the image uri prefix or -1 if it's not supported
 int GetImageUriPrefixLength(absl::string_view uri) {
@@ -427,6 +426,12 @@ Future<resources::Resource> AssetManager::LoadResource(
     return Future<Resource>(absl::InternalError("Asset url is empty."));
   }
   return resource_manager_.Load(asset_url);
+}
+
+MaterialPackage& AssetManager::GetGltfGenericMaterialPackage(
+    absl::optional<GltfAsset::LoadOptions> options) {
+  return gltf_asset_loader_.GetMaterialPackage(
+      resource_manager_, options ? *options : GetDefaultLoadOptions());
 }
 
 void AssetManager::SetUrlLoader(

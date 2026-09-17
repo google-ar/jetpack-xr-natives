@@ -22,6 +22,7 @@
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
 #include "core/editor/widget.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/render/material_registry.h"
 #include "core/scene_handles/material_handle.h"
 #include "core/view/base_view.h"
@@ -40,6 +41,9 @@ class MaterialEditorWidget : public editor::Widget, public Rememberer {
 
  private:
   void DrawMaterialTarget();
+  void DrawParametersUI();
+  void DrawTextureParameterUI(MaterialDefinition::Parameter& param,
+                              std::string* path);
 
   BaseView& view_;
   MaterialRegistry& material_registry_;
@@ -48,6 +52,7 @@ class MaterialEditorWidget : public editor::Widget, public Rememberer {
   std::string previous_url_;
   // The proto we are editing
   MaterialDefinition material_definition_;
+  Dispatcher::ScopedConnection edit_material_connection_;
 };
 
 }  // namespace imp::editor

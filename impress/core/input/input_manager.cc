@@ -152,13 +152,6 @@ void InputManager::Update() {
       interceptor->FilterInputActionEvents(input_action_events_[source]);
     }
   }
-  // The default engine input handlers do not consume text input events via
-  // PopTextInputEvents(). They must be explicitly cleared here every frame
-  // to prevent memory leaks.
-  for (size_t i = 0; i < kInputEventSourceCount; ++i) {
-    text_input_events_[static_cast<InputEventSource>(i)].events.clear();
-  }
-
   if (!input_handlers_.empty()) {
     // Calls the input handler at the top of the stack.
     // Note: This is a strategy pattern where a 'handling strategy' can be
@@ -168,6 +161,18 @@ void InputManager::Update() {
     // reverts to the previous handling strategy. The initial (default)
     // strategy, cannot be popped.
     input_handlers_.back()->Update(this);
+  }
+
+  // Clear any remaining events that were not consumed by the active input
+  // handler. This ensures that unconsumed events do not persist across frames
+  // and re-trigger interceptors on subsequent updates.
+  for (size_t i = 0; i < kInputEventSourceCount; ++i) {
+    InputEventSource source = static_cast<InputEventSource>(i);
+    pointer_events_[source].events.clear();
+    keyboard_events_[source].events.clear();
+    text_input_events_[source].events.clear();
+    wheel_events_[source].events.clear();
+    input_action_events_[source].events.clear();
   }
 }
 

@@ -14,6 +14,7 @@
 
 #include "core/editor/selection_controller_impl.h"
 
+#include <cstddef>
 #include <functional>
 #include <vector>
 
@@ -24,8 +25,8 @@
 #include "core/common/registry.h"
 #include "core/editor/camera_defaults.h"
 #include "core/editor/editor.h"
-#include "core/editor/editor_info.h"
 #include "core/editor/events.h"
+#include "core/editor/layout/helpers.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
 #include "core/math/quat.h"
@@ -34,6 +35,7 @@
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/path_manager.h"
 #include "core/ncsb/system.h"
+#include "core/ncsb/update_system.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_collider.h"
 #include "core/view/framework/assets/gltf_renderer.h"
@@ -122,7 +124,7 @@ constexpr bool IsMultiSelectKey(VirtualKeyCode key_code) {
 }  // namespace
 
 SelectionControllerImpl::SelectionControllerImpl(BaseView* view)
-    : System(view) {
+    : System(view), UpdateSystem::Updater<SelectionControllerImpl>(*view) {
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
   PathManager& path_manager = GetView().GetPathManager();
 
@@ -196,6 +198,18 @@ SelectionControllerImpl::SelectionControllerImpl(BaseView* view)
   editor_dispatcher.Connect(
       [this](const FocusOnSelectionEvent& event) { FocusCameraOnSelection(); },
       this);
+}
+
+void SelectionControllerImpl::Update(const FrameTime& frame_time) {
+  // Prune invalid nodes from the selection every frame.
+  const size_t initial_count = selected_nodes_.size();
+  PruneInvalidHandles(selected_nodes_);
+  if (selected_nodes_.size() != initial_count) {
+    // Send a NodeSelectionChangedEvent to notify the selection change.
+    Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+    Dispatcher& editor_dispatcher = editor.GetDispatcher();
+    editor_dispatcher.Send(NodeSelectionChangedEvent());
+  }
 }
 
 const absl::flat_hash_set<NodeHandle>&

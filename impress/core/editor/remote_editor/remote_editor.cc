@@ -36,6 +36,7 @@
 #include "core/editor/widget_ui_system.h"
 #include "core/ncsb/path_manager.h"
 #include "core/view/base_view.h"
+#include "core/window/filament_host.h"
 
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS)
 #include "core/scripting/message_handlers/forward_input_handler.h"
@@ -114,12 +115,21 @@ void RemoteEditor::Stop() {
 
   running_ = false;
   OnStop();
+  if (view_.GetHost()) {
+    if (window::FilamentHost::DevModeExtension* extension =
+            view_.GetHost()->TryGetExtension()) {
+      extension->ApplyTextureRenderTarget(nullptr);
+    }
+  }
 }
 
 void RemoteEditor::SetDisplayMode(editor::EditorInfo::DisplayMode mode) {
   absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
       view_.GetRegistry().Get<editor::Editor>();
   if (!editor.ok()) {
+    return;
+  }
+  if (editor->get().GetDisplayMode() == mode) {
     return;
   }
   editor->get().SetDisplayMode(mode);
@@ -131,10 +141,11 @@ void RemoteEditor::SetDisplayMode(editor::EditorInfo::DisplayMode mode) {
     // We only transition to kRemoteScreen on the first client connection, so
     // we should never already have a cached native layout here.
     native_layout_composer_ = widget_ui_system.ReleaseLayoutComposer();
-
-    // Apply the default desktop layout for the remote web UI.
-    widget_ui_system.SetLayoutComposer(std::make_unique<editor::LayoutComposer>(
-        editor::kDefaultDesktopLayoutConfig));
+    if (!widget_ui_system.HasLayoutComposer()) {
+      widget_ui_system.SetLayoutComposer(
+          std::make_unique<editor::LayoutComposer>(
+              editor::kDefaultDesktopLayoutConfig));
+    }
 
     // TODO: Replace this with a solution that uses Config data to
     // determine whether to show the world space UI.
@@ -192,7 +203,7 @@ void RemoteEditor::ClearConnections() {
 }
 
 bool RemoteEditor::ShouldSwitchToRemoteMode() const {
-  return connection_count_ == 1 && IsDisplayModeSwitchingAllowed();
+  return IsReadyToSendDataToRemote() && IsDisplayModeSwitchingAllowed();
 }
 
 bool RemoteEditor::ShouldSwitchToNativeMode() const {

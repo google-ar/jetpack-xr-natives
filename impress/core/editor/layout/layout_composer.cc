@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "core/common/log.h"
 #include "absl/strings/match.h"
@@ -77,6 +78,9 @@ constexpr absl::string_view kPinToBottomLabel = "Bottom";
 
 // Padding around the viewport widget image.
 constexpr ImVec2 kViewportPadding = ImVec2(2.0f, 2.0f);
+
+// Padding around the settings toolbar.
+constexpr ImVec2 kSettingsToolbarPadding = ImVec2(0.0f, 4.0f);
 
 bool IsLabelVisible(absl::string_view label) {
   return !absl::StartsWith(label, "##");
@@ -147,6 +151,11 @@ void LayoutComposer::DrawOnDockingLayout(const WidgetLayoutInfo& layout_info,
           widget->GetName(), [widget]() { widget->DrawImGui(); },
           /*force_focus=*/LatchFocusRequest(widget), widget->IsCloseable());
       break;
+    case PanelId::kRightPanel:
+      DrawInRightDock(
+          widget->GetName(), [widget]() { widget->DrawImGui(); },
+          /*force_focus=*/LatchFocusRequest(widget), widget->IsCloseable());
+      break;
     case PanelId::kTabBar:
       DrawAsDockableTab(
           widget->GetName(), [widget]() { widget->DrawImGui(); },
@@ -156,6 +165,9 @@ void LayoutComposer::DrawOnDockingLayout(const WidgetLayoutInfo& layout_info,
     case PanelId::kMenuBar:
       DrawAsMenuInMenuBar(widget->GetName(),
                           [widget]() { widget->DrawImGui(); });
+      break;
+    case PanelId::kSettingsBar:
+      DrawInSettingsBar([widget]() { widget->DrawImGui(); });
       break;
     case PanelId::kToolBar:
       DrawInToolbar([widget]() { widget->DrawImGui(); });
@@ -185,6 +197,7 @@ void LayoutComposer::DrawOnFixedLayout(const WidgetLayoutInfo& layout_info,
           /*force_focus=*/LatchFocusRequest(widget));
       break;
     case PanelId::kMenuBar:
+    case PanelId::kSettingsBar:
     case PanelId::kToolBar:
       break;
     default:
@@ -312,6 +325,14 @@ void LayoutComposer::DrawInLeftDock(absl::string_view tab_label,
                                        is_closeable});
 }
 
+void LayoutComposer::DrawInRightDock(absl::string_view tab_label,
+                                     imp::Invocable<void()> draw_function,
+                                     bool force_focus, bool is_closeable) {
+  right_dock_draw_functions_.push_back({std::string(tab_label),
+                                        std::move(draw_function), force_focus,
+                                        is_closeable});
+}
+
 void LayoutComposer::DrawAsDockableTab(absl::string_view tab_label,
                                        imp::Invocable<void()> draw_function,
                                        bool draw_before_previous_tabs,
@@ -339,6 +360,10 @@ void LayoutComposer::DrawAsMenuInMenuBar(absl::string_view menu_label,
 
 void LayoutComposer::DrawInToolbar(imp::Invocable<void()> draw_function) {
   toolbar_draw_functions_.push_back(std::move(draw_function));
+}
+
+void LayoutComposer::DrawInSettingsBar(imp::Invocable<void()> draw_function) {
+  settings_bar_draw_functions_.push_back(std::move(draw_function));
 }
 
 void LayoutComposer::DrawAfterLayout(absl::string_view label,
@@ -561,10 +586,18 @@ void LayoutComposer::DrawDockableTabbedWindow() {
     }
   }
 
-  for (auto& info : left_dock_draw_functions_) {
-    ImGui::SetNextWindowDockID(
-        docking_helper_->GetDockId(DockingHelper::DockingType::kLeft),
-        ImGuiCond_Appearing);
+  DrawDockedWindows(left_dock_draw_functions_,
+                    DockingHelper::DockingType::kLeft, flags);
+  DrawDockedWindows(right_dock_draw_functions_,
+                    DockingHelper::DockingType::kRight, flags);
+}
+
+void LayoutComposer::DrawDockedWindows(std::vector<WidgetInfo>& widget_infos,
+                                       DockingHelper::DockingType docking_type,
+                                       ImGuiWindowFlags flags) {
+  for (auto& info : widget_infos) {
+    ImGui::SetNextWindowDockID(docking_helper_->GetDockId(docking_type),
+                               ImGuiCond_Appearing);
     if (info.force_focus) {
       ImGui::SetNextWindowFocus();
     }
@@ -772,6 +805,30 @@ void LayoutComposer::DrawToolbar() {
   ImGui::End();
 }
 
+void LayoutComposer::DrawSettingsBar() {
+  if (settings_bar_draw_functions_.empty()) return;
+
+  ImGui::SetNextWindowBgAlpha(kWindowAlpha);
+
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  const ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
+      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, kSettingsToolbarPadding);
+  if (ImGui::BeginViewportSideBar("##SettingsBar", viewport, ImGuiDir_Up,
+                                  settings_bar_height_, flags)) {
+    for (auto& draw_function : settings_bar_draw_functions_) {
+      draw_function();
+    }
+    settings_bar_height_ = ImGui::GetWindowHeight();
+    window_y_offset_ += settings_bar_height_;
+  }
+  ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
+  ImGui::End();
+}
+
 void LayoutComposer::DrawAfterLayout() {
   for (auto& [label, draw_function, _, is_closeable] : draw_after_functions_) {
     // Freeform windows with invisible labels draw invisible widgets, so we
@@ -847,11 +904,15 @@ void LayoutComposer::DrawLayout() {
         }
       }
     }
-    ImGui::DockSpaceOverViewport(
-        docking_helper_->GetDockableSpaceId(), nullptr,
-        ImGuiDockNodeFlags_PassthruCentralNode  // PassthruCentralNode makes the
-                                                // central node transparent
-    );
+    if (dockspace_last_frame_rendered_ != ImGui::GetFrameCount()) {
+      dockspace_last_frame_rendered_ = ImGui::GetFrameCount();
+      ImGui::DockSpaceOverViewport(
+          docking_helper_->GetDockableSpaceId(), nullptr,
+          ImGuiDockNodeFlags_PassthruCentralNode  // PassthruCentralNode makes
+                                                  // the central node
+                                                  // transparent
+      );
+    }
   }
 
   // Draw the menu bar first to know if we should draw all other windows
@@ -860,6 +921,10 @@ void LayoutComposer::DrawLayout() {
     DrawMainMenuBar();
   } else {
     window_y_offset_ = layout_config_.overscan.y;
+  }
+
+  if (!settings_bar_draw_functions_.empty()) {
+    DrawSettingsBar();
   }
 
   // Pick where to render the Details and Scene panels.
@@ -914,9 +979,11 @@ void LayoutComposer::DrawLayout() {
   scene_draw_functions_.clear();
   viewport_draw_functions_.clear();
   left_dock_draw_functions_.clear();
+  right_dock_draw_functions_.clear();
   tab_item_info_.clear();
   menu_draw_functions_.clear();
   toolbar_draw_functions_.clear();
+  settings_bar_draw_functions_.clear();
   draw_after_functions_.clear();
   node_info_draw_function_ = imp::Invocable<void()>();
   component_library_draw_function_ = imp::Invocable<void()>();

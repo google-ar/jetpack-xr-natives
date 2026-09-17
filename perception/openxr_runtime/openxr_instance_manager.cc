@@ -3,7 +3,6 @@
 #include <jni.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/public/all_extensions.h>
-#include <openxr/public/xr_androidx2_geospatial_streetscape.h>
 
 #include <algorithm>
 #include <array>
@@ -53,7 +52,7 @@ const std::array<std::string, 13> kRequiredExtensions = {
 
 // Extensions must be listed after their dependencies.
 // LINT.IfChange
-const std::array<OpenXrExtension, 10> kOptionalExtensions = {{
+const std::array<OpenXrExtension, 9> kOptionalExtensions = {{
     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -62,8 +61,6 @@ const std::array<OpenXrExtension, 10> kOptionalExtensions = {{
      {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, XR_EXT_FUTURE_EXTENSION_NAME,
       XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME,
       XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
-    {XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME,
-     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME}},
     {XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME,
      {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
     {XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME,
@@ -76,10 +73,9 @@ const std::array<OpenXrExtension, 10> kOptionalExtensions = {{
 }};
 // LINT.ThenChange(//depot/google3/third_party/jetpack_xr_natives/openxr/openxr_manager.cc)
 
-const std::array<std::string, 7> kGeospatialExtensions = {
+const std::array<std::string, 6> kGeospatialExtensions = {
     XR_ANDROID_GEOSPATIAL_EXTENSION_NAME,
     XR_ANDROID_GEOSPATIAL_ANCHOR_EXTENSION_NAME,
-    XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME,
     XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME,
     XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
     XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME,

@@ -282,6 +282,12 @@ void DeleteRef(JNIEnv* env, jobject object) {
     return;
   }
 
+  // Make sure we don't call DeleteLocalRef with a pending exception.
+  jthrowable exception = env->ExceptionOccurred();
+  if (exception) {
+    env->ExceptionClear();
+  }
+
   switch (env->GetObjectRefType(object)) {
     default:
     case JNIInvalidRefType:
@@ -297,6 +303,12 @@ void DeleteRef(JNIEnv* env, jobject object) {
     case JNIWeakGlobalRefType:
       env->DeleteWeakGlobalRef(object);
       break;
+  }
+
+  // Re-throw any exception
+  if (exception) {
+    env->Throw(exception);
+    env->DeleteLocalRef(exception);
   }
 }
 

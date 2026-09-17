@@ -1,0 +1,65 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+  name : "OutlineComposite",
+  blending: transparent,
+  depthWrite: false,
+  parameters: [
+    { type: sampler2d, name: objectsTexture },
+    { type: sampler2d, name: hBlurTexture },
+    { type: float, name: blurSizeNormalized },
+    { type: float3, name: outlineColor },
+    { type: float2, name: smoothstepEdges, default: [ 0.05, 0.15 ] }
+  ],
+  requires: [ uv0 ],
+  shadingModel: unlit,
+  vertexDomain: device,
+  vertexDomainDeviceJittered : true
+}
+fragment {
+  #include "gaussian_kernel.glsl"
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+
+    vec2 uv = uvToRenderTargetUV(getUV0());
+
+    // Discard any fragment overlapping with the outline targets.
+    vec2 objects_texture_uv = vec2(uv.x, 1.0 - uv.y);
+    vec4 objects_sample =
+      texture(materialParams_objectsTexture, objects_texture_uv);
+    if (objects_sample.r > 0.0) {
+      discard;
+    }
+
+    // Determine the uv step for each iteration of the blur based on the size
+    // of the outline.
+    float step = materialParams.blurSizeNormalized / 16.0;
+
+    // Apply the vertical blur.
+    float outline = 0.0;
+    float[16] kernel = getGaussianKernel();
+    for (int i=0; i < 16; i++) {
+      outline +=
+        kernel[i] *
+        texture(materialParams_hBlurTexture,
+          uv + vec2(0, (float(i) - 8.0) * step)).r;
+    }
+
+    // Output the final outline with the appropriate color.
+    float solid_outline = smoothstep(materialParams.smoothstepEdges.x, materialParams.smoothstepEdges.y, outline);
+    material.baseColor = vec4(materialParams.outlineColor * solid_outline, solid_outline);
+  }
+}

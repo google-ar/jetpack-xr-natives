@@ -823,6 +823,9 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_SPATIAL_MARKER_SIZE_EXT, 1000743004) \
     _(XR_TYPE_SPATIAL_MARKER_STATIC_OPTIMIZATION_EXT, 1000743005) \
     _(XR_TYPE_SPATIAL_COMPONENT_MARKER_LIST_EXT, 1000743006) \
+    _(XR_TYPE_SPATIAL_BOUNDS_SPHEREF_ANDROID, 1000761000) \
+    _(XR_TYPE_SPATIAL_BOUNDS_BOXF_ANDROID, 1000761001) \
+    _(XR_TYPE_SPATIAL_BOUNDS_FRUSTUMF_ANDROID, 1000761002) \
     _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ANCHOR_EXT, 1000762000) \
     _(XR_TYPE_SPATIAL_COMPONENT_ANCHOR_LIST_EXT, 1000762001) \
     _(XR_TYPE_SPATIAL_ANCHOR_CREATE_INFO_EXT, 1000762002) \
@@ -2613,6 +2616,9 @@ XR_ENUM_STR(XrResult);
 #define XR_LIST_ENUM_XrSpatialCapabilityFeatureEXT(_) \
     _(XR_SPATIAL_CAPABILITY_FEATURE_MARKER_TRACKING_FIXED_SIZE_MARKERS_EXT, 1000743000) \
     _(XR_SPATIAL_CAPABILITY_FEATURE_MARKER_TRACKING_STATIC_MARKERS_EXT, 1000743001) \
+    _(XR_SPATIAL_CAPABILITY_FEATURE_SPHERE_BOUNDS_FILTER_ANDROID, 1000761000) \
+    _(XR_SPATIAL_CAPABILITY_FEATURE_BOX_BOUNDS_FILTER_ANDROID, 1000761001) \
+    _(XR_SPATIAL_CAPABILITY_FEATURE_FRUSTUM_BOUNDS_FILTER_ANDROID, 1000761002) \
     _(XR_SPATIAL_CAPABILITY_FEATURE_MAX_ENUM_EXT, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrSpatialComponentTypeEXT(_) \
@@ -8150,6 +8156,30 @@ XR_ENUM_STR(XrResult);
     _(markerCount) \
     _(markers) \
 
+/// Calls your macro with the name of each member of XrSpatialBoundsSpherefANDROID, in order.
+#define XR_LIST_STRUCT_XrSpatialBoundsSpherefANDROID(_) \
+    _(type) \
+    _(next) \
+    _(space) \
+    _(time) \
+    _(sphere) \
+
+/// Calls your macro with the name of each member of XrSpatialBoundsBoxfANDROID, in order.
+#define XR_LIST_STRUCT_XrSpatialBoundsBoxfANDROID(_) \
+    _(type) \
+    _(next) \
+    _(space) \
+    _(time) \
+    _(box) \
+
+/// Calls your macro with the name of each member of XrSpatialBoundsFrustumfANDROID, in order.
+#define XR_LIST_STRUCT_XrSpatialBoundsFrustumfANDROID(_) \
+    _(type) \
+    _(next) \
+    _(space) \
+    _(time) \
+    _(frustum) \
+
 /// Calls your macro with the name of each member of XrSpatialCapabilityConfigurationAnchorEXT, in order.
 #define XR_LIST_STRUCT_XrSpatialCapabilityConfigurationAnchorEXT(_) \
     _(type) \
@@ -8989,6 +9019,9 @@ XR_ENUM_STR(XrResult);
     _(XrSpatialMarkerSizeEXT, XR_TYPE_SPATIAL_MARKER_SIZE_EXT) \
     _(XrSpatialMarkerStaticOptimizationEXT, XR_TYPE_SPATIAL_MARKER_STATIC_OPTIMIZATION_EXT) \
     _(XrSpatialComponentMarkerListEXT, XR_TYPE_SPATIAL_COMPONENT_MARKER_LIST_EXT) \
+    _(XrSpatialBoundsSpherefANDROID, XR_TYPE_SPATIAL_BOUNDS_SPHEREF_ANDROID) \
+    _(XrSpatialBoundsBoxfANDROID, XR_TYPE_SPATIAL_BOUNDS_BOXF_ANDROID) \
+    _(XrSpatialBoundsFrustumfANDROID, XR_TYPE_SPATIAL_BOUNDS_FRUSTUMF_ANDROID) \
     _(XrSpatialCapabilityConfigurationAnchorEXT, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ANCHOR_EXT) \
     _(XrSpatialComponentAnchorListEXT, XR_TYPE_SPATIAL_COMPONENT_ANCHOR_LIST_EXT) \
     _(XrSpatialAnchorCreateInfoEXT, XR_TYPE_SPATIAL_ANCHOR_CREATE_INFO_EXT) \
@@ -9420,6 +9453,7 @@ XR_ENUM_STR(XrResult);
     _(XR_EXT_stationary_reference_space, 743) \
     _(XR_EXT_spatial_marker_tracking, 744) \
     _(XR_LOGITECH_mx_ink_stylus_interaction, 746) \
+    _(XR_ANDROID_spatial_discovery_bounds, 762) \
     _(XR_EXT_spatial_anchor, 763) \
     _(XR_EXT_spatial_persistence, 764) \
     _(XR_EXT_haptic_parametric, 776) \

@@ -1,0 +1,136 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# proto-file: core/ncsb/node_data.proto
+# proto-message: NodeData
+components: {
+  [type.googleapis.com/imp.TexturePipelineRendererState] {
+    # First pass renders all the outlined objects as a solid color into a
+    # one-channel texture.
+    passes: {
+      # Specifies that this pass renders all nodes in the EditorSelected group.
+      group: "EditorSelected"
+      color_texture: {
+        name: "ObjectsTexture"
+        format: R8
+      }
+      # Render the full pixel size of the view so that there are no gaps in the
+      # final outline when discarding overlapping fragments.
+      automatic_size: {
+        mode: VIEW_SIZE_PHYSICAL_PIXELS
+      }
+      # Overrides all the nodes in the pass with a simple unlit white material.
+      override_material: {
+        asset: "core/editor/assets/outline_replace.cmat"
+      }
+      render_settings: {
+        post_processing_enabled: false
+      }
+    }
+    # Second pass horizontally blurs the output of the previous pass into a
+    # small one-channel texture.
+    passes: {
+      # The group contains a node with a PrimitiveShapeRenderer that blurs
+      # the texture.
+      group: "OutlineHBlurGroup"
+      color_texture: {
+        name: "HBlurTexture"
+        format: R8
+      }
+      pixel_size: {
+        x: 512
+        y: 512
+      }
+      render_settings: {
+        post_processing_enabled: false
+      }
+    }
+  }
+}
+children: {
+  # Quad rendered with a screen-space material to apply the horizontal blur.
+  name: "OutlineHBlurRenderer"
+  groups: {
+    # Only draw this quad in the group rendered by the horizontal blur pass.
+    groups: "OutlineHBlurGroup"
+  }
+  components: {
+    [type.googleapis.com/imp.PrimitiveShapeRendererState] {
+      frustrum_culling_mode: DISABLED
+      shadow_casting_mode: NONE
+      shadow_receiving_mode: NONE
+      primitive: {
+        quad_mesh: {}
+        material: {
+          asset: "core/editor/assets/outline_h_blur.cmat"
+          parameters: {
+            name: "objectsTexture"
+            registered_texture: "ObjectsTexture"
+          }
+          parameters: {
+            name: "blurSizeNormalized"
+            float_val: 0.02
+          }
+        }
+      }
+    }
+  }
+}
+children: {
+  # Renders the final outline as an overlay on top of the main scene.
+  name: "OutlineCompositeRenderer"
+  components: {
+    [type.googleapis.com/imp.PrimitiveShapeRendererState] {
+      frustrum_culling_mode: DISABLED
+      shadow_casting_mode: NONE
+      shadow_receiving_mode: NONE
+      primitive: {
+        quad_mesh: {}
+        material: {
+          asset: "core/editor/assets/outline_composite.cmat"
+          # Used to discard fragments that overlap with the selected objects.
+          parameters: {
+            name: "objectsTexture"
+            registered_texture: "ObjectsTexture"
+          }
+          # Vertically blurred to produce final outline.
+          parameters: {
+            name: "hBlurTexture"
+            registered_texture: "HBlurTexture"
+          }
+          parameters: {
+            name: "blurSizeNormalized"
+            float_val: 0.02
+          }
+          parameters: {
+            name: "outlineColor"
+            float3_val: {
+              # Orange outline color.
+              x: 1.0
+              y: 0.35
+              z: 0.0
+            }
+          }
+          parameters: {
+            name: "smoothstepEdges"
+            float2_val: {
+              x: 0.05
+              y: 0.15
+            }
+          }
+        }
+      }
+    }
+  }
+}

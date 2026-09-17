@@ -16,18 +16,23 @@
 
 #include <cstddef>
 #include <memory>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
+#include "absl/base/no_destructor.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/hash/hash.h"
 #include "absl/log/check.h"
+#include "core/common/log.h"
+#include "absl/synchronization/mutex.h"
 #include "core/common/small_source_location.h"
 
 namespace imp {
 
 // Stores the location and count for outstanding references.
-// Stored in a set of unique_ptr to provide pointer stability,
-// allowing Ref to store a direct pointer to this tracker.
 struct SourceLocationTracker {
   SmallSourceLocation loc;
   RefCounter::CounterType count;
@@ -41,11 +46,11 @@ struct SourceLocationTracker {
     return H::combine(std::move(h), tracker.loc);
   }
 
-  // Transparent hash comparator for unique_ptr<SourceLocationTracker>
+  // Transparent hash comparator for SourceLocationTracker*
   // allowing lookups using SmallSourceLocation directly.
   struct Hash {
     using is_transparent = void;
-    size_t operator()(const std::unique_ptr<SourceLocationTracker>& ptr) const {
+    size_t operator()(const SourceLocationTracker* ptr) const {
       return absl::Hash<SmallSourceLocation>()(ptr->loc);
     }
     size_t operator()(const SmallSourceLocation& loc) const {
@@ -53,20 +58,20 @@ struct SourceLocationTracker {
     }
   };
 
-  // Transparent equality comparator for unique_ptr<SourceLocationTracker>
+  // Transparent equality comparator for SourceLocationTracker*
   // allowing lookups using SmallSourceLocation directly.
   struct Eq {
     using is_transparent = void;
-    bool operator()(const std::unique_ptr<SourceLocationTracker>& a,
-                    const std::unique_ptr<SourceLocationTracker>& b) const {
+    bool operator()(const SourceLocationTracker* a,
+                    const SourceLocationTracker* b) const {
       return a->loc == b->loc;
     }
-    bool operator()(const std::unique_ptr<SourceLocationTracker>& a,
+    bool operator()(const SourceLocationTracker* a,
                     const SmallSourceLocation& b) const {
       return a->loc == b;
     }
     bool operator()(const SmallSourceLocation& a,
-                    const std::unique_ptr<SourceLocationTracker>& b) const {
+                    const SourceLocationTracker* b) const {
       return a == b->loc;
     }
   };
@@ -76,15 +81,177 @@ struct SourceLocationTracker {
 // so that it can outlive the RefCounter if there are still outstanding
 // Ref objects when the RefCounter is destroyed.
 struct TrackedRefs {
-  using SetType = absl::flat_hash_set<std::unique_ptr<SourceLocationTracker>,
-                                      SourceLocationTracker::Hash,
-                                      SourceLocationTracker::Eq>;
+  using SetType =
+      absl::flat_hash_set<SourceLocationTracker*, SourceLocationTracker::Hash,
+                          SourceLocationTracker::Eq>;
 
   SetType source_location_trackers;
   bool is_destroyed = false;
 };
 
 namespace {
+
+// GlobalTrackerPool is a thread-safe singleton that backs the thread-local
+// TrackerAllocators. It owns the memory chunks and maintains a global free list
+// to prevent memory leaks over the process lifetime.
+//
+// NOTE: If a thread exits without releasing its local resource, the global
+// pool will not be able to redistribute the memory to other threads.
+class GlobalTrackerPool {
+ public:
+  static GlobalTrackerPool& GetInstance() {
+    // We intentionally use absl::NoDestructor to "leak" the pool at exit.
+    // Tearing down the pool risks Use-After-Free crashes if any trailing
+    // threads or static destructors still try to invoke ReleaseBatch().
+    static absl::NoDestructor<GlobalTrackerPool> instance;
+    return *instance;
+  }
+
+  // TrackerNode is a union of SourceLocationTracker and a pointer to the next
+  // free node. This allows us to reuse the memory for SourceLocationTracker
+  // objects and avoid memory allocation overhead.
+  union TrackerNode {
+    SourceLocationTracker tracker;
+    TrackerNode* next_free;
+
+    TrackerNode() {}
+    ~TrackerNode() {}
+  };
+
+  // Holds available resources from the global pool.
+  struct TrackerNodeResource {
+    // The head and tail of the free list.
+    TrackerNode* free_list_head = nullptr;
+    TrackerNode* free_list_tail = nullptr;
+
+    // The cursor to the next available node in the current batch.
+    // This is guaranteed to be contiguous in memory, meaning we can use
+    // pointer arithmetic to quickly find the next available node.
+    TrackerNode* batch_cursor = nullptr;
+    // The number of available nodes in the current batch.
+    int available_count_in_batch = 0;
+  };
+
+  // The number of tracker nodes to allocate in each chunk.
+  static constexpr int kBatchSize = 64;
+
+  // Requests tracker node resources from the global pool.
+  //
+  // If there are no resources available, a new chunk of nodes will be
+  // allocated.
+  //
+  // NOTE: The returned resource may contain a small number of available nodes
+  // than kBatchSize.
+  TrackerNodeResource RequestResource() {
+    absl::MutexLock lock(mutex_);
+    if (available_resources_.empty()) {
+      // No resources available, allocate a new chunk.
+      auto chunk = std::make_unique<TrackerNode[]>(kBatchSize);
+      chunks_.push_back(std::move(chunk));
+
+      return TrackerNodeResource{.free_list_head = nullptr,
+                                 .free_list_tail = nullptr,
+                                 .batch_cursor = chunks_.back().get(),
+                                 .available_count_in_batch = kBatchSize};
+    }
+
+    TrackerNodeResource resource = available_resources_.back();
+    available_resources_.pop_back();
+    return resource;
+  }
+
+  // Releases tracker node resources back to the global pool.
+  void ReleaseResource(TrackerNodeResource resource) {
+    absl::MutexLock lock(mutex_);
+    available_resources_.push_back(resource);
+  }
+
+ private:
+  friend class absl::NoDestructor<GlobalTrackerPool>;
+  GlobalTrackerPool() = default;
+
+  absl::Mutex mutex_;
+
+  // Available resources released from TrackerAllocators.
+  std::vector<TrackerNodeResource> available_resources_ ABSL_GUARDED_BY(mutex_);
+  // Owns the allocated chunks.
+  std::vector<std::unique_ptr<TrackerNode[]>> chunks_ ABSL_GUARDED_BY(mutex_);
+};
+
+// TrackerAllocator is a thread-local singleton class that manages the
+// allocation and reuse of SourceLocationTracker instances. It uses a free list
+// to minimize memory allocation overhead and avoid locks on the fast path.
+//
+// Note: RefCounter is not designed to be thread safe (since each
+// thread will only access their own RefCounter/OwnedPtr). The TrackerAllocator
+// is thread-local so that multiple threads can allocate/deallocate trackers in
+// parallel without locks.
+class TrackerAllocator {
+ public:
+  using TrackerNode = GlobalTrackerPool::TrackerNode;
+
+  static TrackerAllocator& GetInstance() {
+    thread_local TrackerAllocator instance;
+    return instance;
+  }
+
+  ~TrackerAllocator() {
+    // Return all remaining local free nodes to the global pool on thread exit,
+    // thereby ensuring another thread dropping references to this thread's
+    // allocated memory won't UAF against deleted chunks.
+    GlobalTrackerPool::GetInstance().ReleaseResource(
+        std::move(local_resource_));
+  }
+
+  // Allocates a SourceLocationTracker. It reuses instances from the free list
+  // if possible. If the free list is empty, it queries the GlobalTrackerPool.
+  SourceLocationTracker* Allocate(SmallSourceLocation loc,
+                                  TrackedRefs* tracked_refs) {
+    TrackerNode* allocated_node = nullptr;
+    if (local_resource_.available_count_in_batch == 0 &&
+        !local_resource_.free_list_head) {
+      // We've exhausted the free list and the current batch, query the global
+      // pool for a new batch.
+      local_resource_ = GlobalTrackerPool::GetInstance().RequestResource();
+    }
+
+    if (local_resource_.free_list_head) {
+      // Check free list first for better cache locality and less batch
+      // consumption.
+      allocated_node = local_resource_.free_list_head;
+      local_resource_.free_list_head = allocated_node->next_free;
+    } else if (local_resource_.available_count_in_batch > 0) {
+      allocated_node = local_resource_.batch_cursor;
+      local_resource_.available_count_in_batch--;
+      local_resource_.batch_cursor++;
+    } else {
+      // this should never happen.
+      IMP_LOG(imp::FATAL) << "We've exhausted the free list and the current batch, but "
+                    "failed to allocate a new batch.";
+    }
+
+    SourceLocationTracker* tracker = new (&allocated_node->tracker)
+        SourceLocationTracker{loc, 0, tracked_refs};
+    return tracker;
+  }
+
+  // Frees a SourceLocationTracker by returning it to the local free list for
+  // reuse.
+  void Free(SourceLocationTracker* tracker) {
+    static_assert(std::is_trivially_destructible_v<SourceLocationTracker>,
+                  "SourceLocationTracker must be trivially destructible so we "
+                  "don't need to explicitly call its destructor in Free().");
+
+    TrackerNode* node = reinterpret_cast<TrackerNode*>(tracker);
+    node->next_free = local_resource_.free_list_head;
+    local_resource_.free_list_head = node;
+  }
+
+ private:
+  TrackerAllocator() = default;
+
+  GlobalTrackerPool::TrackerNodeResource local_resource_;
+};
 
 // Returns the total number of tracked references by summing up the counts
 // for all source locations.
@@ -128,10 +295,9 @@ RefCounter::Ref::Ref(SmallSourceLocation loc,
                      TrackedRefs* tracked_refs) noexcept {
   auto it = tracked_refs->source_location_trackers.lazy_emplace(
       loc, [&](const auto& ctor) {
-        ctor(std::make_unique<SourceLocationTracker>(
-            SourceLocationTracker{loc, 0, tracked_refs}));
+        ctor(TrackerAllocator::GetInstance().Allocate(loc, tracked_refs));
       });
-  tracker_ptr_ = it->get();
+  tracker_ptr_ = *it;
   tracker_ptr_->count++;
 }
 
@@ -187,6 +353,7 @@ void RefCounter::Ref::DecrementCount() {
       auto it = tracked_refs->source_location_trackers.find(tracker_ptr_->loc);
       if (it != tracked_refs->source_location_trackers.end()) {
         tracked_refs->source_location_trackers.erase(it);
+        TrackerAllocator::GetInstance().Free(tracker_ptr_);
       }
     }
     DeleteTrackedRefsIfNeeded(tracked_refs);
@@ -280,6 +447,14 @@ RefCounter::CounterType RefCounter::GetCount() const {
   }
   
   return GetTrackedRefsCount(*tracked_refs_);
+}
+
+bool RefCounter::IsBorrowed() const {
+  if (!tracked_refs_) {
+    return false;
+  }
+  
+  return !tracked_refs_->source_location_trackers.empty();
 }
 
 }  // namespace imp

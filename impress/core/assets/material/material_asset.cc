@@ -38,14 +38,6 @@
 namespace imp {
 namespace {
 
-bool IsPlaceholderSplitEngineMaterial(const filament::Material* material) {
-  if (material) {
-    // TODO: (broken link) - Find a better way to check the placeholder material.
-    return strcmp(material->getName(), "Split Engine Placeholder") == 0;
-  }
-  return false;
-}
-
 filament::Material::Builder::ShadowSamplingQuality
 ToFilamentShadowSamplingQuality(
     MaterialPreCompileOptions::ShadowSamplingQuality quality) {
@@ -144,12 +136,11 @@ Future<std::unique_ptr<MaterialAsset>> CreateMaterialFromResource(
     // or when imp_material sets include_source_mat true.
     std::string material_source = std::string(filament_material->getSource());
 
-    // The placeholder material is used for built-in materials as a kind of
-    // app-side handle. The built-in materials expect it to be loaded as a
-    // normal app-side material. Because of this, we should not request it
-    // from split engine.
-    if (!IsPlaceholderSplitEngineMaterial(filament_material) &&
-        !material_source.empty()) {
+    // If we don't have source for the material, we can't load it as a split
+    // engine custom material. Instead, load it as a normal app-side material.
+    // This behavior is needed for the placeholder material used by split engine
+    // built-in materials.
+    if (!material_source.empty()) {
       // Get the supported variants from the material to avoid requesting
       // variants that are not supported.
       MaterialPreCompileOptions modified_options = FilterUnsupportedVariants(
@@ -243,8 +234,7 @@ MaterialAsset::~MaterialAsset() {
   if (view_ != nullptr && view_->GetSharedEngine() != nullptr &&
       material_ != nullptr) {
     if (auto serializer = view_->GetSplitEngineSerializer()) {
-      if (!IsPlaceholderSplitEngineMaterial(material_) &&
-          !material_->getSource().empty()) {
+      if (!material_->getSource().empty()) {
         serializer->RemoveMaterial(material_);
       }
     }

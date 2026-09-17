@@ -24,12 +24,23 @@
 #include "core/input/key_codes.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/system.h"
+#include "core/ncsb/update_phase.h"
+#include "core/ncsb/update_system.h"
+
+namespace imp {
+class FrameTime;
+}  // namespace imp
 
 namespace imp::editor {
 
 // Contains node selection logic within Editor
-class SelectionControllerImpl : public SelectionController, public System {
+class SelectionControllerImpl
+    : public SelectionController,
+      public System,
+      public UpdateSystem::Updater<SelectionControllerImpl> {
  public:
+  static constexpr UpdatePhase kUpdatePhase = UpdatePhase::kEnd;
+
   // Once constructed, SelectionController listens for TapEvents and sends
   // NodeSelectionChangedEvents, cycling through all intersected nodes on
   // subsequent TapEvents. Events are listened and sent through the Editor
@@ -57,6 +68,8 @@ class SelectionControllerImpl : public SelectionController, public System {
   void DisableSelectModelWhenLoaded(bool disable_select_model_on_load) {
     disable_select_model_on_load_ = disable_select_model_on_load;
   }
+
+  void Update(const FrameTime& frame_time) override;
 
  private:
   void CycleOrUpdateSelection(NodeHandle target,

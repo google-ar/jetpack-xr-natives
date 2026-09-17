@@ -75,6 +75,9 @@ struct RemoteEditorInfo {
     // Default port for the UI streaming server.
     static constexpr int kDefaultUiStreamingPort = 6278;
 
+    // Default delay between streaming frame captures in milliseconds (~30 FPS).
+    static constexpr int kDefaultUiStreamingUpdateDelayMs = 33;
+
     // The port the UI streaming server is listening on.
     int ui_streaming_port = kDefaultUiStreamingPort;
 

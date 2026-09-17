@@ -16,7 +16,6 @@
 
 #include <bluevk/BlueVK.h>
 #include <dlfcn.h>
-#include <jni.h>
 
 #include <cstdint>
 #include <memory>
@@ -117,24 +116,12 @@ XrVulkanPlatform::XrVulkanPlatform() { bluevk::initialize(); }
 
 filament::backend::Driver* XrVulkanPlatform::createDriver(
     void* sharedContext, const Platform::DriverConfig& driverConfig) noexcept {
-  // TODO: (broken link) - Remove this once impress supports filament feature
-  // flags
-  Platform::DriverConfig vk_driver_config = driverConfig;
-  vk_driver_config.vulkanEnableAsyncPipelineCachePrewarming = true;
-  vk_driver_config.vulkanEnableStagingBufferBypass = true;
-
   filament::backend::Driver* driver =
-      XrPlatformBase::createDriver(sharedContext, vk_driver_config);
+      XrPlatformBase::createDriver(sharedContext, driverConfig);
 
   // This loads several AHardwareBuffers to fetch their external formats,
   // and store them in a list for async cache prewarming.
-  // We're currently setting this flag a few lines prior to this, so it seems
-  // odd; there are plans for that to change as soon as the Impress-Filament
-  // feature flag system is fixed.
-  if (vk_driver_config.vulkanEnableAsyncPipelineCachePrewarming) {
-    registerAndroidExternalFormatsForCachePrewarm();
-  }
-
+  registerAndroidExternalFormatsForCachePrewarm();
   return driver;
 }
 
@@ -206,19 +193,21 @@ XrVulkanPlatform::SwapChainBundle XrVulkanPlatform::getSwapChainBundle(
 
 bool XrVulkanPlatform::hasResized(SwapChainPtr handle) noexcept {
   auto* swap_chain = static_cast<XrSwapChain*>(handle);
-  bool should_render_with_varjo_foveation =
-      swap_chain->GetHost()->ShouldRenderVarjoFoveationThisFrame();
-  // TODO: (broken link) - Implement a better way to handle this which handles
-  // switching between swapchains without forcing a resize.
+  if (swap_chain->GetSwapchainImageHandler().IsStereo()) {
+    bool should_render_with_varjo_foveation =
+        swap_chain->GetHost()->ShouldRenderVarjoFoveationThisFrame();
+    // TODO: (broken link) - Implement a better way to handle this which handles
+    // switching between swapchains without forcing a resize.
 
-  // Force filament to update the swapchain when the varjo foveation state
-  // is different from the last rendered frame. This will make filament to
-  // request a new SwapchainBundle.
-  if (should_render_with_varjo_foveation != rendering_with_varjo_foveation_) {
-    swap_chain->GetSwapchainImageHandler().SwitchSwapchainLayers(
-        should_render_with_varjo_foveation);
-    rendering_with_varjo_foveation_ = should_render_with_varjo_foveation;
-    return true;
+    // Force filament to update the swapchain when the varjo foveation state
+    // is different from the last rendered frame. This will make filament to
+    // request a new SwapchainBundle.
+    if (should_render_with_varjo_foveation != rendering_with_varjo_foveation_) {
+      swap_chain->GetSwapchainImageHandler().SwitchSwapchainLayers(
+          should_render_with_varjo_foveation);
+      rendering_with_varjo_foveation_ = should_render_with_varjo_foveation;
+      return true;
+    }
   }
   return false;
 }

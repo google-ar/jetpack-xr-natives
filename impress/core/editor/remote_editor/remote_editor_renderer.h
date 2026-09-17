@@ -19,7 +19,9 @@
 
 #include "absl/time/time.h"
 #include "filament/filament/include/filament/SwapChain.h"
-#include "core/common/rememberer.h"
+#include "core/editor/remote_editor/base_remote_editor_renderer.h"
+#include "core/ncsb/node_handle.h"
+#include "core/ncsb/update_system.h"
 #include "core/view/base_view.h"
 
 namespace imp::window {
@@ -35,7 +37,7 @@ namespace imp::editor {
 //
 // This class manages rendering of the editor UI view directly onto the
 // remote swap chain target window.
-class RemoteEditorRenderer : public Rememberer {
+class RemoteEditorRenderer : public BaseRemoteEditorRenderer {
  public:
   explicit RemoteEditorRenderer(BaseView& view);
 
@@ -47,10 +49,13 @@ class RemoteEditorRenderer : public Rememberer {
   // Sets the remote window to draw the UI onto. Reallocates the internal
   // offscreen texture if the dimensions change. A valid, non-null
   // remote_window must be provided.
-  void SetRenderTargetWindow(void* native_window, int width, int height);
+  void SetRenderTargetWindow(void* native_window, int width,
+                             int height) override;
 
   // Clears the remote window and releases rendering resources.
-  void ClearRenderTargetWindow();
+  void ClearRenderTargetWindow() override;
+
+  bool IsReady() const override;
 
  private:
   // Renders UI streaming, capped at 30fps via kRenderTargetUpdateDelayMs to

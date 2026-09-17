@@ -39,7 +39,6 @@
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
-#include "split_engine/schemas/split_engine_schema_version.h"
 
 namespace imp::split_engine {
 
@@ -235,13 +234,12 @@ SplitEngineTextureBuilder& SplitEngineTextureBuilder::Name(
   // If it remains experimental, update this assert to expect the new production
   // API level to unblock the build.
   //
-  SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
-      /*production_api_level=*/1);
-  if (serializer_->GetApiLevel() ==
-      android_xr::kSplitEngineExperimentalApiLevel) {
+  if (serializer_->GetApiLevel() >= 4) {
     state_.name = name;
   } else {
-    IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::Name is not implemented.";
+    IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::Name is not supported over "
+                    "Split Engine - requires api level 4+, current api level: "
+                 << serializer_->GetApiLevel();
   }
   return *this;
 }

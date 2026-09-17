@@ -161,10 +161,10 @@ table TexturePipelinePass {
   clear_color:Float4 (id: 11);
 }
 
-table ProjectionQuad {
-  size:Float2 (id: 0);
-  center:Float3 (id: 1);
-  rotation:Quatf (id: 2);
+table ProjectionQuad (requires_api: 4, unstable_api) {
+  size:Float2 (id: 0, requires_api: 4, unstable_api);
+  center:Float3 (id: 1, requires_api: 4, unstable_api);
+  rotation:Quatf (id: 2, requires_api: 4, unstable_api);
 }
 
 table TexturePipelineRenderer {

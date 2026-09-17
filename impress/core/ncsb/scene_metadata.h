@@ -75,7 +75,7 @@ class SceneMetadata : public Component {
   void PushBaseComponentSources(HashValue component_type, bool disabled,
                                 absl::string_view component_source_bytes);
 
-  const ComponentSource* GetBaseComponentSource(HashValue component_type);
+  const ComponentSource* GetBaseComponentSource(HashValue component_type) const;
 
   // Sets whether the component is considered authored, which impacts whether
   // it is serialized to the .isf file when saved in kAuthored mode and if the

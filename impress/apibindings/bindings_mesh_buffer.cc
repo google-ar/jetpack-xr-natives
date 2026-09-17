@@ -265,7 +265,8 @@ BindingsMeshBuffer::BindingsMeshBuffer(
     max_indices_ = options.initial_index_data.size() / sizeof(uint32_t);
   }
 
-  CreateRootMesh(options.initial_vertex_data, options.initial_index_data);
+  CreateRootMesh(options.initial_vertex_data, options.initial_index_data,
+                 options.usage);
 }
 
 absl::Status BindingsMeshBuffer::UpdateVertexData(
@@ -296,7 +297,7 @@ absl::Status BindingsMeshBuffer::UpdateIndexData(
 
 void BindingsMeshBuffer::CreateRootMesh(
     const std::vector<absl::Span<const uint8_t>>& initial_vertex_data,
-    absl::Span<const uint8_t> initial_index_data) {
+    absl::Span<const uint8_t> initial_index_data, Usage usage) {
   imp::MeshDescription description;
   description.vertex_format = output_format_;
   description.vertex_count = max_vertices_;
@@ -375,10 +376,16 @@ void BindingsMeshBuffer::CreateRootMesh(
     initial_aabb = aabb_calculator.GetAabb();
   }
 
-  MeshFactory factory(view_);
+  MeshFactory& factory = view_.GetMeshFactory();
+
+  MeshFactory::MeshDataStorageMode storage_mode =
+      usage == Usage::kDynamic
+          ? MeshFactory::MeshDataStorageMode::kStoreMeshData
+          : MeshFactory::MeshDataStorageMode::kDiscardMeshData;
+
   root_mesh_ = factory.CreateByMovingMeshData(
       RenderableManager::PrimitiveType::TRIANGLES, std::move(mesh_data),
-      initial_aabb, MeshFactory::MeshDataStorageMode::kDiscardMeshData);
+      initial_aabb, storage_mode);
 }
 
 absl::Status BindingsMeshBuffer::UploadVertexData(int32_t buffer_index,
@@ -410,43 +417,78 @@ absl::Status BindingsMeshBuffer::UploadVertexData(int32_t buffer_index,
 
   int vertex_count = size / stride;
   size_t buffer_size = vertex_count * output_stride;
-  void* buffer = new uint8_t[buffer_size];
 
-  if (info.needs_normal_conversion) {
-    ConvertAndCopyVertexData(data, buffer, vertex_count, stride, output_stride,
-                             input_format_, output_format_, buffer_index);
+  MeshData* mesh_data = root_mesh_->GetMeshData();
+  if (mesh_data && mesh_data->GetVertexData()) {
+    if (info.needs_normal_conversion) {
+      offset = (offset / stride) * output_stride;
+      uint8_t* dest_ptr =
+          &mesh_data->GetVertexData()->VertexAttributeAt<uint8_t>(
+              /*vertex_index=*/0, /*attribute_offset=*/0, buffer_index) +
+          offset;
 
-    // Adjust offset for GPU buffer
-    offset = (offset / stride) * output_stride;
+      ConvertAndCopyVertexData(data, dest_ptr, vertex_count, stride,
+                               output_stride, input_format_, output_format_,
+                               buffer_index);
+    } else {
+      // Update the local CPU memory backing store with the new vertex data.
+      mesh_data->GetVertexData()->UpdateData(
+          buffer_index, offset,
+          absl::MakeSpan(static_cast<const uint8_t*>(data), size));
+    }
+    // Notify the root mesh that its underlying data has changed.
+    // This triggers the serializer observer, which reads the updated local CPU
+    // buffer and sends the dirty geometry over IPC to the compositor.
+    root_mesh_->UpdateMeshData(mesh_data,
+                               Mesh::AabbSource::kAssignedOrUnchanged);
   } else {
-    std::memcpy(buffer, data, size);
+    // The buffer is allocated here and will be deleted by the lambda
+    // passed to filament::backend::BufferDescriptor below once Filament
+    // finishes uploading the data to the GPU.
+    void* buffer = new uint8_t[buffer_size];
+    if (info.needs_normal_conversion) {
+      ConvertAndCopyVertexData(data, buffer, vertex_count, stride,
+                               output_stride, input_format_, output_format_,
+                               buffer_index);
+      offset = (offset / stride) * output_stride;
+    } else {
+      std::memcpy(buffer, data, buffer_size);
+    }
+
+    filament::backend::BufferDescriptor desc(
+        buffer, buffer_size, [](void* buffer, size_t size, void* user) {
+          delete[] static_cast<uint8_t*>(buffer);
+        });
+
+    vb->setBufferAt(*view_.GetHost()->GetEngine(), buffer_index,
+                    std::move(desc), offset);
   }
-
-  filament::backend::BufferDescriptor desc(
-      buffer, buffer_size, [](void* buffer, size_t size, void* user) {
-        delete[] static_cast<uint8_t*>(buffer);
-      });
-
-  vb->setBufferAt(*view_.GetHost()->GetEngine(), buffer_index, std::move(desc),
-                  offset);
   return absl::OkStatus();
 }
 
 absl::Status BindingsMeshBuffer::UploadIndexData(int32_t offset, int32_t size,
                                                  const void* data) {
   if (!root_mesh_) return absl::FailedPreconditionError("Root mesh not ready.");
-  IndexBuffer* ib = root_mesh_->GetIndexBuffer();
-  if (!ib) return absl::InternalError("No IndexBuffer.");
+  MeshData* mesh_data = root_mesh_->GetMeshData();
+  if (mesh_data && mesh_data->GetIndexData()) {
+    mesh_data->GetIndexData()->UpdateData(
+        offset, absl::MakeSpan(static_cast<const uint8_t*>(data), size));
+    root_mesh_->UpdateMeshData(mesh_data,
+                               Mesh::AabbSource::kAssignedOrUnchanged);
+  } else {
+    IndexBuffer* ib = root_mesh_->GetIndexBuffer();
+    if (!ib) return absl::InternalError("No IndexBuffer.");
 
-  void* buffer = new uint8_t[size];
-  std::memcpy(buffer, data, size);
+    void* buffer = new uint8_t[size];
+    std::memcpy(buffer, data, size);
 
-  filament::backend::BufferDescriptor desc(
-      buffer, size, [](void* buffer, size_t size, void* user) {
-        delete[] static_cast<uint8_t*>(buffer);
-      });
+    filament::backend::BufferDescriptor desc(
+        buffer, size, [](void* buffer, size_t size, void* user) {
+          delete[] static_cast<uint8_t*>(buffer);
+        });
 
-  ib->setBuffer(*view_.GetHost()->GetEngine(), std::move(desc), offset);
+    ib->setBuffer(*view_.GetHost()->GetEngine(), std::move(desc), offset);
+  }
   return absl::OkStatus();
 }
 

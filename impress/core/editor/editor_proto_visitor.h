@@ -26,13 +26,16 @@
 #include <variant>
 #include <vector>
 
+#include "absl/container/inlined_vector.h"
 #include "core/common/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
+#include "dear_imgui/imgui_internal.h"
 #include "core/common/bit_flag.h"
 #include "core/common/copyable_ptr.h"
 #include "core/common/invocable.h"
@@ -59,6 +62,14 @@ constexpr absl::string_view kVectorFieldElementDragAndDropPayloadId =
 
 constexpr ImVec2 kVectorFieldElementDragAndDropTargetSize = ImVec2(256, 8);
 
+// Capacity for the active states inlined vector.
+// 4 is selected as the default capacity because:
+// 1. In typical editor workflows, bulk editing is performed on small sets
+//    of selected objects (usually 1-4 nodes).
+// 2. Since this visitor recurses down the proto hierarchy, keeping this
+//    inline capacity low prevents bloating stack frames during recursion.
+constexpr size_t kActiveStatesInlineCapacity = 4;
+
 namespace internal {
 template <int field_type, typename T>
 constexpr bool kIsImpressProtoMessage =
@@ -75,6 +86,10 @@ class EditorProtoVisitor {
   explicit EditorProtoVisitor(Proto& state, BaseView* view = nullptr)
       : state_(state), view_(view) {}
 
+  void SetActiveStates(absl::Span<Proto* const> active_states) {
+    active_states_.assign(active_states.begin(), active_states.end());
+  }
+
   template <int field_type, typename T>
   Cursor Visit(
       Cursor field_index, int field_id, T* field, T* other,
@@ -82,6 +97,25 @@ class EditorProtoVisitor {
       Invocable<void()> extra_popup_fn = {}) {
     if (IsFieldDisabled(field_id)) {
       return ++field_index;
+    }
+
+    bool all_same = true;
+    if constexpr (!(field_type == imp::proto::TYPE_MESSAGE &&
+                    !imp::proto::HasFields<T>::value &&
+                    !EditorFieldControl::is_handled_type<T>::value)) {
+      if (!active_states_.empty()) {
+        for (T* other_state_field : GetActiveStateFields(field)) {
+          if (other_state_field == field) continue;
+          if (!EditorFieldControl::CompareField(*field, *other_state_field)) {
+            all_same = false;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!all_same) {
+      ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
     }
 
     if (IsFieldReadonly(field_id)) {
@@ -96,7 +130,8 @@ class EditorProtoVisitor {
         // Show a label for the nested field name if specified, indent, and
         // recurse.
         if (CheckBit(editor_control_flags, EditorControlFlags::kDisplayLabel)) {
-          ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).data());
+          ImGui::Text(
+              "%s", std::string(proto::GetFieldName<Proto>(field_id)).c_str());
 
           if (extra_popup_fn) {
             if (ImGui::BeginPopupContextItem(
@@ -118,6 +153,15 @@ class EditorProtoVisitor {
         }
 
         EditorProtoVisitor<T> nested_visitor(*field, view_);
+        absl::InlinedVector<T*, kActiveStatesInlineCapacity>
+            nested_active_states;
+
+        if (!active_states_.empty()) {
+          nested_active_states = GetActiveStateFields(field);
+        }
+
+        nested_visitor.SetActiveStates(nested_active_states);
+
         ::imp::proto::VisitPaired(field, &nested_visitor, 0, other);
         updated_ |= nested_visitor.AnyFieldEdited();
         if (CheckBit(editor_control_flags, EditorControlFlags::kDisplayLabel)) {
@@ -142,6 +186,10 @@ class EditorProtoVisitor {
           ImGui::EndPopup();
         }
       }
+    }
+
+    if (!all_same) {
+      ImGui::PopItemFlag();  // ImGuiItemFlags_MixedValue
     }
 
     if (IsFieldReadonly(field_id)) {
@@ -277,13 +325,18 @@ class EditorProtoVisitor {
   template <int field_type, typename T>
   Cursor Visit(Cursor field_index, int field_id, CopyablePtr<T>* field,
                CopyablePtr<T>* other) {
-    return VisitOptionalHelper<field_type, T>(
+    absl::InlinedVector<Proto*, kActiveStatesInlineCapacity> old_active_states =
+        active_states_;
+    active_states_.clear();
+    Cursor result = VisitOptionalHelper<field_type, T>(
         field_index, field_id, field, other,
         +[](CopyablePtr<T>* field) { return field->get() != nullptr; },
         +[](CopyablePtr<T>* field) { return field->get(); },
         +[](CopyablePtr<T>* field, T assignment) {
           field->reset(new T(std::move(assignment)));
         });
+    active_states_ = old_active_states;
+    return result;
   }
 
   // Handles the case where the field is a OptionalWithDefault.
@@ -361,6 +414,10 @@ class EditorProtoVisitor {
     if (IsFieldDisabled(field_id)) {
       return ++field_index;
     }
+
+    absl::InlinedVector<Proto*, kActiveStatesInlineCapacity> old_active_states =
+        active_states_;
+    active_states_.clear();
 
     if (IsFieldReadonly(field_id)) {
       ImGui::BeginDisabled();
@@ -551,6 +608,7 @@ class EditorProtoVisitor {
     if (IsFieldReadonly(field_id)) {
       ImGui::EndDisabled();
     }
+    active_states_ = old_active_states;
     return ++field_index;
   }
 
@@ -560,6 +618,10 @@ class EditorProtoVisitor {
     if (IsFieldDisabled(field_id)) {
       return ++field_index;
     }
+
+    absl::InlinedVector<Proto*, kActiveStatesInlineCapacity> old_active_states =
+        active_states_;
+    active_states_.clear();
 
     if (IsFieldReadonly(field_id)) {
       ImGui::BeginDisabled();
@@ -647,6 +709,7 @@ class EditorProtoVisitor {
     if (IsFieldReadonly(field_id)) {
       ImGui::EndDisabled();
     }
+    active_states_ = old_active_states;
     return ++field_index;
   }
 
@@ -658,6 +721,21 @@ class EditorProtoVisitor {
     // First, determine if the field matches the base.
     bool does_match_base_type = other && other->index() == field->index();
     bool is_base_set = other && other->index() != 0;
+
+    bool all_same_tag = true;
+    if (!active_states_.empty()) {
+      for (T* other_state_field : GetActiveStateFields(field)) {
+        if (other_state_field == field) continue;
+        if (other_state_field->index() != field->index()) {
+          all_same_tag = false;
+          break;
+        }
+      }
+    }
+
+    if (!all_same_tag) {
+      ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+    }
 
     if (does_match_base_type) {
       editor::PushBaseIsfElementStyle();
@@ -699,11 +777,16 @@ class EditorProtoVisitor {
         !field_set
             ? "select type..."
             : proto::GetFieldName<Proto>(variant_field_ids[field->index() - 1]);
+
+    const std::string preview_text = EditorFieldControl::IsMixedValue()
+                                         ? EditorFieldControl::kMixedValueString
+                                         : std::string(combo_text);
+
     ImGui::SameLine();
     if (ImGui::BeginCombo(
             GenerateUniqueImGuiLabel("combo", field, EditorControlFlags::kNone)
                 .c_str(),
-            combo_text.data(), ImGuiComboFlags_None)) {
+            preview_text.c_str(), ImGuiComboFlags_None)) {
       // Next, populate the combo box with all the types in the oneof.
       ForConstexpr<0, std::variant_size_v<T>>(
           [this, can_unset, field, &variant_field_ids](auto i) mutable {
@@ -727,6 +810,12 @@ class EditorProtoVisitor {
                   std::decay_t<std::variant_alternative_t<i, T>>>::type;
               field->template emplace<i>(FieldT{});
               updated_ = true;
+              if (!active_states_.empty()) {
+                ForEachActiveStateField(
+                    field, [field, i](T* other_state_field) {
+                      other_state_field->template emplace<i>(FieldT{});
+                    });
+              }
             }
           });
       ImGui::EndCombo();
@@ -734,6 +823,16 @@ class EditorProtoVisitor {
 
     if (does_match_base_type) {
       editor::PopBaseIsfElementStyle();
+    }
+
+    if (!all_same_tag) {
+      ImGui::PopItemFlag();  // ImGuiItemFlags_MixedValue
+    }
+
+    absl::InlinedVector<Proto*, kActiveStatesInlineCapacity> old_active_states =
+        active_states_;
+    if (!all_same_tag) {
+      active_states_.clear();
     }
 
     ImGui::Indent();
@@ -762,6 +861,8 @@ class EditorProtoVisitor {
     }
     ImGui::Unindent();
 
+    active_states_ = old_active_states;
+
     // Oneofs guaranteed to be contiguous.
     return field_index + std::variant_size_v<T>;
   }
@@ -781,6 +882,21 @@ class EditorProtoVisitor {
     int base_idx = other ? other->Index() : 0;
     bool does_match_base_type = other && (active_idx == base_idx);
     bool is_base_set = other && other->HasValue();
+
+    bool all_same_tag = true;
+    if (!active_states_.empty()) {
+      for (auto* other_state_field : GetActiveStateFields(field)) {
+        if (other_state_field == field) continue;
+        if (other_state_field->Index() != active_idx) {
+          all_same_tag = false;
+          break;
+        }
+      }
+    }
+
+    if (!all_same_tag) {
+      ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+    }
 
     if (does_match_base_type) {
       editor::PushBaseIsfElementStyle();
@@ -820,11 +936,15 @@ class EditorProtoVisitor {
             ? "select type..."
             : proto::GetFieldName<Proto>(variant_field_ids[active_idx - 1]);
 
+    const std::string preview_text = EditorFieldControl::IsMixedValue()
+                                         ? EditorFieldControl::kMixedValueString
+                                         : std::string(combo_text);
+
     ImGui::SameLine();
     if (ImGui::BeginCombo(GenerateUniqueImGuiLabel(combo_text, field,
                                                    EditorControlFlags::kNone)
                               .c_str(),
-                          combo_text.data(), ImGuiComboFlags_None)) {
+                          preview_text.c_str(), ImGuiComboFlags_None)) {
       // Populate the "unset" option
       if (can_unset) {
         bool selected = false;
@@ -849,6 +969,12 @@ class EditorProtoVisitor {
               if (!field->template Holds<Tags>()) {
                 field->template MutableValue<Tags>();
                 updated_ = true;
+                if (!active_states_.empty()) {
+                  ForEachActiveStateField(
+                      field, [field](imp::OneOf<Tags...>* other_state_field) {
+                        other_state_field->template MutableValue<Tags>();
+                      });
+                }
               }
             }
           }(),
@@ -859,6 +985,16 @@ class EditorProtoVisitor {
 
     if (does_match_base_type) {
       editor::PopBaseIsfElementStyle();
+    }
+
+    if (!all_same_tag) {
+      ImGui::PopItemFlag();  // ImGuiItemFlags_MixedValue
+    }
+
+    absl::InlinedVector<Proto*, kActiveStatesInlineCapacity> old_active_states =
+        active_states_;
+    if (!all_same_tag) {
+      active_states_.clear();
     }
 
     ImGui::Indent();
@@ -884,6 +1020,8 @@ class EditorProtoVisitor {
           ...);
     }
     ImGui::Unindent();
+
+    active_states_ = old_active_states;
 
     // Add sizeof...(Tags) +1 to account for the number of oneof field types and
     // the unset option.
@@ -931,13 +1069,24 @@ class EditorProtoVisitor {
             if (!result.ok()) {
               IMP_LOG(imp::FATAL) << result.status();
             }
+            if (*result && !active_states_.empty()) {
+              ForEachActiveStateField(val, [val](FieldT* other_state_field) {
+                *other_state_field = *val;
+              });
+            }
             return *result;
             //}
           },
           editor_control_type->type);
     } else {
-      return EditorFieldControl::ShowDefaultControl(
+      const bool updated = EditorFieldControl::ShowDefaultControl(
           field_name, val, other, editor_control_flags, view_);
+      if (updated && !active_states_.empty()) {
+        ForEachActiveStateField(val, [val](FieldT* other_state_field) {
+          *other_state_field = *val;
+        });
+      }
+      return updated;
     }
   }
 
@@ -946,8 +1095,13 @@ class EditorProtoVisitor {
       size_t field_index, int field_id, E* val, E* base,
       EditorControlFlags editor_control_flags = EditorControlFlags::kDefault) {
     absl::string_view field_name = proto::GetFieldName<Proto>(field_id);
-    return EditorFieldControl::ShowEnumControl(field_name, val, base,
-                                               editor_control_flags, view_);
+    const bool updated = EditorFieldControl::ShowEnumControl(
+        field_name, val, base, editor_control_flags, view_);
+    if (updated && !active_states_.empty()) {
+      ForEachActiveStateField(
+          val, [val](E* other_state_field) { *other_state_field = *val; });
+    }
+    return updated;
   }
 
   std::optional<EditorControlType> GetEditorControlTypeForField(int field_id) {
@@ -1040,17 +1194,18 @@ class EditorProtoVisitor {
   }
 
   Proto& state_;
-  std::vector<Proto*> active_states_;
+  absl::InlinedVector<Proto*, kActiveStatesInlineCapacity> active_states_;
   BaseView* view_ = nullptr;
   bool updated_ = false;
 
   template <typename T>
-  std::vector<T*> GetActiveStateFields(T* field) const {
+  absl::InlinedVector<T*, kActiveStatesInlineCapacity> GetActiveStateFields(
+      T* field) const {
     if (active_states_.empty()) return {};
     // Calculate the offset of the field within the proto.
     const size_t offset = reinterpret_cast<const char*>(field) -
                           reinterpret_cast<const char*>(&state_);
-    std::vector<T*> fields;
+    absl::InlinedVector<T*, kActiveStatesInlineCapacity> fields;
     fields.reserve(active_states_.size());
     for (Proto* s : active_states_) {
       // Add the field from the active state to the list.

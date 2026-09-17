@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -41,6 +42,7 @@
 #include "core/editor/composite_command.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
+#include "core/editor/layout/helpers.h"
 #include "core/editor/visualizers/transform_gizmo_assets.h"
 #include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
@@ -175,11 +177,13 @@ imp::Future<absl::Status> TransformWidgetAspect::Setup() {
       PropertyBinding<float>(editor_->GetSettings().transform_widget_scale,
                              change_scale, BindingMode::kBindAndFire);
 
-  GetView().GetDispatcher().Connect(
-      [this](const TransformWidgetSpaceModeChangedEvent& event) {
-        use_local_space_ = event.local_space;
-      },
-      this);
+  const auto change_local_space = [this](bool local_space, bool /*old*/) {
+    if (selected_nodes_.empty()) return;
+    UpdateWidgetTransform();
+  };
+  transform_widget_local_space_binding_ =
+      PropertyBinding<bool>(editor_->GetSettings().transform_widget_local_space,
+                            change_local_space, BindingMode::kBindAndFire);
 
   return GetView()
       .GetMaterialFactory()
@@ -295,7 +299,8 @@ std::optional<float3> TransformWidgetAspect::ComputeClosestPoint() const {
     plane_normal = kOne3 - axis;
 
     // If using local space, rotate the plane normal to the node's rotation.
-    if (use_local_space_ && HasOneNodeSelected()) {
+    if (editor_->GetSettings().transform_widget_local_space.Get() &&
+        HasOneNodeSelected()) {
       quatf rotation;
 
       // If dragging, use the initial rotation.
@@ -325,6 +330,7 @@ std::optional<float3> TransformWidgetAspect::ComputeClosestPoint() const {
 
 imp::Dispatcher::PropagationResult TransformWidgetAspect::OnDragStart(
     const DragGesture::StartEvent& event) {
+  PruneInvalidHandles(selected_nodes_);
   if (!IsActive() || selected_nodes_.empty()) {
     return imp::Dispatcher::kAccept;
   }
@@ -401,6 +407,7 @@ imp::Dispatcher::PropagationResult TransformWidgetAspect::OnDragFinish(
 }
 
 void TransformWidgetAspect::Update(const FrameTime& frame_time) {
+  PruneInvalidHandles(selected_nodes_);
   if (selected_nodes_.empty()) return;
 
   UpdateWidgetTransform();
@@ -454,6 +461,7 @@ void TransformWidgetAspect::UpdateMaterial() {
 }
 
 void TransformWidgetAspect::ProcessAspectUpdate(bool commit) {
+  PruneInvalidHandles(selected_nodes_);
   if (selected_nodes_.empty()) return;
 
   std::vector<std::unique_ptr<Command>> commands;

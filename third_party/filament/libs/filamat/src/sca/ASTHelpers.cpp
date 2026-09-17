@@ -18,10 +18,10 @@
 
 #include "GLSLTools.h"
 
+#include "filament/libs/utils/include/utils/Log.h"
+
 #include "glslang/Include/intermediate.h"
 #include "glslang/MachineIndependent/localintermediate.h"
-
-#include "filament/libs/utils/include/utils/Log.h"
 
 using namespace glslang;
 

@@ -23,11 +23,12 @@
 
 #include <bluevk/BlueVK.h>
 
+#include "filament/libs/utils/include/utils/Condition.h"
+#include "filament/libs/utils/include/utils/Mutex.h"
+
 #include "filament/libs/math/include/math/vec4.h"
 
-#include <condition_variable>
 #include <functional>
-#include <mutex>
 #include <queue>
 #include <thread>
 
@@ -63,8 +64,8 @@ public:
         void loop();
 
         bool mShouldStop;
-        std::condition_variable mHasTaskCondition;
-        std::mutex mTaskQueueMutex;
+        utils::Condition mHasTaskCondition;
+        utils::Mutex mTaskQueueMutex;
         std::queue<Task> mTaskQueue;
         std::thread mThread;
     };

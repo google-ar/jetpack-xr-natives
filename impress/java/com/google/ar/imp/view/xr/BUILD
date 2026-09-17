@@ -28,6 +28,8 @@ android_library(
     custom_package = "com.google.ar.imp.view.xr",
     manifest = ":AndroidManifest.xml",
     deps = [
+        "//core/view/utils:filament_feature_flag_java_proto_lite",
+        "//core/view/utils:view_config_java_proto_lite",
         "//java/com/google/ar/imp/view",
         "//java/com/google/ar/imp/view:setup_params_java_proto_lite",
         "@maven//:androidx_annotation_annotation",

@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/base/macros.h"
 #include "core/common/log.h"
@@ -60,10 +61,10 @@ sk_sp<SkFontMgr> CreateFallbackFontManager() {
       Noto Sans Khmer
     */
     absl::string_view fonts[] = {
-        "/googlesans_medium.ttf",
-        "/googlesans_arabic_medium.ttf",
-        "/googlesans_japanese_medium.ttf",
-        "/googlesans_myanmar_medium.ttf",
+        "/GoogleSans-Medium.ttf",
+        "/GoogleSans-ArabicMedium.ttf",
+        "/GoogleSans-JapaneseMedium.ttf",
+        "/GoogleSans-MyanmarMedium.ttf",
     };
     for (int i = 0; i < ABSL_ARRAYSIZE(fonts); ++i) {
       SkString fontFilePath(
@@ -89,20 +90,34 @@ DesktopFontHolder::DesktopFontHolder()
 
 DesktopFontHolder::DesktopFontHolder(
     std::optional<absl::string_view> family_name, FontWeight font_weight,
-    TextStyle text_style)
+    TextStyle text_style, sk_sp<FontCollection> font_collection)
     : font_weight_(font_weight), text_style_(text_style) {
-  font_collection_ = sk_make_sp<FontCollection>();
-  sk_sp<SkFontMgr> font_mgr = GetFontMgr();
-  if (font_mgr != nullptr) {
-    if (family_name.has_value()) {
+  if (font_collection != nullptr) {
+    font_collection_ = std::move(font_collection);
+    if (family_name.has_value() && !family_name->empty()) {
       font_name_ = std::string(*family_name);
-      font_collection_->setDefaultFontManager(std::move(font_mgr),
-                                              {SkString(*family_name)});
     } else {
-      font_collection_->setDefaultFontManager(std::move(font_mgr));
+      font_name_ = "Noto Sans";
     }
   } else {
-    IMP_LOG(imp::ERROR) << "Unable to create a font manager; text will not be rendered";
+    font_collection_ = sk_make_sp<FontCollection>();
+    sk_sp<SkFontMgr> font_mgr = GetFontMgr();
+    if (font_mgr != nullptr) {
+      std::vector<SkString> default_families;
+      if (family_name.has_value() && !family_name->empty()) {
+        font_name_ = std::string(*family_name);
+        default_families.push_back(SkString(*family_name));
+      } else {
+        font_name_ = "Noto Sans";
+      }
+      default_families.push_back(SkString("Noto Sans"));
+      default_families.push_back(SkString("Google Sans"));
+      font_collection_->setDefaultFontManager(std::move(font_mgr),
+                                              default_families);
+    } else {
+      IMP_LOG(imp::ERROR)
+          << "Unable to create a font manager; text will not be rendered";
+    }
   }
 }
 

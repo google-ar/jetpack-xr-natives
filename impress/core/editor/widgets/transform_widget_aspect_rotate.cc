@@ -122,7 +122,8 @@ void TransformWidgetAspectRotate::UpdateWidgetTransform() {
   }
 
   // If using world space or rotating multiple nodes, use the world axis.
-  if (!use_local_space_ || !HasOneNodeSelected()) {
+  if (!editor_->GetSettings().transform_widget_local_space.Get() ||
+      !HasOneNodeSelected()) {
     GetNode()->GetParent()->SetWorldRotation(kIdentityQuatf);
     return;
   }
@@ -139,7 +140,8 @@ float3 TransformWidgetAspectRotate::GetAxis() const {
   }
 
   // If using world space or rotating multiple nodes, use the world axis.
-  if (!use_local_space_ || !HasOneNodeSelected()) {
+  if (!editor_->GetSettings().transform_widget_local_space.Get() ||
+      !HasOneNodeSelected()) {
     return GetAxisFromState();
   }
 

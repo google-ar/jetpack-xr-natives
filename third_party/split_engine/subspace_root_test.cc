@@ -71,7 +71,7 @@ TEST_F(SubspaceRootTest, SetTransformWorks) {
   MP_ASSERT_OK(subspace_root_manager.UpdateAnchor(
       android_xr::SubspaceRoot::AnchorType::kTaskSpace));
   subspace_root_manager.AttachToRoot(view_->CreateNode());
-  EXPECT_OK(subspace_root_manager.UpdateSubspaceTransform(
+  MP_EXPECT_OK(subspace_root_manager.UpdateSubspaceTransform(
       imp::mat4f::translation(imp::float3{1, 2, 3})));
   EXPECT_EQ(subspace_root_manager.GetNode()->GetChildren()[0]->GetWorldTrs(),
             imp::mat4f::translation(imp::float3{1, 2, 3}));

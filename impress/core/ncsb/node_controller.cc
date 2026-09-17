@@ -44,6 +44,7 @@
 #include "core/ncsb/path_manager.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 
 namespace imp::imp_internal {
 
@@ -422,6 +423,8 @@ bool NodeController::UpdateInheritedGroupsSelf() {
 void NodeController::OnGroupsChanged() {
   if (split_engine::SplitEngineSerializer* serializer =
           view_->GetSplitEngineSerializer()) {
+    SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+        /*production_api_level=*/4);
     if (serializer->GetApiLevel() ==
         split_engine::kSplitEngineExperimentalApiLevel) {
       std::vector<std::string> groups = GetGroups();

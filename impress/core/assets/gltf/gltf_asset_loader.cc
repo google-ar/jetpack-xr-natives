@@ -64,42 +64,8 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
     GltfAsset::LoadOptions options, mediapipe::Clock* clock /*= nullptr*/) {
   IMP_TRACE();
 
-  // If it hasn't already been created, create the material package for the type
-  // of materials being loaded. This is done right away so that the zip file
-  // containing the materials can be loaded while the glTF is loaded/parsed.
-  MaterialPackage* material_package = nullptr;
-  if (options.materials_url_override) {
-    auto itr = custom_material_packages_.find(*options.materials_url_override);
-    if (itr != custom_material_packages_.end()) {
-      material_package = itr->second.get();
-    } else {
-      Future<resources::Resource> materials_zip =
-          resource_manager->Load(*options.materials_url_override);
-      material_package =
-          custom_material_packages_
-              .emplace(*options.materials_url_override,
-                       std::make_unique<MaterialPackage>(
-                           materials_zip,
-                           GltfAsset::kDefaultMaterialPreCompileOptions))
-              .first->second.get();
-    }
-  } else if (options.use_lite_materials) {
-    if (!lite_material_package_) {
-      lite_material_package_ = std::make_unique<MaterialPackage>(
-          resource_manager->Load(
-              materials::kCompiledImpDefaultLiteGltfMaterialsZip),
-          GltfAsset::kDefaultMaterialPreCompileOptions);
-    }
-    material_package = lite_material_package_.get();
-  } else {
-    if (!material_package_) {
-      material_package_ = std::make_unique<MaterialPackage>(
-          resource_manager->Load(
-              materials::kCompiledImpDefaultGltfMaterialsZip),
-          GltfAsset::kDefaultMaterialPreCompileOptions);
-    }
-    material_package = material_package_.get();
-  }
+  MaterialPackage& material_package =
+      GetMaterialPackage(*resource_manager, options);
 
   // Remove the query params from the Url because when a gltf references other
   // assets we must append the referenced asset relative to the base url before
@@ -140,7 +106,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
 
   // Track when shaders finish downloading.
   Future<absl::Time> end_download_materials_time_future =
-      material_package->GetMaterialsZipFuture().Then(
+      material_package.GetMaterialsZipFuture().Then(
           [clock](const absl::StatusOr<Resource>& status_or_shaders) {
             return clock->TimeNow();
           },
@@ -182,7 +148,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
   }
 
   return get_loader_future.Merge(resource_future)
-      .Then([view, id, material_package, load_event, clock, loader_options](
+      .Then([view, id, &material_package, load_event, clock, loader_options](
                 std::tuple<loader::GetLoaderFn, Resource> tuple) mutable
                 -> absl::StatusOr<
                     std::shared_ptr<GltfAssetLoader::LoadInProgress>> {
@@ -193,7 +159,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
         load_event->num_bytes_downloaded += resource.GetData().Size();
 
         absl::StatusOr<std::unique_ptr<loader::Loader>> loader =
-            get_loader_fn(*view, id, resource.GetData(), material_package,
+            get_loader_fn(*view, id, resource.GetData(), &material_package,
                           std::move(loader_options));
         MP_RETURN_IF_ERROR(loader.status());
 
@@ -278,6 +244,50 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
 void GltfAssetLoader::SetSandboxedGltfLoader(
     std::unique_ptr<loader::LoaderCreator> sandboxed_gltf_loader_creator) {
   sandboxed_gltf_loader_creator_ = std::move(sandboxed_gltf_loader_creator);
+}
+
+MaterialPackage& GltfAssetLoader::GetMaterialPackage(
+    resources::ResourceManager& resource_manager,
+    const GltfAsset::LoadOptions& options) {
+  // If it hasn't already been created, create the material package for the type
+  // of materials being loaded. This is done right away so that the zip file
+  // containing the materials can be loaded while the glTF is loaded/parsed.
+  MaterialPackage* material_package = nullptr;
+  if (options.materials_url_override) {
+    // Emplace the package if it doesn't exist already.
+    // Use a nullptr initially so we only create the package if we need to.
+    auto [itr, inserted] = custom_material_packages_.try_emplace(
+        *options.materials_url_override, nullptr);
+
+    // package is new, so we need to load the materials zip and assign it to the
+    // emplaced package.
+    if (inserted) {
+      Future<resources::Resource> materials_zip =
+          resource_manager.Load(*options.materials_url_override);
+
+      itr.value() = std::make_unique<MaterialPackage>(
+          materials_zip, GltfAsset::kDefaultMaterialPreCompileOptions);
+    }
+
+    material_package = itr->second.get();
+  } else if (options.use_lite_materials) {
+    if (!lite_material_package_) {
+      lite_material_package_ = std::make_unique<MaterialPackage>(
+          resource_manager.Load(
+              materials::kCompiledImpDefaultLiteGltfMaterialsZip),
+          GltfAsset::kDefaultMaterialPreCompileOptions);
+    }
+    material_package = lite_material_package_.get();
+  } else {
+    if (!material_package_) {
+      material_package_ = std::make_unique<MaterialPackage>(
+          resource_manager.Load(materials::kCompiledImpDefaultGltfMaterialsZip),
+          GltfAsset::kDefaultMaterialPreCompileOptions);
+    }
+    material_package = material_package_.get();
+  }
+
+  return *material_package;
 }
 
 GltfAssetLoader::LoadInProgress::LoadInProgress(

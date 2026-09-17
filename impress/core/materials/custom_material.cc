@@ -359,8 +359,7 @@ void CustomMaterial::SetOwnedOrBorrowedTexture(
 }
 
 bool CustomMaterial::HasParameter(absl::string_view name) {
-  return GetFilamentMaterialInstance()->getMaterial()->hasParameter(
-      std::string(name).c_str());
+  return GetFilamentMaterialInstance()->getMaterial()->hasParameter(name);
 }
 
 absl::string_view CustomMaterial::GetParameterTransformName(
@@ -400,6 +399,15 @@ CustomMaterial::GetUnownedFilamentTextures() const {
     result.emplace(pair.first, pair.second->GetTexture());
   }
   return result;
+}
+
+bool CustomMaterial::HoldsOwnedTextures() const {
+  for (auto& [_, texture] : parameters_to_owned_or_borrowed_textures_) {
+    if (texture.IsOwned()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void CustomMaterial::ForEachTexture(

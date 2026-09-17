@@ -19,6 +19,8 @@
 
 #include <memory>
 
+#include "filament/filament/include/filament/RenderTarget.h"
+#include "filament/filament/include/filament/Renderer.h"
 #include "core/common/rememberer.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/layout/layout_composer.h"
@@ -42,13 +44,19 @@ class RemoteEditor : public Rememberer {
   // frames.
   virtual bool IsReadyToSendDataToRemote() const { return false; }
 
+  // Invoked after the offscreen render pass to allow the remote editor to
+  // capture or blit UI from the provided render target. Used to support
+  // offscreen texture streaming (e.g. for OpenXR video streaming).
+  virtual void BlitFromRenderTarget(filament::Renderer* renderer,
+                                    filament::RenderTarget* render_target) {}
+
   // Starts the remote editor with the provided configuration.
   void Start(const RemoteEditorInfo::RemoteUiConfig& config);
 
   // Stops the remote editor.
   void Stop();
 
-  // Returns true if the remote editor is currently running.
+  // True after Start() and before Stop(), independent of active connections.
   bool IsRunning() const { return running_; }
 
   // Returns true if the provided config differs from the current
@@ -56,8 +64,12 @@ class RemoteEditor : public Rememberer {
   virtual bool HasConfigChanged(
       const RemoteEditorInfo::RemoteUiConfig& config) const = 0;
 
-  // Returns true if at least one client is connected.
+  // True if any WebSocket client is connected (can linger briefly after
+  // Stop()).
   bool HasActiveConnections() const { return connection_count_ > 0; }
+
+  // Returns the current number of active client connections.
+  int ConnectionCount() const { return connection_count_; }
 
  protected:
   explicit RemoteEditor(BaseView& view);
@@ -81,6 +93,8 @@ class RemoteEditor : public Rememberer {
   // Called to forcefully reset all connections and revert the display mode.
   void ClearConnections();
 
+  void SetDisplayMode(editor::EditorInfo::DisplayMode mode);
+
   BaseView& GetView() const { return view_; }
 
   BaseView& view_;
@@ -89,7 +103,6 @@ class RemoteEditor : public Rememberer {
   bool running_ = false;
 
  private:
-  void SetDisplayMode(editor::EditorInfo::DisplayMode mode);
   bool ShouldSwitchToRemoteMode() const;
   bool ShouldSwitchToNativeMode() const;
 

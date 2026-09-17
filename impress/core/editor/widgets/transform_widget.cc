@@ -20,7 +20,9 @@
 #include "absl/container/flat_hash_set.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/registry.h"
+#include "core/editor/common/notifying_property.h"
 #include "core/editor/editor.h"
+#include "core/editor/editor_settings.h"
 #include "core/editor/events.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
@@ -93,13 +95,16 @@ void TransformWidget::Setup() {
         } else if (event.type == KeyboardEventType::kOnDown) {
           switch (event.key.code) {
             case VirtualKeyCode::VK_w:
-              SetMode(Mode::kTranslate);
+              editor.GetSettings().transform_widget_mode.Set(
+                  TransformWidgetMode::kTranslate);
               break;
             case VirtualKeyCode::VK_e:
-              SetMode(Mode::kRotate);
+              editor.GetSettings().transform_widget_mode.Set(
+                  TransformWidgetMode::kRotate);
               break;
             case VirtualKeyCode::VK_r:
-              SetMode(Mode::kScale);
+              editor.GetSettings().transform_widget_mode.Set(
+                  TransformWidgetMode::kScale);
               break;
             case VirtualKeyCode::VK_x:
               ToggleSpaceMode();
@@ -110,33 +115,60 @@ void TransformWidget::Setup() {
         }
       },
       this);
+
+  const auto mode_callback = [this](TransformWidgetMode new_mode,
+                                    TransformWidgetMode) { SetMode(new_mode); };
+  mode_binding_ = PropertyBinding<TransformWidgetMode>(
+      editor.GetSettings().transform_widget_mode, mode_callback,
+      BindingMode::kBindAndFire);
+
+  const auto local_space_callback = [this](bool new_local_space, bool) {
+    use_local_space_ = new_local_space;
+    GetView().GetDispatcher().Send(
+        TransformWidgetSpaceModeChangedEvent(use_local_space_));
+  };
+  local_space_binding_ =
+      PropertyBinding<bool>(editor.GetSettings().transform_widget_local_space,
+                            local_space_callback, BindingMode::kBindAndFire);
 }
 
 void TransformWidget::ToggleSpaceMode() {
-  use_local_space_ = !use_local_space_;
-  GetView().GetDispatcher().Send(
-      TransformWidgetSpaceModeChangedEvent(use_local_space_));
+  Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+  const bool current = editor.GetSettings().transform_widget_local_space.Get();
+  editor.GetSettings().transform_widget_local_space.Set(!current);
 }
 
 void TransformWidget::CycleMode() {
-  switch (mode_) {
-    case Mode::kTranslate:
-      SetMode(Mode::kRotate);
+  Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+  const TransformWidgetMode current =
+      editor.GetSettings().transform_widget_mode.Get();
+  switch (current) {
+    case TransformWidgetMode::kTranslate:
+      editor.GetSettings().transform_widget_mode.Set(
+          TransformWidgetMode::kRotate);
       break;
-    case Mode::kRotate:
-      SetMode(Mode::kScale);
+    case TransformWidgetMode::kRotate:
+      editor.GetSettings().transform_widget_mode.Set(
+          TransformWidgetMode::kScale);
       break;
-    case Mode::kScale:
-      SetMode(Mode::kTranslate);
+    case TransformWidgetMode::kScale:
+      editor.GetSettings().transform_widget_mode.Set(
+          TransformWidgetMode::kTranslate);
       break;
   }
 }
 
-void TransformWidget::SetMode(Mode mode) {
+void TransformWidget::SetMode(const TransformWidgetMode mode) {
   mode_ = mode;
-  if (state_.translate) state_.translate->SetEnabled(mode_ == Mode::kTranslate);
-  if (state_.rotate) state_.rotate->SetEnabled(mode_ == Mode::kRotate);
-  if (state_.scale) state_.scale->SetEnabled(mode_ == Mode::kScale);
+  if (state_.translate) {
+    state_.translate->SetEnabled(mode_ == TransformWidgetMode::kTranslate);
+  }
+  if (state_.rotate) {
+    state_.rotate->SetEnabled(mode_ == TransformWidgetMode::kRotate);
+  }
+  if (state_.scale) {
+    state_.scale->SetEnabled(mode_ == TransformWidgetMode::kScale);
+  }
 }
 
 void TransformWidget::Update(const FrameTime& frame_time) {

@@ -60,7 +60,7 @@ IosWebUiRemoteEditor::~IosWebUiRemoteEditor() {
 }
 
 bool IosWebUiRemoteEditor::IsReadyToSendDataToRemote() const {
-  return video_writer_ && video_writer_->IsReady();
+  return IsRunning() && video_writer_ && video_writer_->IsReady();
 }
 
 void IosWebUiRemoteEditor::OnWebUiStart() {

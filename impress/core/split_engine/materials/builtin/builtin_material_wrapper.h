@@ -185,6 +185,9 @@ class BuiltInMaterialWrapper : public BuiltInMaterial {
   imp::StringMap<const filament::Texture*> GetUnownedFilamentTextures()
       const override;
 
+  // Returns true if the material holds owned textures.
+  bool HoldsOwnedTextures() const override;
+
   // Invokes the given function on each texture used by the material.
   void ForEachTexture(absl::FunctionRef<void(BorrowedTexturePtr)> fn,
                       SmallSourceLocation loc) override;
@@ -507,6 +510,11 @@ template <typename MaterialT>
 imp::StringMap<const filament::Texture*>
 BuiltInMaterialWrapper<MaterialT>::GetUnownedFilamentTextures() const {
   return material_->GetUnownedFilamentTextures();
+}
+
+template <typename MaterialT>
+bool BuiltInMaterialWrapper<MaterialT>::HoldsOwnedTextures() const {
+  return material_->HoldsOwnedTextures();
 }
 
 template <typename MaterialT>

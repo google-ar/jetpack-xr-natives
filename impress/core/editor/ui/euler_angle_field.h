@@ -29,7 +29,8 @@ class EulerAngleField {
  public:
   // Draws the euler angle fields as ImGui::InputFloat3.
   // Returns true if the fields are modified. Returns false otherwise.
-  bool DrawFields(absl::string_view label, quatf rotation);
+  bool DrawFields(absl::string_view label, quatf rotation,
+                  const bool all_same_rotation[3] = nullptr);
 
   // Updates the cached euler angles to match the given rotation if they are not
   // already roughly equal rotations.

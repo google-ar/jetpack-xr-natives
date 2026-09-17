@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -25,7 +26,11 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/assets/asset_ptr.h"
+#include "core/common/owned_ptr.h"
 #include "core/gsplat/gsplat_material_params.h"
+#include "core/material_library/generic_material.h"
+#include "core/material_library/generic_material_spec.h"
+#include "core/material_library/schemas/generic_material_generated.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
@@ -48,11 +53,23 @@ class GsplatMaterialSerializerTest : public ViewFixture {
 
   std::unique_ptr<GsplatMaterialSerializer> CreateSerializer(
       schemas::GsplatMode mode) {
+    // Placeholder material so that GsplatMaterialSerializer can be constructed
+    // with a valid material.
+    // TODO: Make this test more realistic by loading the correct
+    // dependencies or using GsplatMaterialSerializer::Create properly.
+    imp::GenericMaterialSpec spec(
+        imp::schemas::GenericMaterialLightingModel::Unlit,
+        imp::schemas::GenericMaterialBlendMode::Opaque,
+        imp::schemas::GenericMaterialDoubleSidedMode::SingleSided,
+        imp::schemas::GenericMaterialDepthClearMaterial::Disabled);
+    imp::OwnedPtr<imp::GenericMaterial> material =
+        *MoveFuture(view_->GetMaterialFactory().LoadGltfMaterial(spec));
+
     // Since we are a friend of GsplatMaterialSerializer, we can call the
     // private constructor directly to avoid the complex Create() flow that
     // involves requesting materials and loading assets.
     return absl::WrapUnique(new GsplatMaterialSerializer(
-        *view_, /*material=*/{}, /*gsplat_asset=*/{}, mode,
+        *view_, std::move(material), /*gsplat_asset=*/{}, mode,
         /*precomputed_data_texture=*/{},
         /*magic_window_offscreen_resolution=*/{}));
   }

@@ -192,10 +192,19 @@ void WorldSpaceEditorUi::OnActiveStatusChanged(bool is_active) {
     return;
   }
   if (texture_ && is_active) {
-    GetView().GetHost()->TryGetExtension()->ApplyTextureRenderTarget(
-        texture_->GetTexture());
+    if (GetView().GetHost() && GetView().GetHost()->TryGetExtension()) {
+      GetView().GetHost()->TryGetExtension()->ApplyTextureRenderTarget(
+          texture_->GetTexture());
+    }
   } else {
-    GetView().GetHost()->TryGetExtension()->ApplyTextureRenderTarget(nullptr);
+    if (GetView().GetHost() && GetView().GetHost()->TryGetExtension()) {
+      window::FilamentHost::DevModeExtension* extension =
+          GetView().GetHost()->TryGetExtension();
+      if (!texture_ ||
+          extension->GetRenderTargetTexture() == texture_->GetTexture()) {
+        extension->ApplyTextureRenderTarget(nullptr);
+      }
+    }
   }
 }
 

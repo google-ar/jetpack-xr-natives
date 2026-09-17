@@ -17,6 +17,7 @@ load("//build_tools:assets.bzl", "imp_assets")
 
 # IMGUI UI Widgets for Impress Editor.
 load("//build_tools:imp.bzl", "imp_google3_copts", "imp_linkopts", "imp_test_copts")
+load("//build_tools:imp_material.bzl", "imp_material")
 load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 load("//core/proto:imp_isf_data.bzl", "imp_isf_data")
 
@@ -204,11 +205,13 @@ cc_library(
         "//core/editor/ui:ui_helpers",
         "//core/editor/widgets/icons:texture_assets",
         "//core/ncsb:ncsb_proto_cc",
+        "//core/proto:proto_reader",
         "//core/proto:proto_writer",
         "//core/proto:textproto_writer",
         "//core/render",
         "//core/render:material_registry",
         "//core/resources",
+        "//core/scene_handles:base_material_handle",
         "//core/scene_handles:material_handle",
         "//core/view:base_view",
         "//core/view/framework",
@@ -216,6 +219,7 @@ cc_library(
         "//core/view/utils:string_map",
         "//core/view/utils:string_set",
         "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
@@ -248,6 +252,7 @@ cc_library(
         "//core/editor:widget",
         "//core/editor:widget_layout_info",
         "//core/editor:widget_ui_system",
+        "//core/editor/layout:helpers",
         "//core/ncsb",
         "//core/view:base_view",
         "//core/view/framework",
@@ -477,20 +482,27 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
+        ":asset_thumbnail_provider",
         "//core/common:invocable",
         "//core/common:rememberer",
         "//core/editor:editor_field_control",
+        "//core/editor:events",
         "//core/editor:widget",
         "//core/editor/layout:editor_control_flags",
+        "//core/editor/widgets/window:window_configuration",
         "//core/materials",
+        "//core/ncsb",
         "//core/render:material_registry",
         "//core/scene_handles:material_handle",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
         "@dear_imgui",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:math_hdrs",
     ],
     alwayslink = 1,
 )
@@ -520,12 +532,14 @@ cc_library(
         "//core/editor:node_value_command",
         "//core/editor:widget",
         "//core/editor/layout:editor_control_flags",
+        "//core/editor/layout:helpers",
         "//core/ncsb",
         "//core/ncsb:ncsb_proto_cc",
         "//core/proto:proto_writer",
         "//core/proto:textproto_writer",
         "//core/view:base_view",
         "//core/view/framework",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -560,6 +574,31 @@ cc_library(
 )
 
 cc_library(
+    name = "settings_toolbar",
+    srcs = ["settings_toolbar.cc"],
+    hdrs = ["settings_toolbar.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/assets",
+        "//core/async:future",
+        "//core/common:registry",
+        "//core/common:rememberer",
+        "//core/editor",
+        "//core/editor:editor_settings",
+        "//core/editor:widget",
+        "//core/editor/widgets/icons:texture_assets",
+        "//core/render",
+        "//core/resources",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@dear_imgui",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "transform",
     srcs = [
         "transform.cc",
@@ -580,11 +619,14 @@ cc_library(
         "//core/editor",
         "//core/editor:command",
         "//core/editor:editor_field_control",
+        "//core/editor:editor_settings",
         "//core/editor:editor_style",
         "//core/editor:events",
         "//core/editor:events_cc_proto",
         "//core/editor:node_value_command",
         "//core/editor:widget",
+        "//core/editor/common:notifying_property",
+        "//core/editor/layout:helpers",
         "//core/editor/ui:euler_angle_field",
         "//core/input",
         "//core/math",
@@ -629,6 +671,7 @@ cc_library(
         "//core/editor:events_cc_proto",
         "//core/editor:node_value_command",
         "//core/editor/common:notifying_property",
+        "//core/editor/layout:helpers",
         "//core/editor/visualizers:transform_gizmo_assets",
         "//core/geometry/shapes",
         "//core/materials",
@@ -663,6 +706,82 @@ imp_cc_proto_library(
         ":transform_widget_mode_control",
         "//core/math:math_proto_cc",
     ],
+)
+
+proto_library(
+    name = "viewport_camera_orientation_widget_state_proto",
+    srcs = ["viewport_camera_orientation_widget_state.proto"],
+    deps = [
+        "//core/scene_handles:scene_handles_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "viewport_camera_orientation_widget_state_imp_cc_proto",
+    proto = ":viewport_camera_orientation_widget_state_proto",
+    deps = [
+        "//core/scene_handles:scene_handles_imp_cc_proto",
+    ],
+)
+
+imp_material(
+    name = "viewport_camera_orientation_axis_material",
+    src = "viewport_camera_orientation_axis_material.mat",
+)
+
+imp_isf_data(
+    name = "viewport_camera_orientation_widget_isf",
+    srcs = [
+        "viewport_camera_orientation_widget.textproto",
+    ],
+    deps = [
+        ":viewport_camera_orientation_widget_state_proto",
+    ],
+)
+
+imp_assets(
+    name = "viewport_camera_orientation_widget_assets",
+    srcs = [
+        ":viewport_camera_orientation_axis_material",
+        ":viewport_camera_orientation_widget.glb",
+        ":viewport_camera_orientation_widget_isf",
+    ],
+    namespace = "imp::editor::viewport_camera_orientation_widget_assets",
+)
+
+cc_library(
+    name = "viewport_camera_orientation_widget",
+    srcs = [
+        "viewport_camera_orientation_widget.cc",
+    ],
+    hdrs = [
+        "viewport_camera_orientation_widget.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":viewport_camera_orientation_widget_assets",
+        ":viewport_camera_orientation_widget_state_imp_cc_proto",
+        "//core/assets",
+        "//core/assets/material:material_asset",
+        "//core/async:future",
+        "//core/camera",
+        "//core/camera:camera_proto_cc_imp",
+        "//core/collision:ray",
+        "//core/common:registry",
+        "//core/editor",
+        "//core/editor/components:camera_rotate",
+        "//core/editor/visualizers:transform_gizmo_assets",
+        "//core/materials",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "//core/view/utils:frame_time",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
 )
 
 cc_library(
@@ -718,20 +837,21 @@ cc_library(
         "//core/editor:component_editor_cc_proto",
         "//core/editor:editor_field_control",
         "//core/editor:editor_info",
-        "//core/editor:editor_style",
         "//core/editor:events_cc_proto",
         "//core/editor:node_value_command",
         "//core/editor:widget",
         "//core/editor/layout:editor_control_flags",
         "//core/editor/layout:helpers",
         "//core/ncsb",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_impress//core/common:log",
         "@dear_imgui",
-        "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,
 )

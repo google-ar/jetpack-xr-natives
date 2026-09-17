@@ -22,6 +22,10 @@ load(
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "IMP_FLATBUFFER_INCLUDE_PATHS", "IMP_FLATC_ARGS", "if_android", "if_dev_runtime", "if_emscripten", "if_non_android", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//core/loader/data:generic_material.bzl", "process_and_build_material")
+load(
+    ":trace_categories.bzl",
+    "IMP_TRACE_CATEGORIES_COMMAND",
+)
 
 package(
     default_visibility = ["//visibility:public"],
@@ -667,11 +671,18 @@ cc_library(
     alwayslink = 1,
 )
 
+genrule(
+    name = "generate_trace_categories_h",
+    outs = ["trace_categories.h"],
+    cmd = IMP_TRACE_CATEGORIES_COMMAND,
+)
+
 cc_library(
     name = "trace",
     srcs = ["trace.cc"],
     hdrs = [
         "trace.h",
+        "trace_categories.h",
         "trace_details.h",
     ],
     copts = imp_copts(),
@@ -811,10 +822,14 @@ cc_library(
     linkstatic = True,
     deps = [
         ":small_source_location",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

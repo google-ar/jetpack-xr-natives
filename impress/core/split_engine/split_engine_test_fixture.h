@@ -80,7 +80,7 @@ using ::testing::TestWithParam;
 //   // the renderer view.
 //   EXPECT_THAT(RenderAndDiffGolden("MyTest.png"), testing::GoldenPassed());
 //   // Note: must call ClearAppContent to avoid msan errors.
-//   EXPECT_OK(split_engine_renderer_->ClearAppContent(kBridgeId));
+//   MP_EXPECT_OK(split_engine_renderer_->ClearAppContent(kBridgeId));
 // }
 //
 // INSTANTIATE_TEST_SUITE_P(
@@ -346,7 +346,7 @@ class SplitEngineTestFixture
 
   void TearDown() override {
     // Ensure all app content is cleared on shutdown.
-    EXPECT_OK(split_engine_renderer_->ClearAppContext(kBridgeId));
+    MP_EXPECT_OK(split_engine_renderer_->ClearAppContext(kBridgeId));
   }
 
   ~SplitEngineTestFixture() override { serializer_view_thread_->Stop(); }

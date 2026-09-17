@@ -1,0 +1,56 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "core/scene_handles/base_material_handle.h"
+
+#include <string>
+#include <utility>
+
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
+#include "core/async/future.h"
+#include "core/common/small_source_location.h"
+#include "core/materials/material.h"
+
+namespace imp {
+
+BaseMaterialHandle::BaseMaterialHandle(absl::string_view url) : url_(url) {}
+
+Future<absl::Status> BaseMaterialHandle::AsyncPreload(BaseView& view) {
+  return Future<absl::Status>(absl::UnimplementedError("Not implemented."));
+}
+
+Material* BaseMaterialHandle::operator->() const {
+  return material_.operator->();
+}
+
+BaseMaterialHandle::operator bool() const { return material_ != nullptr; }
+
+absl::string_view BaseMaterialHandle::GetUrl() const { return url_; }
+
+BorrowedMaterialPtr BaseMaterialHandle::GetMaterial(
+    SmallSourceLocation loc) const {
+  if (!material_) {
+    return BorrowedMaterialPtr();
+  }
+  return material_.WithNewLocation(loc);
+}
+
+void BaseMaterialHandle::AssignMaterial(absl::string_view url,
+                                        BorrowedMaterialPtr material) {
+  url_ = url;
+  material_ = std::move(material);
+}
+
+}  // namespace imp

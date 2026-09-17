@@ -47,11 +47,16 @@ objc_library(
 genrule(
     name = "ui_stream_html_gen",
     srcs = ["//javascript/core/editor/remote_editor/ui_stream:assets"],
-    outs = ["ui_stream.html"],
+    outs = [
+        "ui_stream.css",
+        "ui_stream.html",
+    ],
     cmd = """
         for f in $(SRCS); do
           if [[ $$f == *"index.html" ]]; then
-            cp $$f $@
+            cp $$f $(location ui_stream.html)
+          elif [[ $$f == *"style.css" ]]; then
+            cp $$f $(location ui_stream.css)
           fi
         done
     """,
@@ -61,7 +66,6 @@ objc_library(
     name = "ui_stream_assets_ios",
     data = [
         ":ui_stream_html_gen",
-        "//javascript/core/editor/remote_editor/ui_stream:assets/ui_stream/style.css",
         "//javascript/core/editor/remote_editor/ui_stream:assets/ui_stream/ui_stream_app.js",
     ],
 )

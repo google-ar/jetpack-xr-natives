@@ -197,7 +197,7 @@ CreateSwapChainImages(XrSessionHost* host, XrSwapchain swapchain) {
 
 absl::StatusOr<std::unique_ptr<XrSwapChain>> XrSwapChain::Create(
     XrSwapChain::ImageHandlerType::XrPlatformType& platform,
-    XrSessionHost& host, XrSwapchainCreateFlags flags, bool should_end_frame) {
+    XrSessionHost& host, XrSwapchainCreateFlags flags) {
   // WARNING: Called from Filament's Render Thread. It is NOT SAFE to call most
   // Impress or Filament APIs from here.
 
@@ -241,8 +241,7 @@ absl::StatusOr<std::unique_ptr<XrSwapChain>> XrSwapChain::Create(
       new XrSwapChain(&platform, &host, swapchain_layers,
                       flags & XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT
                           ? ContentSecurityLevel::kProtected
-                          : ContentSecurityLevel::kNone,
-                      should_end_frame));
+                          : ContentSecurityLevel::kNone));
   if (host.IsXrFbFoveationEnabled()) {
     MP_RETURN_IF_ERROR(xr_swapchain->ResolveFoveationFunctionPointers());
   }
@@ -253,7 +252,7 @@ absl::StatusOr<std::unique_ptr<XrSwapChain>> XrSwapChain::Create(
 absl::StatusOr<std::unique_ptr<XrSwapChain>> XrSwapChain::CreateForQuadLayer(
     XrSwapChain::ImageHandlerType::XrPlatformType& platform,
     XrSessionHost& host, int2 quad_size, int sample_count,
-    XrSwapchainCreateFlags flags, bool should_end_frame) {
+    XrSwapchainCreateFlags flags) {
   MP_ASSIGN_OR_RETURN(XrSwapchain swapchain_color,
                    CreateQuadSwapChain(&host, quad_size, sample_count, flags));
   MP_ASSIGN_OR_RETURN(std::vector<XrSwapChain::ImageHandlerType::XrSwapChainImage>
@@ -271,22 +270,21 @@ absl::StatusOr<std::unique_ptr<XrSwapChain>> XrSwapChain::CreateForQuadLayer(
       new XrSwapChain(&platform, &host, std::move(swapchain_layers),
                       flags & XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT
                           ? ContentSecurityLevel::kProtected
-                          : ContentSecurityLevel::kNone,
-                      should_end_frame));
+                          : ContentSecurityLevel::kNone));
   return xr_swapchain;
 }
 
 XrSwapChain::XrSwapChain(
     XrSwapChain::ImageHandlerType::XrPlatformType* platform,
     XrSessionHost* host, XrSwapChain::ImageHandlerType::SwapchainLayers layers,
-    ContentSecurityLevel content_security_level, bool should_end_frame)
+    ContentSecurityLevel content_security_level)
     : host_(host),
       content_security_level_(content_security_level),
       image_handler_(
           platform, host,
           std::make_unique<XrSwapChain::ImageHandlerType::SwapchainLayers>(
               layers),
-          content_security_level, should_end_frame) {}
+          content_security_level) {}
 
 XrSwapChain::~XrSwapChain() {
   if (image_handler_.GetSwapchainLayers()->default_color.handle !=

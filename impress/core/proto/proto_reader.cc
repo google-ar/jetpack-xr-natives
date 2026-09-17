@@ -53,9 +53,9 @@ const char* ProtoReader::ReadVarint(const char* ptr, uint32_t* varint) const {
   // We don't need to parse with limit if the buffer ends with a byte that
   // terminates a varint.
   if (ABSL_PREDICT_TRUE(ptr < end_) && !(end_[-1] & 0x80)) {
-    *varint = boost::beast::detail::varint_read(ptr); return ptr;
+    if (ptr >= end_) return nullptr; *varint = boost::beast::detail::varint_read(ptr); return ptr <= end_ ? ptr : nullptr;
   }
-  *varint = boost::beast::detail::varint_read(ptr); return ptr;
+  if (ptr >= end_) return nullptr; *varint = boost::beast::detail::varint_read(ptr); return ptr <= end_ ? ptr : nullptr;
 }
 
 const char* ProtoReader::ReadVarint(const char* ptr, uint64_t* varint) const {
@@ -63,9 +63,9 @@ const char* ProtoReader::ReadVarint(const char* ptr, uint64_t* varint) const {
   // We don't need to parse with limit if the buffer ends with a byte that
   // terminates a varint.
   if (ABSL_PREDICT_TRUE(ptr < end_) && !(end_[-1] & 0x80)) {
-    *varint = boost::beast::detail::varint_read(ptr); return ptr;
+    if (ptr >= end_) return nullptr; *varint = boost::beast::detail::varint_read(ptr); return ptr <= end_ ? ptr : nullptr;
   }
-  *varint = boost::beast::detail::varint_read(ptr); return ptr;
+  if (ptr >= end_) return nullptr; *varint = boost::beast::detail::varint_read(ptr); return ptr <= end_ ? ptr : nullptr;
 }
 
 const char* ProtoReader::ReadZigzag(const char* ptr, int32_t* zigzag) const {

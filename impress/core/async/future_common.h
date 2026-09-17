@@ -184,7 +184,7 @@ class WeakFuture {
     if (auto impl_wrapper = impl_wrapper_.lock()) {
       return Future<T>(impl_wrapper);
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
  private:

@@ -209,11 +209,80 @@ class SplitEngineSerializerImpl
       const filament::MaterialInstance* copy) override;
   void RemoveMaterialInstance(
       const filament::MaterialInstance* instance) override;
-  void SetMaterialParameter(const filament::MaterialInstance* material,
-                            absl::string_view name,
-                            const MaterialParamValue& value) override;
-  void SetMaterialParameter(const filament::MaterialInstance* material,
-                            absl::string_view name,
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            bool value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            bool2 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            bool3 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            bool4 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            float value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            float2 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            float3 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            float4 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            int value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            int2 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            int3 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            int4 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            uint value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            uint2 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            uint3 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            uint4 value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            mat3f value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            mat4f value) override;
+
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const bool> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const bool2> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const bool3> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const bool4> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const float> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const float2> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const float3> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const float4> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const int> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const int2> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const int3> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const int4> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const uint> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const uint2> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const uint3> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const uint4> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const mat3f> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
+                            absl::Span<const mat4f> value) override;
+  void SetMaterialParameter(uint64_t material_id, absl::string_view name,
                             const filament::Texture* texture,
                             const filament::TextureSampler& sampler) override;
   void CreateNode(utils::Entity entity) override;
@@ -345,11 +414,30 @@ class SplitEngineSerializerImpl
 
   SplitEngineSerializerBatchManager batch_manager_;
 
+  template <typename T>
+  void SetMaterialScalarParamImpl(uint64_t material_id, absl::string_view name,
+                                  android_xr::schemas::MaterialParamValue type,
+                                  const T& value);
+
+  template <typename SchemaStructT, typename T, typename CreateVecFn>
+  void SetMaterialSpanParamImpl(uint64_t material_id, absl::string_view name,
+                                android_xr::schemas::MaterialParamValue type,
+                                absl::Span<const T> value,
+                                CreateVecFn create_vec_fn);
+
+  void SetMaterialMat3fSpanParamImpl(uint64_t material_id,
+                                     absl::string_view name,
+                                     absl::Span<const mat3f> value);
+
+  void SetMaterialMat4fSpanParamImpl(uint64_t material_id,
+                                     absl::string_view name,
+                                     absl::Span<const mat4f> value);
+
   // Borrows a FlatbufferBuilder associated with the given batch.
   //
   // TODO: (broken link) - Use OwnedPtr and BorrowedPtr for CommandBatchBase when
   // they support implicit upcast and static_cast.
-  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> BorrowFlatBufferBuilder(
+  flatbuffers::FlatBufferBuilder& GetFlatBufferBuilder(
       SerializerDataTypes::CommandBatchBase& batch);
 
   // Transfers ownership of a FlatbufferBuilder associated with the given batch
@@ -367,9 +455,8 @@ class SplitEngineSerializerImpl
   // We do not store the builder as part of the Batch class to emphasize that
   // the Batch data should be independent of the builder.
   // The batch pointers are owned by batch_queue_.
-  absl::flat_hash_map<SerializerDataTypes::CommandBatchBase* /*absl_nonnull*/ ,
-                      imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>>
-      fbb_;
+  std::vector<imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>>
+      fbb_vector_;
 
   // Sends a Flatbuffer for the given batch to the bridge.
   void SendMessage(

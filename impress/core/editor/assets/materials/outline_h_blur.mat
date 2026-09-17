@@ -1,0 +1,52 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+  name : "OutlineHBlur",
+  depthWrite: false,
+  parameters: [
+    { type: sampler2d, name: objectsTexture },
+    { type: float, name: blurSizeNormalized }
+  ],
+  requires: [ uv0 ],
+  shadingModel: unlit,
+  vertexDomain: device
+}
+
+fragment {
+  #include "gaussian_kernel.glsl"
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+
+    vec2 uv = uvToRenderTargetUV(getUV0());
+
+    // Determine the uv step for each iteration of the blur based on the size
+    // of the outline.
+    int2 texture_size = textureSize(materialParams_objectsTexture, 0);
+    float aspect_ratio = float(texture_size.y) / float(texture_size.x);
+    float step = (materialParams.blurSizeNormalized / 16.0) * aspect_ratio;
+
+    // Apply the horizontal blur.
+    float result = 0.0;
+    float[16] kernel = getGaussianKernel();
+    for (int i=0; i < 16; i++) {
+      result += kernel[i] *
+        texture(materialParams_objectsTexture,
+          uv + vec2((float(i) - 8.0) * step, 0)).r;
+    }
+
+    material.baseColor = vec4(result);
+  }
+}

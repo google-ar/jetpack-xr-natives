@@ -117,6 +117,10 @@ class Editor : public System {
   // EditMode.
   virtual EditorInfo::RunMode GetRunMode() const = 0;
 
+  // Returns true if the build is a sandbox build (i.e. play/pause is
+  // available).
+  virtual bool IsSandbox() const = 0;
+
   // Returns the current DisplayMode.
   //
   // Native screen is the default mode. In the editor, there is no UI for

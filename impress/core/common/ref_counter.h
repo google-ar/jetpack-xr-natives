@@ -109,6 +109,9 @@ class RefCounter {
   // The count starts at zero.
   CounterType GetCount() const;
 
+  // Returns true if there are any outstanding references.
+  bool IsBorrowed() const;
+
   // Returns a map of source locations to reference counts.
   //
   // This creates a new map from internal data structures.

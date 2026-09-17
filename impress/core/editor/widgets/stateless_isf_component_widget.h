@@ -17,17 +17,23 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_STATELESS_ISF_COMPONENT_WIDGET_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_STATELESS_ISF_COMPONENT_WIDGET_H_
 
+#include <memory>
+#include <utility>
+#include <vector>
+
+#include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "core/common/invocable.h"
-#include "core/editor/function_command.h"
+#include "core/editor/command.h"
+#include "core/editor/composite_command.h"
+#include "core/editor/node_value_command.h"
 #include "core/editor/widgets/component_editor_helpers.h"
 #include "core/editor/widgets/fallback_component_widget.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/scene_metadata.h"
-#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::editor {
 
@@ -35,7 +41,8 @@ namespace imp::editor {
 template <typename T>
 class StatelessIsfComponentWidget : public FallbackComponentWidget {
  public:
-  explicit StatelessIsfComponentWidget(ComponentHandle<T> component);
+  StatelessIsfComponentWidget(absl::flat_hash_set<NodeHandle> nodes,
+                              ComponentHandle<T> component);
 
   Invocable<void()> OnCloseButton() override;
   bool IsCloseable() const override {
@@ -48,15 +55,18 @@ class StatelessIsfComponentWidget : public FallbackComponentWidget {
   const SceneMetadata::ComponentSource* GetBaseComponentSource() const override;
 
  private:
+  void OnCloseButtonImpl();
+  static absl::Status ApplyCloseState(NodeHandle target, bool value);
+
   ComponentHandle<T> component_;
 };
 
 template <typename T>
 
 StatelessIsfComponentWidget<T>::StatelessIsfComponentWidget(
-    ComponentHandle<T> component)
+    absl::flat_hash_set<NodeHandle> nodes, ComponentHandle<T> component)
     : FallbackComponentWidget(
-          component->GetNode(),
+          std::move(nodes),
           component->GetNode()
               ->GetView()
               .GetComponentManager()
@@ -71,25 +81,46 @@ ComponentHandle<T> StatelessIsfComponentWidget<T>::GetComponent() const {
 template <typename T>
 Invocable<void()> StatelessIsfComponentWidget<T>::OnCloseButton() {
   // If this component comes from a base isf file then it can't be removed.
-  if (GetBaseComponentSource()) {
-    return {};
+  if (GetBaseComponentSource()) return {};
+
+  return [this]() { OnCloseButtonImpl(); };
+}
+
+template <typename T>
+void StatelessIsfComponentWidget<T>::OnCloseButtonImpl() {
+  const absl::flat_hash_set<NodeHandle>& nodes = this->GetNodes();
+  std::vector<std::unique_ptr<Command>> commands;
+  commands.reserve(nodes.size());
+
+  for (const NodeHandle& node : nodes) {
+    // Although widgets are only displayed for components present on all
+    // selected nodes, defensively check in case the component was removed
+    // after the widget was created.
+    if (!node->GetComponent<T>()) continue;
+
+    // If this component comes from a base isf file then it can't be removed.
+    const ComponentHandle<SceneMetadata> metadata =
+        node->GetComponent<SceneMetadata>();
+
+    if (metadata &&
+        metadata->GetBaseComponentSource(T::IsfInfo::kTypeUrlHash)) {
+      continue;
+    }
+
+    commands.push_back(std::make_unique<NodeValueCommand<bool>>(
+        node, true, false, ApplyCloseState));
   }
 
-  return [this]() {
-    NodeHandle node = GetComponent()->GetNode();
-    GetCommandManager().template PerformCommand<FunctionCommand>(
-        [node]() {
-          if (node) {
-            node->RemoveComponent<T>();
-          }
-        },
-        [node]() -> absl::Status {
-          if (node) {
-            MP_RETURN_IF_ERROR(AddComponentSync<T>(node).status());
-          }
-          return absl::OkStatus();
-        });
-  };
+  if (commands.empty()) return;
+
+  this->GetCommandManager().template PerformCommand<CompositeCommand>(
+      std::move(commands));
+}
+
+template <typename T>
+absl::Status StatelessIsfComponentWidget<T>::ApplyCloseState(NodeHandle target,
+                                                             bool value) {
+  return UpdateComponentAuthoredSync<T>(target, value);
 }
 
 template <typename T>

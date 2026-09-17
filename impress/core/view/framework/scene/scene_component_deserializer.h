@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_SCENE_SCENE_COMPONENT_DESERIALIZER_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_SCENE_SCENE_COMPONENT_DESERIALIZER_H_
 
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -50,6 +51,7 @@
 #include "dear_imgui/imgui.h"
 #include "core/async/executor.h"
 #include "core/editor/command_manager.h"
+#include "core/editor/composite_command.h"
 #include "core/editor/editor_proto_visitor.h"
 #include "core/editor/node_value_command.h"
 #include "core/editor/ui/filterable_combo.h"
@@ -88,7 +90,7 @@ class SceneComponentDeserializer {
                                                      ComponentManager*);
 #if IMP_RUNTIME(DEV)
   using CreateComponentWidgetFunc = std::unique_ptr<editor::Widget>(
-      NodeHandle node, Dispatcher& editor_dispatcher);
+      absl::flat_hash_set<NodeHandle> nodes, Dispatcher& editor_dispatcher);
 #endif
 
   // A struct of function pointers.  If the component type doesn't implement a
@@ -149,11 +151,11 @@ class SceneComponentDeserializer {
 
 #if IMP_RUNTIME(DEV)
   // Displays a menu of all component types that can be added to the given
-  // node.
-  void ShowAddComponentUi(NodeHandle node);
+  // nodes.
+  void ShowAddComponentUi(const absl::flat_hash_set<NodeHandle>& nodes);
   std::unique_ptr<editor::Widget> CreateComponentWidget(
-      HashValue component_state_type_url_hash, NodeHandle node,
-      Dispatcher& editor_dispatcher);
+      HashValue component_state_type_url_hash,
+      absl::flat_hash_set<NodeHandle> nodes, Dispatcher& editor_dispatcher);
 #endif
 
  private:
@@ -161,8 +163,31 @@ class SceneComponentDeserializer {
   RobinMap<HashValue, absl::flat_hash_set<HashValue>> deps_;
 #if IMP_RUNTIME(DEV)
   editor::FilterableCombo add_component_ui_;
-  NodeHandle selected_node_;
+  absl::flat_hash_set<NodeHandle> selected_nodes_;
   editor::CommandManager* command_manager_;
+
+  template <typename T>
+  editor::FilterableCombo::SelectionStatus ShowAddComponentWithStateUi(
+      typename T::IsfInfo::StateT& state);
+
+  template <typename T>
+  editor::FilterableCombo::SelectionStatus ShowAddComponentStatelessUi();
+
+  template <typename T>
+  std::optional<editor::FilterableCombo::SelectionStatus>
+  CheckComponentExistsAndShowText();
+
+  template <typename T, typename ValueT, typename ApplyFunc>
+  void PerformAddComponentCommandInternal(ValueT old_value, ValueT new_value,
+                                          ApplyFunc&& apply_func);
+
+  template <typename T>
+  void PerformAddComponentCommand(const typename T::IsfInfo::StateT& state);
+
+  template <typename T>
+  void PerformAddComponentCommand();
+
+  bool ShowAddButton();
 #endif
 };
 
@@ -261,23 +286,24 @@ void SceneComponentDeserializer::RegisterComponentWidget(Handler& handler) {
   using ComponentStateT = typename ComponentIsfInfo::StateT;
 
   handler.create_component_widget =
-      [](NodeHandle node,
+      [](absl::flat_hash_set<NodeHandle> nodes,
          Dispatcher& editor_dispatcher) -> std::unique_ptr<editor::Widget> {
-    if (!node) {
+    if (nodes.empty()) {
       return {};
     }
 
-    auto component = node->GetComponent<T>();
+    NodeHandle first_node = *nodes.begin();
+    auto component = first_node->GetComponent<T>();
     if (!component) {
       return {};
     }
 
     if constexpr (!std::is_void_v<ComponentStateT>) {
-      return std::make_unique<editor::IsfComponentWidget<T>>(component,
-                                                             editor_dispatcher);
+      return std::make_unique<editor::IsfComponentWidget<T>>(
+          std::move(nodes), component, editor_dispatcher);
     } else {
       return std::make_unique<editor::StatelessIsfComponentWidget<T>>(
-          component);
+          std::move(nodes), component);
     }
   };
 }
@@ -290,7 +316,6 @@ void SceneComponentDeserializer::RegisterAddComponentUi() {
 
   using IsfInfoT = typename T::IsfInfo;
   using StateT = typename IsfInfoT::StateT;
-  using OptionalStateT = std::optional<StateT>;
 
   if constexpr (!std::is_void_v<StateT>) {
     // Setup the add-component UI panel.
@@ -299,103 +324,125 @@ void SceneComponentDeserializer::RegisterAddComponentUi() {
     // will cause its state to persist across frames to make it useful.
     StateT state;
     add_component_ui_.Add(type_traits::kTypeName<T>, [this, state]() mutable {
-      if (!selected_node_) {
-        IMP_LOG(imp::FATAL) << "Call to show add-component UI without selected node.";
-        return editor::FilterableCombo::SelectionStatus::kNotSelected;
-      }
-
-      // TODO: This type should be greyed-out in the combo.
-      if (selected_node_->GetComponent<T>()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180, 30, 30, 255));
-        ImGui::Text("Node already has this component type!");
-        ImGui::PopStyleColor();
-        return editor::FilterableCombo::SelectionStatus::kSelected;
-      }
-
-      imp::editor::EditorProtoVisitor<StateT> visitor(state);
-      state.Visit(visitor, 0, static_cast<StateT*>(nullptr));
-      ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(30, 90, 30, 255));
-      bool clicked = ImGui::Button("Add");
-      if (clicked) {
-        command_manager_
-            ->PerformCommand<editor::NodeValueCommand<OptionalStateT>>(
-                selected_node_, std::nullopt, state,
-                [](NodeHandle target,
-                   const OptionalStateT& value) -> absl::Status {
-                  auto scene_metadata = target->GetComponent<SceneMetadata>();
-                  if (value) {
-                    // TODO: allow async commands.
-                    absl::StatusOr<ComponentHandle<T>> result =
-                        editor::AddComponentWithStateSync<T>(target, *value);
-                    if (scene_metadata) {
-                      scene_metadata->SetComponentAuthored(
-                          IsfInfoT::kTypeUrlHash, /*is_authored=*/true);
-                    }
-                    MP_RETURN_IF_ERROR(result.status());
-                  } else {
-                    target->RemoveComponent<T>();
-                    if (scene_metadata) {
-                      scene_metadata->SetComponentAuthored(
-                          IsfInfoT::kTypeUrlHash, /*is_authored=*/false);
-                    }
-                  }
-
-                  return absl::OkStatus();
-                });
-      }
-      ImGui::PopStyleColor();
-      return clicked ? editor::FilterableCombo::SelectionStatus::kNotSelected
-                     : editor::FilterableCombo::SelectionStatus::kSelected;
+      return ShowAddComponentWithStateUi<T>(state);
     });
   } else {
     add_component_ui_.Add(type_traits::kTypeName<T>, [this]() {
-      if (!selected_node_) {
-        IMP_LOG(imp::FATAL) << "Call to show add-component UI without selected node.";
-        return editor::FilterableCombo::SelectionStatus::kNotSelected;
-      }
-
-      // TODO: This type should be greyed-out in the combo.
-      if (selected_node_->GetComponent<T>()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180, 30, 30, 255));
-        ImGui::Text("Node already has this component type!");
-        ImGui::PopStyleColor();
-        return editor::FilterableCombo::SelectionStatus::kSelected;
-      }
-
-      ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(30, 90, 30, 255));
-      bool clicked = ImGui::Button("Add");
-      if (clicked) {
-        command_manager_->PerformCommand<editor::NodeValueCommand<bool>>(
-            selected_node_, false, true,
-            [](NodeHandle target, bool value) -> absl::Status {
-              auto scene_metadata = target->GetComponent<SceneMetadata>();
-              if (value) {
-                // TODO: allow async commands.
-                absl::StatusOr<ComponentHandle<T>> result =
-                    editor::AddComponentSync<T>(target);
-                if (scene_metadata) {
-                  scene_metadata->SetComponentAuthored(IsfInfoT::kTypeUrlHash,
-                                                       /*is_authored=*/true);
-                }
-                MP_RETURN_IF_ERROR(result.status());
-              } else {
-                target->RemoveComponent<T>();
-                if (scene_metadata) {
-                  scene_metadata->SetComponentAuthored(IsfInfoT::kTypeUrlHash,
-                                                       /*is_authored=*/false);
-                }
-              }
-
-              return absl::OkStatus();
-            });
-      }
-      ImGui::PopStyleColor();
-      return clicked ? editor::FilterableCombo::SelectionStatus::kNotSelected
-                     : editor::FilterableCombo::SelectionStatus::kSelected;
+      return ShowAddComponentStatelessUi<T>();
     });
   }
 }
-#endif
+
+template <typename T>
+editor::FilterableCombo::SelectionStatus
+SceneComponentDeserializer::ShowAddComponentWithStateUi(
+    typename T::IsfInfo::StateT& state) {
+  using StateT = typename T::IsfInfo::StateT;
+
+  const std::optional<editor::FilterableCombo::SelectionStatus> status =
+      CheckComponentExistsAndShowText<T>();
+  if (status) return *status;
+
+  imp::editor::EditorProtoVisitor<StateT> visitor(state);
+  state.Visit(visitor, 0, static_cast<StateT*>(nullptr));
+
+  if (ShowAddButton()) {
+    PerformAddComponentCommand<T>(state);
+    return editor::FilterableCombo::SelectionStatus::kNotSelected;
+  }
+
+  return editor::FilterableCombo::SelectionStatus::kSelected;
+}
+
+template <typename T>
+editor::FilterableCombo::SelectionStatus
+SceneComponentDeserializer::ShowAddComponentStatelessUi() {
+  const std::optional<editor::FilterableCombo::SelectionStatus> status =
+      CheckComponentExistsAndShowText<T>();
+  if (status) return *status;
+
+  if (!ShowAddButton()) {
+    return editor::FilterableCombo::SelectionStatus::kSelected;
+  }
+
+  PerformAddComponentCommand<T>();
+  return editor::FilterableCombo::SelectionStatus::kNotSelected;
+}
+
+template <typename T, typename ValueT, typename ApplyFunc>
+void SceneComponentDeserializer::PerformAddComponentCommandInternal(
+    ValueT old_value, ValueT new_value, ApplyFunc&& apply_func) {
+  std::vector<std::unique_ptr<editor::Command>> commands;
+  for (const NodeHandle& node : selected_nodes_) {
+    if (node->GetComponent<T>()) continue;
+
+    commands.push_back(std::make_unique<editor::NodeValueCommand<ValueT>>(
+        node, std::move(old_value), std::move(new_value), apply_func));
+  }
+
+  if (commands.empty()) return;
+
+  command_manager_->PerformCommand<editor::CompositeCommand>(
+      std::move(commands));
+}
+
+template <typename T>
+void SceneComponentDeserializer::PerformAddComponentCommand(
+    const typename T::IsfInfo::StateT& state) {
+  using StateT = typename T::IsfInfo::StateT;
+  using OptionalStateT = std::optional<StateT>;
+  PerformAddComponentCommandInternal<T, OptionalStateT>(
+      std::nullopt, state, editor::UpdateComponentWithStateAuthoredSync<T>);
+}
+
+template <typename T>
+void SceneComponentDeserializer::PerformAddComponentCommand() {
+  PerformAddComponentCommandInternal<T, bool>(
+      false, true, editor::UpdateComponentAuthoredSync<T>);
+}
+
+inline bool SceneComponentDeserializer::ShowAddButton() {
+  ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(30, 90, 30, 255));
+  bool clicked = ImGui::Button("Add");
+  ImGui::PopStyleColor();
+  return clicked;
+}
+
+template <typename T>
+std::optional<editor::FilterableCombo::SelectionStatus>
+SceneComponentDeserializer::CheckComponentExistsAndShowText() {
+  if (selected_nodes_.empty()) {
+    IMP_LOG(imp::FATAL) << "Call to show add-component UI without selected nodes.";
+    return editor::FilterableCombo::SelectionStatus::kNotSelected;
+  }
+
+  bool any_have_it = false;
+  bool all_have_it = true;
+  for (const NodeHandle& node : selected_nodes_) {
+    if (node->GetComponent<T>()) {
+      any_have_it = true;
+    } else {
+      all_have_it = false;
+    }
+  }
+
+  // TODO: This type should be greyed-out in the combo.
+  if (any_have_it) {
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180, 30, 30, 255));
+    if (all_have_it) {
+      ImGui::Text("All nodes already have this component type!");
+    } else {
+      ImGui::Text("Some nodes already have this component type!");
+    }
+    ImGui::PopStyleColor();
+
+    if (all_have_it) {
+      return editor::FilterableCombo::SelectionStatus::kSelected;
+    }
+  }
+  return std::nullopt;
+}
+#endif  // IMP_RUNTIME(DEV)
 
 }  // namespace imp
 

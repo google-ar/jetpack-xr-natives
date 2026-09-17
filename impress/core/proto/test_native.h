@@ -32,8 +32,10 @@ namespace test {
 
 struct PreloadField {
   PreloadField() = default;
-  PreloadField(const PreloadField& other) : preload_future() {}
+  PreloadField(const PreloadField& other)
+      : async_preload_called(other.async_preload_called), preload_future() {}
   PreloadField& operator=(const PreloadField& other) {
+    async_preload_called = other.async_preload_called;
     preload_future = ::imp::Future<absl::Status>();
     return *this;
   }
@@ -41,16 +43,20 @@ struct PreloadField {
   PreloadField& operator=(PreloadField&&) = default;
 
   ::imp::Future<absl::Status> AsyncPreload(::imp::BaseView& view) {
+    async_preload_called = true;
     return preload_future;
   }
 
+  bool async_preload_called = false;
   ::imp::Future<absl::Status> preload_future;
 };
 
 struct InnerProtoState {
   InnerProtoState() = default;
-  InnerProtoState(const InnerProtoState& other) : preload_future() {}
+  InnerProtoState(const InnerProtoState& other)
+      : async_preload_called(other.async_preload_called), preload_future() {}
   InnerProtoState& operator=(const InnerProtoState& other) {
+    async_preload_called = other.async_preload_called;
     preload_future = ::imp::Future<absl::Status>();
     return *this;
   }
@@ -58,9 +64,11 @@ struct InnerProtoState {
   InnerProtoState& operator=(InnerProtoState&&) = default;
 
   ::imp::Future<absl::Status> AsyncPreload(::imp::BaseView& view) {
+    async_preload_called = true;
     return preload_future;
   }
 
+  bool async_preload_called = false;
   ::imp::Future<absl::Status> preload_future;
 };
 

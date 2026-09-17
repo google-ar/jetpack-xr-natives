@@ -17,15 +17,15 @@
 #ifndef TNT_STATICCODEANALYZER_H
 #define TNT_STATICCODEANALYZER_H
 
+#include <filamat/MaterialBuilder.h>
+
+#include "glslang/Public/ShaderLang.h"
+
 #include <deque>
 #include <list>
 #include <optional>
 #include <set>
 #include <string>
-
-#include <filamat/MaterialBuilder.h>
-
-#include "glslang/Public/ShaderLang.h"
 
 class TIntermNode;
 

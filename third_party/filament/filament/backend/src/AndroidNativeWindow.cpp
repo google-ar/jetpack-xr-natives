@@ -50,9 +50,9 @@ std::pair<int, bool> NativeWindow::isValid(ANativeWindow* const anw) noexcept {
     // libnativewindow.so is not available before API level 26, this means we can't call
     // any method above 25 (even protected by __builtin_available()).
     if (__builtin_available(android 28, *)) {
-        // this a proxy for is_valid()
-        auto const result = ANativeWindow_getBuffersDataSpace(anw);
-        return { result, result >= 0 };
+      // this a proxy for is_valid()
+      auto const result = ANativeWindow_getBuffersDataSpace(anw);
+      return {result, result >= 0};
     }
 #endif
 

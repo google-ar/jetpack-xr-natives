@@ -102,6 +102,7 @@ cc_library(
         "//core/common:bit_flag",
         "//core/editor:editor_style",
         "//core/math",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@dear_imgui",

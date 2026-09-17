@@ -20,17 +20,45 @@
 #include <array>
 #include <memory>
 #include <queue>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/base/nullability.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/types/span.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/common/invocable.h"
 #include "core/split_engine/split_engine_serializer_data_types.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 
 namespace imp::split_engine {
+
+// Traits to identify command types that remove resources at compile time.
+template <android_xr::schemas::CommandTypes CommandT>
+struct IsRemoveResourceCommand : std::false_type {};
+template <>
+struct IsRemoveResourceCommand<
+    android_xr::schemas::CommandTypes::RemoveMorphTargetBuffers>
+    : std::true_type {};
+template <>
+struct IsRemoveResourceCommand<
+    android_xr::schemas::CommandTypes::RemoveMeshData> : std::true_type {};
+template <>
+struct IsRemoveResourceCommand<
+    android_xr::schemas::CommandTypes::RemoveMaterialInstances>
+    : std::true_type {};
+template <>
+struct IsRemoveResourceCommand<
+    android_xr::schemas::CommandTypes::RemoveMaterials> : std::true_type {};
+template <>
+struct IsRemoveResourceCommand<
+    android_xr::schemas::CommandTypes::RemoveImageBasedLightingAssets>
+    : std::true_type {};
+template <>
+struct IsRemoveResourceCommand<
+    android_xr::schemas::CommandTypes::RemoveTextures> : std::true_type {};
 
 // System to combine multiple serialization commands into batches to reduce the
 // number of messages sent to the renderer.
@@ -48,33 +76,28 @@ class SplitEngineSerializerBatchManager {
   // Returns either an existing batch that keeps dependent commands in order, or
   // a new batch if no such batch exists.
   template <android_xr::schemas::CommandTypes CommandT>
+  SerializerDataTypes::Batch<CommandT>& GetOrCreateBatch() {
+    return GetOrCreateBatchImpl<CommandT>();
+  }
+
+  template <android_xr::schemas::CommandTypes CommandT>
+  SerializerDataTypes::Batch<CommandT>& GetOrCreateBatch(utils::Entity entity) {
+    return GetOrCreateBatchImpl<CommandT>(entity);
+  }
+
+  template <android_xr::schemas::CommandTypes CommandT>
   SerializerDataTypes::Batch<CommandT>& GetOrCreateBatch(
-      const std::vector<utils::Entity>& entity_dependencies = {},
-      const std::vector<SerializerDataTypes::ResourceId>&
-          resource_dependencies = {}) {
-    // Handle commands that are executed at the end of frame separately.
-    if (absl::c_linear_search(kRemoveResourceCommandOrder, CommandT)) {
-      if (!end_of_frame_batches_.contains(CommandT)) {
-        // The batch index is not used for end of frame batches so we pass 0.
-        end_of_frame_batches_[CommandT] =
-            std::make_unique<SerializerDataTypes::Batch<CommandT>>(0);
-      }
-      return *static_cast<SerializerDataTypes::Batch<CommandT>*>(
-          end_of_frame_batches_[CommandT].get());
-    }
+      SerializerDataTypes::ResourceId resource) {
+    return GetOrCreateBatchImpl<CommandT>(resource);
+  }
 
-    SerializerDataTypes::CommandBatchBase* batch =
-        FindBatch(CommandT, entity_dependencies, resource_dependencies);
-
-    if (batch == nullptr) {
-      // The position of the batch in the queue is its index. This is required
-      // to keep dependent batches in order.
-      batch = AddBatch(std::make_unique<SerializerDataTypes::Batch<CommandT>>(
-                           batch_queue_.size()),
-                       entity_dependencies, resource_dependencies);
-    }
-
-    return *static_cast<SerializerDataTypes::Batch<CommandT>*>(batch);
+  template <android_xr::schemas::CommandTypes CommandT>
+  SerializerDataTypes::Batch<CommandT>& GetOrCreateBatch(
+      absl::Span<const utils::Entity> entity_dependencies,
+      absl::Span<const SerializerDataTypes::ResourceId> resource_dependencies =
+          {}) {
+    return GetOrCreateBatchImpl<CommandT>(entity_dependencies,
+                                          resource_dependencies);
   }
 
   // Calls the given function for each batch in the queue.
@@ -85,26 +108,87 @@ class SplitEngineSerializerBatchManager {
  private:
   // When a command is added to a batch, we use this helper method to store that
   // this is the last batch that affected the given entities and resources.
+  template <android_xr::schemas::CommandTypes CommandT, typename... Args>
+  SerializerDataTypes::Batch<CommandT>& GetOrCreateBatchImpl(Args&&... args) {
+    if constexpr (IsRemoveResourceCommand<CommandT>::value) {
+      std::unique_ptr<SerializerDataTypes::CommandBatchBase>& batch_ptr =
+          end_of_frame_batches_[CommandT];
+      if (!batch_ptr) {
+        // The batch index is not used for end of frame batches so we pass 0.
+        batch_ptr = std::make_unique<SerializerDataTypes::Batch<CommandT>>(0);
+      }
+      return *static_cast<SerializerDataTypes::Batch<CommandT>*>(
+          batch_ptr.get());
+    }
+
+    // Intentionally don't use std::forward for args here because we can only
+    // forward once and we know the args are trivial types anyways.
+    SerializerDataTypes::CommandBatchBase* batch = FindBatch(CommandT, args...);
+
+    if (batch == nullptr) {
+      // The position of the batch in the queue is its index. This is required
+      // to keep dependent batches in order.
+      batch = AddBatch(std::make_unique<SerializerDataTypes::Batch<CommandT>>(
+                           batch_queue_.size()),
+                       std::forward<Args>(args)...);
+    }
+
+    return *static_cast<SerializerDataTypes::Batch<CommandT>*>(batch);
+  }
+
+  // When a command is added to a batch, we use these helper methods to store
+  // that this is the last batch that affected the given entities and resources.
   void StoreAffectedDependenciesBatch(
-      const std::vector<utils::Entity>& entity_dependencies,
-      const std::vector<SerializerDataTypes::ResourceId>& resource_dependencies,
+      utils::Entity entity,
+      SerializerDataTypes::CommandBatchBase* /*absl_nonnull*/  batch);
+
+  void StoreAffectedDependenciesBatch(
+      SerializerDataTypes::ResourceId resource,
+      SerializerDataTypes::CommandBatchBase* /*absl_nonnull*/  batch);
+
+  void StoreAffectedDependenciesBatch(
+      absl::Span<const utils::Entity> entity_dependencies,
+      absl::Span<const SerializerDataTypes::ResourceId> resource_dependencies,
       SerializerDataTypes::CommandBatchBase* /*absl_nonnull*/  batch);
 
   // Returns the first batch of the given type that runs after the last batch
-  // that affected the given dependencies. Returns nullptr if no such batch
-  // exists.
+  // that affected the given dependencies.
+  //
+  // Returns nullptr if no such batch exists.
+  SerializerDataTypes::CommandBatchBase* /*absl_nullable*/  FindBatch(
+      android_xr::schemas::CommandTypes command_type);
+
+  SerializerDataTypes::CommandBatchBase* /*absl_nullable*/  FindBatch(
+      android_xr::schemas::CommandTypes command_type, utils::Entity entity);
+
   SerializerDataTypes::CommandBatchBase* /*absl_nullable*/  FindBatch(
       android_xr::schemas::CommandTypes command_type,
-      const std::vector<utils::Entity>& entity_dependencies = {},
-      const std::vector<SerializerDataTypes::ResourceId>&
-          resource_dependencies = {});
+      SerializerDataTypes::ResourceId resource);
+
+  SerializerDataTypes::CommandBatchBase* /*absl_nullable*/  FindBatch(
+      android_xr::schemas::CommandTypes command_type,
+      absl::Span<const utils::Entity> entity_dependencies,
+      absl::Span<const SerializerDataTypes::ResourceId> resource_dependencies);
+
+  SerializerDataTypes::CommandBatchBase* /*absl_nullable*/  FindBatchImpl(
+      android_xr::schemas::CommandTypes command_type,
+      SerializerDataTypes::CommandBatchBase* /*absl_nullable*/  last_batch);
 
   // Adds the given batch to the queue and returns a pointer to it.
+  template <typename... Args>
   SerializerDataTypes::CommandBatchBase* /*absl_nonnull*/  AddBatch(
       /*absl_nonnull*/  std::unique_ptr<SerializerDataTypes::CommandBatchBase> batch,
-      const std::vector<utils::Entity>& entity_dependencies = {},
-      const std::vector<SerializerDataTypes::ResourceId>&
-          resource_dependencies = {});
+      Args&&... args) {
+    batch_queue_.push(std::move(batch));
+    SerializerDataTypes::CommandBatchBase* batch_ptr =
+        batch_queue_.back().get();
+    batches_[batch_ptr->type].push_back(batch_ptr);
+
+    if constexpr (sizeof...(args) > 0) {
+      StoreAffectedDependenciesBatch(std::forward<Args>(args)..., batch_ptr);
+    }
+    return batch_ptr;
+  }
 
   void Reset();
 
@@ -129,7 +213,7 @@ class SplitEngineSerializerBatchManager {
           android_xr::schemas::CommandTypes::RemoveMaterials,
           android_xr::schemas::CommandTypes::RemoveImageBasedLightingAssets,
           android_xr::schemas::CommandTypes::RemoveTextures,
-  };
+      };
   absl::flat_hash_map<android_xr::schemas::CommandTypes,
                       std::unique_ptr<SerializerDataTypes::CommandBatchBase>>
       end_of_frame_batches_;

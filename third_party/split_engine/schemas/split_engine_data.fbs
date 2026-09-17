@@ -346,7 +346,7 @@ table Texture (requires_api: 1) {
   mips:bool (id: 6, requires_api: 1);
   image_params:[ImageParams] (required, id: 7, requires_api: 1);
   pixel_buffers:[PixelBuffer] (required, id: 8, requires_api: 1);
-  name:string (id: 9);
+  name:string (id: 9, requires_api: 4, unstable_api);
 }
 
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
@@ -358,6 +358,9 @@ table LayerMask (requires_api: 1) {
 
 table Bones (requires_api: 1) {
   bones:[Mat4f] (id: 0, requires_api: 1);
+
+  // Allows for partial updates of the bones array.
+  offset:uint32 (id: 1, requires_api: 4);
 }
 
 table MorphWeights (requires_api: 1) {

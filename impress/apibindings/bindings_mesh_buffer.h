@@ -50,6 +50,16 @@ class BindingsMeshBuffer : public BindingsObject {
     kBoneWeights,
   };
 
+  // Specifies how the mesh buffer will be used.
+  enum class Usage {
+    // Mesh is immutable after creation. Backing CPU memory is discarded to save
+    // RAM.
+    kStatic,
+    // Mesh allows dynamic updates after creation. A copy of the mesh data is
+    // retained in CPU memory.
+    kDynamic,
+  };
+
   // Vertex attribute types.
   enum class VertexAttributeType {
     kFloat,
@@ -101,6 +111,9 @@ class BindingsMeshBuffer : public BindingsObject {
     std::vector<absl::Span<const uint8_t>> initial_vertex_data = {};
     // Optional initial index data.
     absl::Span<const uint8_t> initial_index_data = {};
+    // Specifies how the mesh buffer will be used. Dynamic buffers retain
+    // their CPU memory so they can be updated after creation.
+    Usage usage = Usage::kStatic;
   };
 
   // Creates a new BindingsMeshBuffer with the given options.
@@ -137,7 +150,7 @@ class BindingsMeshBuffer : public BindingsObject {
 
   void CreateRootMesh(
       const std::vector<absl::Span<const uint8_t>>& initial_vertex_data,
-      absl::Span<const uint8_t> initial_index_data);
+      absl::Span<const uint8_t> initial_index_data, Usage usage);
   absl::Status UploadVertexData(int32_t buffer_index, int32_t offset,
                                 int32_t size, const void* data);
   absl::Status UploadIndexData(int32_t offset, int32_t size, const void* data);

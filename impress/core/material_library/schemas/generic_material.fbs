@@ -19,26 +19,26 @@ namespace imp.schemas;
 
 // These enums are used to determine which material to load from the material
 // library.
-enum GenericMaterialLightingModel : uint8 {
+enum GenericMaterialLightingModel:uint8 {
   Lit,
   Unlit,
 }
 
-enum GenericMaterialBlendMode : uint8 {
+enum GenericMaterialBlendMode:uint8 {
   Opaque,
   Masked,
   Transparent,
   Refractive,
 }
 
-enum GenericMaterialDoubleSidedMode : uint8  {
+enum GenericMaterialDoubleSidedMode:uint8 {
   SingleSided,
   DoubleSided,
 }
 
 // If Enabled, a special depth clear material will be loaded instead of a normal
 // generic material.
-enum GenericMaterialDepthClearMaterial : uint8  {
+enum GenericMaterialDepthClearMaterial:uint8 {
   Disabled,
   Enabled,
 }
@@ -46,41 +46,41 @@ enum GenericMaterialDepthClearMaterial : uint8  {
 // This table is used to determine which material to load from the material
 // library.
 table GenericMaterialSpec {
-  lighting_model: GenericMaterialLightingModel;
-  blend_mode: GenericMaterialBlendMode;
-  double_sided_mode: GenericMaterialDoubleSidedMode;
-  depth_clear_material: GenericMaterialDepthClearMaterial;
+  lighting_model:GenericMaterialLightingModel;
+  blend_mode:GenericMaterialBlendMode;
+  double_sided_mode:GenericMaterialDoubleSidedMode;
+  depth_clear_material:GenericMaterialDepthClearMaterial;
 }
 
 root_type GenericMaterialSpec;
 
 // These enums are used to determine how to sample textures in materials.
-enum WrapMode : uint8 {
+enum WrapMode:uint8 {
   CLAMP_TO_EDGE,
   REPEAT,
   MIRRORED_REPEAT,
 }
 
-enum MinFilter : uint8 {
+enum MinFilter:uint8 {
   NEAREST = 0,
   LINEAR = 1,
   NEAREST_MIPMAP_NEAREST = 2,
   LINEAR_MIPMAP_NEAREST = 3,
   NEAREST_MIPMAP_LINEAR = 4,
-  LINEAR_MIPMAP_LINEAR = 5
+  LINEAR_MIPMAP_LINEAR = 5,
 }
 
-enum MagFilter : uint8 {
+enum MagFilter:uint8 {
   NEAREST = 0,
   LINEAR = 1,
 }
 
-enum CompareMode : uint8 {
+enum CompareMode:uint8 {
   NONE = 0,
-  COMPARE_TO_TEXTURE = 1
+  COMPARE_TO_TEXTURE = 1,
 }
 
-enum CompareFunc : uint8 {
+enum CompareFunc:uint8 {
   LE = 0,
   GE,
   L,
@@ -88,34 +88,34 @@ enum CompareFunc : uint8 {
   E,
   NE,
   A,
-  N
+  N,
 }
 
 // This is a schema version of filament::TextureSampler.
 table TextureSampler {
-  min_filter : MinFilter;
-  mag_filter : MagFilter;
-  wrap_mode_s : WrapMode;
-  wrap_mode_t : WrapMode;
-  wrap_mode_r : WrapMode;
-  compare_mode : CompareMode;
-  compare_func : CompareFunc;
-  anisotropy_log2 : uint8;
+  min_filter:MinFilter;
+  mag_filter:MagFilter;
+  wrap_mode_s:WrapMode;
+  wrap_mode_t:WrapMode;
+  wrap_mode_r:WrapMode;
+  compare_mode:CompareMode;
+  compare_func:CompareFunc;
+  anisotropy_log2:uint8;
 }
 
 // These tables are used to include various types of parameters in the schema.
 
 // This is the index into the material's texture list.
 struct MaterialTextureId {
-  index : uint16;
+  index:uint16;
 }
 
 struct ExternalSampler {
-  unused : uint8;
+  unused:uint8;
 }
 
 struct NilValue {
-  unused : uint8;
+  unused:uint8;
 }
 
 // This is a union of all the possible types of parameters.
@@ -142,54 +142,59 @@ union MaterialParamValue {
 }
 
 // This determines how the image data of a texture should be interpreted.
-enum TextureInfoFlags : ubyte (bit_flags) {
-  IsSrgb,           // (1 << 0)
-  GenerateMips,     // (1 << 1)
-  IsR11G11B10,      // (1 << 2)
-  IsLookup,         // (1 << 3)
+enum TextureInfoFlags:ubyte (bit_flags) {
+  IsSrgb,  // (1 << 0)
+  GenerateMips,  // (1 << 1)
+  IsR11G11B10,  // (1 << 2)
+  IsLookup,  // (1 << 3)
 }
 
 // This contains the information from a glTF texture definition.
 table TextureInfo {
-  name: string (required);
-  flags: TextureInfoFlags;
+  name:string (required);
+  flags:TextureInfoFlags;
 }
 
 // Captures a material parameter name and generic value union.
 // This is used to serialize raw material parameters.
 table MaterialParamInfo {
-  name : string (required);
-  value : MaterialParamValue (required);
+  name:string (required);
+  value:MaterialParamValue (required);
 }
 
 // Defines a texture channel in a generic material.
 table GenericMaterialTextureParameter {
   // The index into the loaded model's texture list OR the split-engine ID of
   // the texture.
-  texture: uint64;
+  texture:uint64;
+
   // The sampler settings to use to sample the texture.
-  sampler: TextureSampler;
+  sampler:TextureSampler;
+
   // The UV transform to apply to the texture.
-  uv_transform: Mat3f;
+  uv_transform:Mat3f;
+
   // If true, UV1 will be used instead of UV0 to sample the texture.
-  uses_uv1: Bool;
+  uses_uv1:Bool;
 }
 
 // The base color (diffuse channel) of the material. This is the color that
 // will be used to color the surface.
 table GenericMaterialParametersBaseColor {
   // A texture that contains the base color data.
-  texture: GenericMaterialTextureParameter;
+  texture:GenericMaterialTextureParameter;
+
   // An optional tint to multiply with the base color.
-  factor: Float4;
+  factor:Float4;
 }
 
 // Normals are used to compute the lighting direction of a surface.
 table GenericMaterialParametersNormal {
   // A texture that contains normal vector data instead of color in XYZW format.
-  texture: GenericMaterialTextureParameter;
+  texture:GenericMaterialTextureParameter;
+
   // The scale of the normal vectors since they are normalized in the texture.
-  factor: Float;
+  factor:Float;
 }
 
 // The metallic property defines whether the surface is a metallic (conductor)
@@ -203,11 +208,13 @@ table GenericMaterialParametersNormal {
 // glossy. The rougher a surface is, the “blurrier” the reflections are.
 table GenericMaterialParametersMetallicRoughness {
   // A texture that contains the metallic and roughness values.
-  texture: GenericMaterialTextureParameter;
+  texture:GenericMaterialTextureParameter;
+
   // A multiplier for the metallic property.
-  metallic_factor: Float;
+  metallic_factor:Float;
+
   // A multiplier for the roughness property.
-  roughness_factor: Float;
+  roughness_factor:Float;
 }
 
 // The ambientOcclusion property defines how much of the ambient light is
@@ -215,74 +222,76 @@ table GenericMaterialParametersMetallicRoughness {
 // (fully shadowed) and 1.0 (fully lit).
 table GenericMaterialParametersAmbientOcclusion {
   // A texture that contains the ambient occlusion data.
-  texture: GenericMaterialTextureParameter;
+  texture:GenericMaterialTextureParameter;
+
   // A multiplier for the ambient occlusion property.
-  factor: Float;
+  factor:Float;
 }
 
 // The emissive property defines the light emitted from the surface.
 table GenericMaterialParametersEmissive {
   // A texture that contains the emissive color data of the material.
-  texture: GenericMaterialTextureParameter;
+  texture:GenericMaterialTextureParameter;
+
   // A multiplier for the emissive property.
-  factor: Float3;
+  factor:Float3;
 }
 
 // Defines the clearcoat parameters in a generic material.
 table GenericMaterialParametersClearcoat {
-  intensity_texture: GenericMaterialTextureParameter;
-  normal_texture: GenericMaterialTextureParameter;
-  roughness_texture: GenericMaterialTextureParameter;
-  factor: Float3;
+  intensity_texture:GenericMaterialTextureParameter;
+  normal_texture:GenericMaterialTextureParameter;
+  roughness_texture:GenericMaterialTextureParameter;
+  factor:Float3;
 }
 
 // Defines the sheen parameters in a generic material.
 table GenericMaterialParametersSheen {
-  color_texture: GenericMaterialTextureParameter;
-  color_factor: Float3;
-  roughness_texture: GenericMaterialTextureParameter;
-  roughness_factor: Float;
+  color_texture:GenericMaterialTextureParameter;
+  color_factor:Float3;
+  roughness_texture:GenericMaterialTextureParameter;
+  roughness_factor:Float;
 }
 
 // Defines the transmission parameters in a generic material.
 table GenericMaterialParametersTransmission {
-  texture: GenericMaterialTextureParameter;
-  factor: Float;
+  texture:GenericMaterialTextureParameter;
+  factor:Float;
 }
 
 // Defines the KHR_materials_volume parameters in a generic material.
 table GenericMaterialParametersVolume {
-  texture: GenericMaterialTextureParameter;
-  thickness_factor: Float;
-  attenuation_distance: Float;
-  attenuation_color: Float3;
+  thickness_texture:GenericMaterialTextureParameter;
+  thickness_factor:Float;
+  attenuation_distance:Float;
+  attenuation_color:Float3;
 }
 
 // Defines the refraction parameters in a generic material.
 table GenericMaterialParametersRefraction {
-  index_of_refraction: Float;
+  index_of_refraction:Float;
 }
 
 table GenericMaterialParametersMasking {
-  alpha_cutoff: Float;
+  alpha_cutoff:Float;
 }
 
 // Captures all the settings for a generic material, specifically those defined
 // in the generic material template:
 // //third_party/impress/core/loader/data/generic_material_lit.mat.template.glsl
 table GenericMaterialParameters {
-  base_color: GenericMaterialParametersBaseColor;
-  metallic_roughness: GenericMaterialParametersMetallicRoughness;
-  normal: GenericMaterialParametersNormal;
-  ambient_occlusion: GenericMaterialParametersAmbientOcclusion;
-  emissive: GenericMaterialParametersEmissive;
-  clearcoat: GenericMaterialParametersClearcoat;
-  sheen: GenericMaterialParametersSheen;
-  transmission: GenericMaterialParametersTransmission;
-  refraction: GenericMaterialParametersRefraction;
-  masking: GenericMaterialParametersMasking;
-  feature_id_textures: [GenericMaterialTextureParameter];
-  volume: GenericMaterialParametersVolume;
+  base_color:GenericMaterialParametersBaseColor;
+  metallic_roughness:GenericMaterialParametersMetallicRoughness;
+  normal:GenericMaterialParametersNormal;
+  ambient_occlusion:GenericMaterialParametersAmbientOcclusion;
+  emissive:GenericMaterialParametersEmissive;
+  clearcoat:GenericMaterialParametersClearcoat;
+  sheen:GenericMaterialParametersSheen;
+  transmission:GenericMaterialParametersTransmission;
+  refraction:GenericMaterialParametersRefraction;
+  masking:GenericMaterialParametersMasking;
+  feature_id_textures:[GenericMaterialTextureParameter];
+  volume:GenericMaterialParametersVolume;
 }
 
 root_type GenericMaterialParameters;
@@ -291,10 +300,10 @@ root_type GenericMaterialParameters;
 // load an imp::GenericMaterial c++ object, which is used to create a
 // filament::MaterialInstance and set all the material parameters in the schema.
 table GenericMaterial {
-  name : string (required);
-  spec : GenericMaterialSpec;
-  bounds : BoundsInfo; // optional
-  params : GenericMaterialParameters;
+  name:string (required);
+  spec:GenericMaterialSpec;
+  bounds:BoundsInfo;  // optional
+  params:GenericMaterialParameters;
 }
 
 root_type GenericMaterial;

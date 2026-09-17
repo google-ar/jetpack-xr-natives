@@ -17,18 +17,18 @@
 #ifndef TNT_FILAMAT_FLATENNER_H
 #define TNT_FILAMAT_FLATENNER_H
 
-#include <utility>
-#include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/ostream.h"
 
 #include <map>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <assert.h>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 

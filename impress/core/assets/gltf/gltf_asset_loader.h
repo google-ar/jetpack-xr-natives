@@ -76,6 +76,10 @@ class GltfAssetLoader {
   void SetSandboxedGltfLoader(
       std::unique_ptr<loader::LoaderCreator> sandboxed_gltf_loader_creator);
 
+  MaterialPackage& GetMaterialPackage(
+      resources::ResourceManager& resource_manager,
+      const GltfAsset::LoadOptions& options);
+
  private:
   using LoadAssetFn =
       std::function<Future<resources::Resource>(absl::string_view)>;

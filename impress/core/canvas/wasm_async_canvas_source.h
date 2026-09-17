@@ -46,7 +46,8 @@ namespace imp {
 // shapes such as the rounded rectangle.
 class WasmAsyncCanvasSource : public AsyncCanvasSource {
  public:
-  WasmAsyncCanvasSource(bool enable_label_prep_profile_logging = false);
+  WasmAsyncCanvasSource(bool enable_label_prep_profile_logging = false,
+                        bool enable_labeler_timing_ticks = false);
   ~WasmAsyncCanvasSource() override = default;
 
   // Because this class passes a pointer to itself to callbacks, it may not be

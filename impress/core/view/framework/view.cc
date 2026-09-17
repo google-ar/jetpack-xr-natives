@@ -48,6 +48,7 @@
 #include "core/ncsb/node_flag.h"
 #include "core/ncsb/path_manager.h"
 #include "core/ncsb/update_phase.h"
+#include "core/render/shader_cache_system.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
@@ -101,9 +102,11 @@ View::View(ViewConfig config)
       dispatcher_(),
       update_system_(this),
       texture_registry_(this),
+      material_store_(*this),
       component_manager_(this),
       scene_system_(this),
-      shader_cache_system_(this),
+      shader_cache_system_(this,
+                           view_config_.cache_config->shader_cache_retained),
       display_layer_manager_(*this),
       asset_manager_(nullptr),
       camera_manager_(this),
@@ -152,7 +155,7 @@ std::unique_ptr<View> View::CreateClient(std::unique_ptr<Context> context) {
 
 std::unique_ptr<View> View::CreateClient(std::unique_ptr<Context> context,
                                          const std::string& identifier) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   // TODO: Look at removing the methods View::Create and
   // View::CreateClient.
   // Pass the context through the ViewHost directly instead of doing it through
@@ -170,7 +173,7 @@ std::unique_ptr<View> View::CreateClient(std::unique_ptr<Context> context,
 std::unique_ptr<View> View::CreateClient(std::unique_ptr<Context> context,
                                          const std::string& identifier,
                                          const ViewConfig& config) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   // TODO: Look at removing the methods View::Create and
   // View::CreateClient.
   // Pass the context through the ViewHost directly instead of doing it through
@@ -317,6 +320,8 @@ MaterialFactory& View::GetMaterialFactory() noexcept {
   return material_factory_;
 }
 
+MaterialStore& View::GetMaterialStore() noexcept { return material_store_; }
+
 ModelFactory& View::GetModelFactory() noexcept { return model_factory_; }
 
 EnvironmentLightFactory& View::GetEnvironmentLightFactory() noexcept {
@@ -379,8 +384,7 @@ absl::Span<filament::View*> View::GetFilamentViews() {
 }
 
 void View::Advance(absl::Duration delta_time) {
-  IMP_TRACE_NAME("View::Advance");
-
+  IMP_TRACE_CATEGORY(view);
   DurationMeasurement delta_time_measurement(GetMonitor(), kViewFrameTime);
   delta_time_measurement.AddSample(delta_time);
 
@@ -399,13 +403,13 @@ void View::Advance(absl::Duration delta_time) {
   update_system_.Update(UpdatePhase::kStart, frame_time_);
 
   if (!imp::client_api::GetIsAppSandboxTarget()) {
-    IMP_TRACE_BLOCK("View::Update");
+    IMP_TRACE_CATEGORY_BLOCK(view, "View::Update");
     Update(frame_time_);
   }
 
   // Note: This no-ops when dev mode is not available.
   {
-    IMP_TRACE_NAME("View::QueueImGuiCommandBlock");
+    IMP_TRACE_CATEGORY_NAME(view, "View::QueueImGuiCommandBlock");
     GetHost()->QueueImGuiCommandBlock(
         [this]() { dispatcher_.Send(ImGuiPreRenderEvent()); });
   }
@@ -436,7 +440,7 @@ void View::AdvanceBackgroundExecutor() {
     return;
   }
 
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
 
   auto start = absl::Now();
   float background_executor_timeout_ms =
@@ -455,7 +459,7 @@ void View::AdvanceBackgroundExecutor() {
 }
 
 void View::AdvanceForegroundExecutor() {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
 
   imp::Executor* ex = Executor::ForegroundExecutor();
   assert(ex);
@@ -506,7 +510,7 @@ void View::OnHostCreated(window::FilamentHost* host) {
 
 void View::OnHostSetup(uint2 dimensions,
                        Invocable<void(bool)> additional_setup_function) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   size_ = dimensions;
   margins_ = {0, 0, 0, 0};
 
@@ -547,7 +551,7 @@ void View::OnHostSetup(uint2 dimensions,
   RegisterComponents();
 
   if (!imp::client_api::GetIsAppSandboxTarget()) {
-    IMP_TRACE_BLOCK("Setup");
+    IMP_TRACE_CATEGORY_BLOCK(view, "Setup");
     Setup();
   } else {
     SetupSandbox();
@@ -578,6 +582,8 @@ void View::OnHostCleanup() {
   // components will have all been removed, but it should still be possible to
   // check if the ComponentHandle is valid.
   component_manager_.DestroyPools();
+
+  material_store_.ClearUnused();
 
   asset_manager_->Cleanup();
 }
@@ -610,7 +616,7 @@ void View::OnHostPreUpdate(
     window::FilamentHost* host, absl::Duration last_vsync,
     absl::Duration next_vsync, UpdateStageFlags* out_flags,
     std::optional<absl::Duration>* out_time_until_retry) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
 
   if (split_engine_serializer_ &&
       !split_engine_serializer_->ReadyForNextFrame()) {
@@ -630,7 +636,7 @@ void View::OnHostPreUpdate(
       [this, out_flags,
        out_time_until_retry](std::optional<absl::Duration> time_until_retry) {
         if (!GetHost()->IsNextRenderRequired()) {
-          IMP_TRACE_BLOCK("Frame-Cancel");
+          IMP_TRACE_CATEGORY_BLOCK(view, "Frame-Cancel");
           out_flags->SetFlag(UpdateStageFlags::kSkipFrame);
           if (out_time_until_retry) {
             *out_time_until_retry = time_until_retry;

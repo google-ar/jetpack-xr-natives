@@ -27,10 +27,10 @@ cc_library(
 
 exports_files(
     srcs = [
+        "GoogleSans-ArabicMedium.ttf",
+        "GoogleSans-JapaneseMedium.ttf",
+        "GoogleSans-Medium.ttf",
+        "GoogleSans-MyanmarMedium.ttf",
         "MaterialSymbolsOutlined-Regular.ttf",
-        "googlesans_arabic_medium.ttf",
-        "googlesans_japanese_medium.ttf",
-        "googlesans_medium.ttf",
-        "googlesans_myanmar_medium.ttf",
     ],
 )

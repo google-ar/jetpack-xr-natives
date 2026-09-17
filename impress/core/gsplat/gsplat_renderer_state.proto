@@ -1,0 +1,96 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2024";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/scene_handles/scene_handles.proto";
+
+// Next ID: 16
+message GSplatRendererState {
+  option (imp.native_include) =
+      "core/view/framework/camera/camera_component.h";
+
+  // The path to the gsplat asset to load.
+  string asset_url = 1 [(imp.editor_control) = { disabled: {} }];
+
+  // Time in seconds to wait from the last time we depth sorted the gsplat data
+  // before considering another sort operation. Set to 0 to sort as soon as
+  // possible.
+  float sort_interval_seconds = 3 [
+    (imp.editor_control) = { slider_float: { min: 0, max: 60 precision: 1 } }
+  ];
+
+  // Distance the camera has to move before a camera position sort is performed.
+  // This is only relevant to the CAMERA_POSITION sort mode below.
+  float sort_camera_movement_threshold = 14 [default = 0];
+
+  enum SortMode {
+    // No sort mode specified.
+    UNSPECIFIED = 0;
+    // Always sort the splats based on the distance along the camera forward
+    // vector. Does not re-sort on camera translation changes.
+    CAMERA_FORWARD = 1;
+    // Always sort the splats based on the squared distance from the camera
+    // position vector. Does not re-sort on camera orientation changes.
+    CAMERA_POSITION = 2;
+    // Sort the splats based on the camera forward vector if it translated,
+    // otherwise sort based on the camera position vector. Tolerance to
+    // determine if the camera has translated is float epsilon.
+    HYBRID = 3;
+  }
+  // Which sort mode to use to decide how to depth sort the gsplat data.
+  SortMode sort_mode = 4 [default = HYBRID];
+
+  // Whether to run sort operations in background threads or block in the
+  // foreground thread during update.
+  bool sort_in_background = 5 [default = true];
+
+  // Whether to render each splat as a triangle or quad.
+  // NOTE: Changing this after the component is created will have no effect.
+  bool use_triangles_for_splats = 9 [default = false];
+
+  // A scaling value used to control the size of the splat relative to the
+  // covariance-matrix defined scale. Mathematically, this is the number of
+  // standard deviations away from the gaussian mean we are visualizing.
+  float splat_scale = 6 [
+    default = 4.0,
+    (imp.editor_control) = { slider_float: { min: 0, max: 10 precision: 1 } }
+  ];
+
+  reserved 7;  // Deprecated: visualize_chunks
+  reserved 8;  // Deprecated: material_mode
+
+  // Specifies the minimum screen size of each gSplats (units are in pixels).
+  imp.Float2 min_screen_size = 10 [(imp.msg_default) = "{0.1f, 0.1f}"];
+
+  // Specifies the maximum screen size of each gSplats (units are in pixels).
+  //
+  // NOTE: will default to half of the screen resolution if not set.
+  imp.Float2 max_screen_size = 11;
+
+  // Controls the maximum opacity of the splats' colors.
+  float opacity_scale = 12 [default = 1.0];
+
+  // If assigned, this camera is used for depth sorting.
+  ComponentSceneHandle override_camera = 13
+      [(imp.template_type) = "::imp::CameraComponent"];
+
+  // If true, sorting will be skipped for a particular frame if the gsplats'
+  // AABB is outside the camera FoV at that frame.
+  bool skip_sort_if_outside_fov = 15 [default = false];
+}

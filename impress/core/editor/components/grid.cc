@@ -17,6 +17,7 @@
 #include <string>
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "core/collision/collision_helpers.h"
 #include "core/collision/plane.h"
 #include "core/collision/ray.h"
@@ -24,6 +25,7 @@
 #include "core/editor/common/notifying_property.h"
 #include "core/editor/components/grid_asset.h"
 #include "core/editor/editor.h"
+#include "core/materials/material.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
@@ -41,6 +43,9 @@ constexpr float kGridPositionOffset = .0001f;
 constexpr float kGridScale = 4.0f;
 // Scales the grid to help ensure it's always visible.
 constexpr float kGridScaleMin = 0.1f;
+// Material parameters for the grid.
+constexpr absl::string_view kMinorGridScaleParam = "minorGridScale";
+constexpr absl::string_view kMajorGridScaleParam = "majorGridScale";
 
 Future<absl::Status> Grid::Setup() {
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
@@ -70,6 +75,22 @@ Future<absl::Status> Grid::Setup() {
         grid_enabled_binding_ =
             PropertyBinding<bool>(editor.GetSettings().show_grid, set_enabled,
                                   BindingMode::kBindAndFire);
+
+        const auto update_grid_parameters = [this](const float grid_spacing,
+                                                   float /*old*/) {
+          if (!grid_renderer_) return;
+
+          Material* material = grid_renderer_->GetMaterial();
+
+          if (!material) return;
+
+          material->SetParameter(kMinorGridScaleParam, 1.0f / grid_spacing);
+          material->SetParameter(kMajorGridScaleParam, 0.1f / grid_spacing);
+        };
+
+        grid_spacing_binding_ = PropertyBinding<float>(
+            editor.GetSettings().grid_spacing, update_grid_parameters,
+            BindingMode::kBindAndFire);
         return absl::OkStatus();
       });
 }

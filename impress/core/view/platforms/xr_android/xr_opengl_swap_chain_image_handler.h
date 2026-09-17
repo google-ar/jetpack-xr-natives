@@ -80,7 +80,7 @@ class XrOpenGLSwapChainImageHandler {
   };
   XrOpenGLSwapChainImageHandler(XrPlatformType* platform, XrSessionHost* host,
                                 std::unique_ptr<SwapchainLayers> layers,
-                                ContentSecurityLevel, bool should_end_frame);
+                                ContentSecurityLevel);
   ~XrOpenGLSwapChainImageHandler();
   XrOpenGLSwapChainImageHandler(const XrOpenGLSwapChainImageHandler&) = delete;
   XrOpenGLSwapChainImageHandler& operator=(
@@ -111,7 +111,6 @@ class XrOpenGLSwapChainImageHandler {
   XrPlatformType* platform_;
   XrSessionHost* host_;
   std::unique_ptr<SwapchainLayers> layers_;
-  bool should_end_frame_ = false;
   ContentSecurityLevel content_security_level_;
   tsl::robin_map<uint32_t, uint32_t> color_to_depth_texture_;
   // The `BeginFrameAndAcquireSwapChainImages` and `Commit` methods are called

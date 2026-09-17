@@ -15,8 +15,10 @@
  */
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
+#include "third_party/absl/cleanup/cleanup.h"
 #include "core/common/log.h"
 #include "third_party/absl/memory/memory.h"
 #include "third_party/absl/status/status.h"
@@ -29,6 +31,7 @@
 #include "core/common/platform_helpers.h"
 #include "core/video/video_writer.h"
 #include "core/video/video_writer_frame.h"
+#include "core/view/base_view.h"
 #include "core/window/filament_host.h"
 
 #import <AVFoundation/AVFoundation.h>
@@ -87,8 +90,13 @@ namespace {
 // A VideoWriter that handles writing a video file on iOS devices.
 class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
  public:
-  explicit VideoFileWriterIos(bool record_microphone_audio)
-      : record_microphone_audio_(record_microphone_audio) {}
+  explicit VideoFileWriterIos(filament::Engine& engine, bool record_microphone_audio)
+      : engine_(&engine), record_microphone_audio_(record_microphone_audio) {}
+
+  ~VideoFileWriterIos() override {
+    static_cast<void>(Close());
+    if (headless_swap_chain_) engine_->destroy(headless_swap_chain_);
+  }
 
   absl::Status Open(uint2 dimensions, absl::string_view filename) override {
     absl::MutexLock lock(&mutex_);
@@ -205,30 +213,63 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
     if (record_microphone_audio_) {
       [audio_capture_ startRunning];
     }
+
+    open_ = true;
+    is_ready_ = true;
     return absl::OkStatus();
   }
 
   void CaptureFrame(window::FilamentHost* filament_host) override {
-    absl::MutexLock lock(&mutex_);
+    filament::SwapChain* swap_chain_to_destroy = nullptr;
+    {
+      absl::MutexLock lock(&mutex_);
 
-    // Do not write more frames if the video writer is not open.
-    if (!open_) {
-      return;
+      if (pending_cleanup_) {
+        video_frames_.clear();
+        swap_chain_to_destroy = headless_swap_chain_;
+        headless_swap_chain_ = nullptr;
+        pending_cleanup_ = false;
+      }
+
+      // Do not write more frames if the video writer is not open.
+      if (!open_) {
+        return;
+      }
+
+      // Have to ensure the asset writer is ready before we write a frame...
+      if (!adaptor_.assetWriterInput.readyForMoreMediaData) {
+        IMP_LOG(imp::ERROR) << "Skipping frame - assert writer not ready for more data!";
+        return;
+      }
     }
 
-    // Have to ensure the asset writer is ready before we write a frame, otherwise we must skip
-    // it.
-    if (!adaptor_.assetWriterInput.readyForMoreMediaData) {
-      IMP_LOG(imp::ERROR) << "Skipping frame - assert writer not ready for more data!";
-      return;
+    if (swap_chain_to_destroy) {
+      engine_->destroy(swap_chain_to_destroy);
     }
 
-    absl::StatusOr<std::unique_ptr<VideoFrame>> video_frame = CreateVideoFrame(filament_host);
-    if (!video_frame.ok()) {
+    absl::StatusOr<std::unique_ptr<VideoFrame>> video_frame_or = CreateVideoFrame(filament_host);
+    if (video_frame_or.ok()) {
+      window::FilamentHost::DevModeExtension* extension = filament_host->TryGetExtension();
+      if (extension && extension->IsEnabled()) {
+        extension->ApplyTextureRenderTarget(video_frame_or.value()->GetTexture());
+      } else {
+        filament_host->CopyFrame(video_frame_or.value()->GetSwapChain(),
+                                 filament::Viewport(0, 0, dimensions_.x, dimensions_.y),
+                                 filament::Viewport(0, 0, dimensions_.x, dimensions_.y),
+                                 filament::Renderer::COMMIT);
+      }
+      absl::MutexLock lock(&mutex_);
+      if (open_) {
+        // The previously added frame (if any) just had its rendering commands submitted.
+        // We can now create a fence to wait on those commands.
+        if (!video_frames_.empty()) {
+          video_frames_.back()->SetFence(engine_->createFence());
+        }
+        video_frames_.push_back(std::move(video_frame_or.value()));
+      }
+    } else {
       IMP_LOG(imp::ERROR) << "Failed to create video frame!";
-      return;
     }
-    video_frames_.push_back(std::move(video_frame.value()));
   }
 
   void WriteFrame() override {
@@ -241,15 +282,21 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
 
   Future<absl::Status> Close() override {
     absl::MutexLock lock(&mutex_);
+    if (!open_) return Future<absl::Status>(absl::OkStatus());
 
     // Ensure we do not try to write any more frames.
     open_ = false;
     is_ready_ = false;
+    pending_cleanup_ = true;
 
     // Stop the audio capture session.
     if (record_microphone_audio_) {
       [audio_capture_ stopRunning];
       [audio_writer_ markAsFinished];
+    }
+
+    if (!video_frames_.empty()) {
+      video_frames_.back()->SetFence(engine_->createFence());
     }
 
     while (!video_frames_.empty()) {
@@ -342,16 +389,23 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
       window::FilamentHost* filament_host) {
     absl::StatusOr<CVPixelBufferRef> pxbuffer_or = GetPixelBuffer();
     MP_RETURN_IF_ERROR(pxbuffer_or.status());
+    CVPixelBufferRef pxbuffer = pxbuffer_or.value();
+    absl::Cleanup release_buffer = [pxbuffer] { CVPixelBufferRelease(pxbuffer); };
     // Calculate the time of this frame.
-    if (!initial_time_.has_value()) {
-      initial_time_ = absl::Now();
+    double seconds = 0;
+    {
+      absl::MutexLock lock(&mutex_);
+      if (!initial_time_.has_value()) {
+        initial_time_ = absl::Now();
+      }
+      seconds = absl::ToDoubleSeconds(absl::Now() - initial_time_.value());
     }
-    double seconds = absl::ToDoubleSeconds(absl::Now() - initial_time_.value());
-    auto video_frame =
-        std::make_unique<VideoFrame>(*filament_host->GetEngine(), pxbuffer_or.value(), seconds);
-    filament_host->CopyFrame(
-        video_frame->GetSwapChain(), filament::Viewport(0, 0, dimensions_.x, dimensions_.y),
-        filament::Viewport(0, 0, dimensions_.x, dimensions_.y), filament::Renderer::COMMIT);
+
+    // TODO: Redo so a texture is reused using a texture queue. The reason the queue is
+    // needed is because the encoding is multi-threaded.
+    std::unique_ptr<VideoFrame> video_frame =
+        std::make_unique<VideoFrame>(*engine_, pxbuffer, seconds);
+
     return video_frame;
   }
 
@@ -380,7 +434,6 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
     WriteFrame(std::move(video_frame));
   }
 
-  NSString* filename_;
   filament::math::int2 dimensions_;
   AVAssetWriter* writer_;
 
@@ -388,6 +441,8 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
   AVAssetWriterInput* video_writer_;
   AVAssetWriterInputPixelBufferAdaptor* adaptor_;
   std::vector<std::unique_ptr<VideoFrame>> video_frames_;
+  filament::SwapChain* headless_swap_chain_ = nullptr;
+  filament::Engine* engine_ = nullptr;
 
   // Audio data.
   AVCaptureSession* audio_capture_;
@@ -403,6 +458,7 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
   absl::optional<double> initial_time_audio_ = absl::nullopt;
   bool open_ = false;
   bool is_ready_ = false;
+  bool pending_cleanup_ = false;
   bool record_microphone_audio_;
 
   // The minimum number of frames to have captured before starting to write.
@@ -418,8 +474,9 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
 namespace imp {
 namespace video {
 
-std::unique_ptr<VideoWriter> CreateVideoFileWriterIos(bool record_microphone_audio) {
-  return std::make_unique<VideoFileWriterIos>(record_microphone_audio);
+std::unique_ptr<VideoWriter> CreateVideoFileWriterIos(filament::Engine& engine,
+                                                      bool record_microphone_audio) {
+  return std::make_unique<VideoFileWriterIos>(engine, record_microphone_audio);
 }
 
 }  // namespace video

@@ -878,5 +878,5 @@ alias(
 
 alias(
     name = "backend_metal",
-    actual = ":backend_metal_objc",
+    actual = if_apple(":backend_metal_objc", ":backend_opengl_default"),
 )

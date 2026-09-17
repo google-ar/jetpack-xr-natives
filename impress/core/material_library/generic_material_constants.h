@@ -23,42 +23,31 @@
 #include "absl/strings/string_view.h"
 #include "core/math/vec.h"
 
+// IWYU pragma: begin_exports
+#include "core/material_library/generic_material_parameter_constants.h"
+// IWYU pragma: end_exports
+
 namespace imp {
 
-// Material parameter names emitted by gltf materials.
+// Constants used in the internal implementation of GenericMaterial.
 
 // LINT.IfChange(generic_material_parameters)
+
 constexpr const absl::string_view kBaseColorIndex = "baseColorIndex";
-constexpr const absl::string_view kBaseColorFactor = "baseColorFactor";
 constexpr const absl::string_view kMetallicRoughnessIndex =
     "metallicRoughnessIndex";
-constexpr const absl::string_view kMetallicFactor = "metallicFactor";
-constexpr const absl::string_view kRoughnessFactor = "roughnessFactor";
 constexpr const absl::string_view kNormalIndex = "normalIndex";
-constexpr const absl::string_view kNormalScale = "normalScale";
 constexpr const absl::string_view kAoIndex = "aoIndex";
-constexpr const absl::string_view kAoStrength = "aoStrength";
 constexpr const absl::string_view kEmissiveIndex = "emissiveIndex";
-constexpr const absl::string_view kEmissiveFactor = "emissiveFactor";
-constexpr const absl::string_view kClearcoatRoughnessNormalFactors =
-    "clearcoat_roughness_normal_factors";
 constexpr const absl::string_view kClearcoatIndex = "clearcoatIndex";
 constexpr const absl::string_view kClearcoatRoughnessIndex =
     "clearcoatRoughnessIndex";
 constexpr const absl::string_view kClearcoatNormalIndex =
     "clearcoatNormalIndex";
 constexpr const absl::string_view kSheenColorIndex = "sheenColorIndex";
-constexpr const absl::string_view kSheenColorFactor = "sheenColorFactor";
 constexpr const absl::string_view kSheenRoughnessIndex = "sheenRoughnessIndex";
-constexpr const absl::string_view kSheenRoughnessFactor =
-    "sheenRoughnessFactor";
 constexpr const absl::string_view kTransmissionIndex = "transmissionIndex";
-constexpr const absl::string_view kTransmissionFactor = "transmissionFactor";
-constexpr const absl::string_view kIndexOfRefraction = "indexOfRefraction";
-constexpr const absl::string_view kThicknessFactor = "thicknessFactor";
 constexpr const absl::string_view kThicknessIndex = "thicknessIndex";
-constexpr const absl::string_view kAttenuationDistance = "attenuationDistance";
-constexpr const absl::string_view kAttenuationColor = "attenuationColor";
 constexpr const absl::string_view kSamplersUvBitflags = "samplers_uv_bitflags";
 constexpr const absl::string_view kSamplersUvMatrices = "samplers_uv_matrices";
 constexpr const absl::string_view kEstimatedDepthTexture =

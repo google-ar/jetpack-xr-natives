@@ -62,7 +62,7 @@ void TestModelManager::LoadGltfAsset(
   context.load_gltf_asset_bytes.actual_key = std::string(key);
   
   if (context.load_gltf_asset_bytes.expect_test_pattern) {
-    EXPECT_OK(
+    MP_EXPECT_OK(
         VerifyTestPattern(data, context.load_gltf_asset_bytes.expected_size));
   }
 

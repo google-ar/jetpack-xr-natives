@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_TRANSFORM_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_TRANSFORM_H_
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
 #include "core/editor/command_manager.h"
@@ -25,6 +26,10 @@
 #include "core/editor/widget.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
+
+namespace imp {
+class SceneMetadata;
+}  // namespace imp
 
 namespace imp::editor {
 
@@ -43,8 +48,20 @@ class Transform : public editor::Widget, public imp::Rememberer {
   CommandManager& command_manager_;
   Editor& editor_;
   NodeHandle transform_widget_;
-  NodeHandle active_node_;
+  absl::flat_hash_set<NodeHandle> active_nodes_;
   EulerAngleField rotation_field_;
+
+  template <bool IsPrecise>
+  void DrawPositionFieldsImpl(NodeHandle first_node,
+                              ComponentHandle<SceneMetadata> scene_metadata);
+  void DrawPositionFieldsPrecise(NodeHandle first_node,
+                                 ComponentHandle<SceneMetadata> scene_metadata);
+  void DrawPositionFields(NodeHandle first_node,
+                          ComponentHandle<SceneMetadata> scene_metadata);
+  void DrawRotationFields(NodeHandle first_node,
+                          ComponentHandle<SceneMetadata> scene_metadata);
+  void DrawScaleFields(NodeHandle first_node,
+                       ComponentHandle<SceneMetadata> scene_metadata);
 };
 
 }  // namespace imp::editor

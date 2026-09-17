@@ -154,6 +154,9 @@ class OwnedPtr {
   // Returns the number of outstanding tracked BorrowedPtr<T> objects.
   uint16_t GetBorrowedCount() const;
 
+  // Returns true if there are any outstanding tracked BorrowedPtr<T> objects.
+  bool IsBorrowed() const;
+
   // Resets the OwnedPtr, destroying the held object if it is non-null.
   //
   // The OwnedPtr will Fatal if any tracked BorrowedPtr<T> objects are still
@@ -561,9 +564,12 @@ bool BorrowedPtr<T>::operator!=(std::nullptr_t) const {
 
 template <typename T>
 void BorrowedPtr<T>::AssertNotDestroyed() const {
+#ifndef NDEBUG
   // If the ref is destroyed, but the ptr_ is still non-null, then the OwnedPtr
   // was destroyed while the BorrowedPtr was still outstanding. If the ptr_ is
   // null, then this is just an empty BorrowedPtr.
+  //
+  // This check is only performed in debug mode.
   if (ref_.IsCounterDestroyed() && ptr_) {
     SmallSourceLocation loc = ref_.GetLocation();
 
@@ -571,6 +577,7 @@ void BorrowedPtr<T>::AssertNotDestroyed() const {
                << type_traits::kTypeName<T> << " borrowed from "
                << loc.GetFileName() << ":" << loc.GetLineNumber();
   }
+#endif
 }
 template <typename T, typename Deleter>
 BorrowedPtr<T> OwnedPtr<T, Deleter>::Borrow(SmallSourceLocation loc) const {
@@ -583,6 +590,11 @@ BorrowedPtr<T> OwnedPtr<T, Deleter>::Borrow(SmallSourceLocation loc) const {
 template <typename T, typename Deleter>
 uint16_t OwnedPtr<T, Deleter>::GetBorrowedCount() const {
   return additional_fields_.GetRefCounter().GetCount();
+}
+
+template <typename T, typename Deleter>
+bool OwnedPtr<T, Deleter>::IsBorrowed() const {
+  return additional_fields_.GetRefCounter().IsBorrowed();
 }
 
 template <typename T, typename Deleter>
@@ -620,7 +632,7 @@ void OwnedPtr<T, Deleter>::AssertSafeToRelinquish() {
     return;
   }
 
-  if (additional_fields_.GetRefCounter().GetCount() > 0) {
+  if (IsBorrowed()) {
     std::string description;
     if constexpr (type_traits::kHasGetNameMethod<T>) {
       static constexpr size_t kMaxNameLength = 256;

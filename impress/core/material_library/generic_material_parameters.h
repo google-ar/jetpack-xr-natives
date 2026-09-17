@@ -92,7 +92,7 @@ struct GenericMaterialParametersTransmission {
 };
 
 struct GenericMaterialParametersVolume {
-  std::optional<GenericMaterialTextureParameter> texture;
+  std::optional<GenericMaterialTextureParameter> thickness_texture;
   float thickness_factor = kDefaultThicknessFactor;
   float attenuation_distance = kDefaultAttenuationDistance;
   float3 attenuation_color = kDefaultAttenuationColor;
@@ -294,8 +294,8 @@ GenericMaterialParameters::ToFlatbufferT(
         volume->attenuation_color.z);
     volume_offset = SchemaCreator::CreateGenericMaterialParametersVolume(
         builder,
-        CreateGenericMaterialTextureParameter<SchemaCreator>(builder,
-                                                             volume->texture),
+        CreateGenericMaterialTextureParameter<SchemaCreator>(
+            builder, volume->thickness_texture),
         &thickness_factor, &attenuation_distance, &attenuation_color);
   }
   flatbuffers::Offset<
@@ -468,7 +468,8 @@ template <typename GenericMaterialParametersVolumeSchema>
 GenericMaterialParametersVolume FromVolumeFlatbuffer(
     const GenericMaterialParametersVolumeSchema& volume) {
   return GenericMaterialParametersVolume{
-      .texture = FromTextureParameterFlatbuffer(volume.texture()),
+      .thickness_texture =
+          FromTextureParameterFlatbuffer(volume.thickness_texture()),
       .thickness_factor = volume.thickness_factor()
                               ? FromFloatFlatbuffer(*volume.thickness_factor())
                               : kDefaultThicknessFactor,

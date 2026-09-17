@@ -301,6 +301,10 @@ class FilamentHost {
                            absl::Duration next_vsync, bool force) = 0;
     // Creates a render target and sets it on the ImGui-specific view.
     virtual void ApplyTextureRenderTarget(filament::Texture* texture) {}
+    // Returns the texture right currently set as the render target (if any).
+    virtual filament::Texture* GetRenderTargetTexture() const {
+      return nullptr;
+    }
     // Returns true if the ImGui-specific view has a render target.
     virtual bool HasRenderTarget() { return false; }
     // Returns true if the UI should be rendered on a remote screen.
@@ -516,6 +520,11 @@ class FilamentHost {
     return editor_viewport_override_;
   }
 
+  // Notifies the host whether the screen-space editor viewport widget is
+  // present/visible in this frame. If not, it falls back to rendering normally
+  // to the main swapchain.
+  void SetViewportWidgetPresent(PassKey<editor::EditorImpl> key, bool present);
+
   void SetClipboardHandler(std::unique_ptr<ClipboardHandler> clipboard_handler);
 
   // Performs rendering by calling filament::Renderer::Render on the view using
@@ -614,6 +623,7 @@ class FilamentHost {
   filament::Camera* editor_camera_override_ = nullptr;
   filament::RenderTarget* editor_render_target_override_ = nullptr;
   std::optional<filament::Viewport> editor_viewport_override_;
+  bool viewport_widget_present_ = false;
   // May or may not be valid depending on whether we have a custom handler for
   // the specific platform the app is running on.
   std::unique_ptr<ClipboardHandler> clipboard_handler_;

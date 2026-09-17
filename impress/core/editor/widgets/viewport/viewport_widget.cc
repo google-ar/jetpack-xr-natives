@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 
+#include "absl/base/optimization.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
@@ -28,9 +29,12 @@
 #include "core/editor/ui/drag_and_drop.h"
 #include "core/editor/widgets/viewport/viewport_helpers.h"
 #include "core/editor/widgets/viewport/viewport_render_target.h"
+#include "core/editor/widgets/viewport_camera_orientation_widget.h"
+#include "core/editor/widgets/viewport_camera_orientation_widget_assets.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
 #include "core/view/base_view.h"
+#include "core/view/framework/scene/scene_system.h"
 #include "core/window/filament_host.h"
 
 namespace imp::editor {
@@ -53,18 +57,49 @@ ViewportWidget::ViewportWidget(Editor& editor, BaseView& view,
                                ViewportRenderTarget* viewport_render_target)
     : editor_(editor),
       view_(view),
-      viewport_render_target_(viewport_render_target) {}
+      viewport_render_target_(viewport_render_target) {
+  view_.GetSceneSystem()
+      .RegisterComponentIsfInfo<ViewportCameraOrientationWidget>();
+  view_.GetSceneSystem()
+      .LoadScene(viewport_camera_orientation_widget_assets::
+                     kViewportCameraOrientationWidgetIsf)
+      .Then([this](NodeHandle node) {
+        camera_orientation_widget_ = node;
+        camera_orientation_widget_->SetParent(editor_.GetEditorRoot());
+      })
+      .KeptBy(this);
+}
+
+ViewportWidget::~ViewportWidget() {
+  if (camera_orientation_widget_) {
+    view_.DestroyNode(camera_orientation_widget_);
+  }
+}
 
 absl::string_view ViewportWidget::GetName() const {
   return kViewportWindowName;
 }
 
+void ViewportWidget::SetOrientationWidgetEnabled(bool enabled) {
+  if (ABSL_PREDICT_FALSE(!camera_orientation_widget_)) return;
+  camera_orientation_widget_->SetEnabled(enabled);
+}
+
 void ViewportWidget::DrawImGui() {
-  if (!viewport_render_target_) return;
+  if (ABSL_PREDICT_FALSE(!viewport_render_target_)) {
+    SetOrientationWidgetEnabled(false);
+    return;
+  }
 
   const ImVec2 viewport_panel_size = ImGui::GetContentRegionAvail();
 
-  if (viewport_panel_size.x <= 0 || viewport_panel_size.y <= 0) return;
+  if (ABSL_PREDICT_FALSE(viewport_panel_size.x <= 0 ||
+                         viewport_panel_size.y <= 0)) {
+    SetOrientationWidgetEnabled(false);
+    return;
+  }
+
+  SetOrientationWidgetEnabled(true);
 
   const bool isRemoteScreen =
       editor_.GetDisplayMode() == EditorInfo::DisplayMode::kRemoteScreen;
@@ -145,6 +180,13 @@ void ViewportWidget::HandleAssetDragDrop(const ImVec2 screen_pos) {
 }
 
 bool ViewportWidget::HasContent() const {
+  // TODO: Support ViewportWidget for XR cases (e.g. by rendering
+  // into a dedicated 2D quad swapchain/offscreen texture) without OpenXR
+  // projection swapchain conflicts.
+  if (view_.GetHost() && view_.GetHost()->IsInXr()) {
+    return false;
+  }
+
   const bool isRemoteScreen =
       editor_.GetDisplayMode() == EditorInfo::DisplayMode::kRemoteScreen;
 

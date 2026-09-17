@@ -54,7 +54,10 @@ Future<OwnedMaterialPtr> SplitEngineMaterial::CreatePlaceholderMaterial(
 
 SplitEngineMaterial::SplitEngineMaterial(BaseView& view,
                                          OwnedMaterialPtr material)
-    : view_(view), material_(std::move(material)) {}
+    : view_(view),
+      material_(std::move(material)),
+      material_id_(SplitEngineSerializer::GetId(
+          material_->GetFilamentMaterialInstance())) {}
 
 BorrowedMaterialPtr SplitEngineMaterial::GetMaterial(
     SmallSourceLocation loc) const {
@@ -281,7 +284,7 @@ void SplitEngineMaterial::SetParameter(
 
   if (SplitEngineSerializer* serializer = view_.GetSplitEngineSerializer()) {
     serializer->SetMaterialParameter(
-        GetFilamentMaterialInstance(), parameter_name, texture->GetTexture(),
+        material_id_, parameter_name, texture->GetTexture(),
         sampler_override ? *sampler_override : texture->GetSampler());
   } else {
     material_->SetParameter(parameter_name, texture, sampler_override);
@@ -328,8 +331,8 @@ void SplitEngineMaterial::SetTextureParameter(
                       filament::Texture* texture) {
         if (SplitEngineSerializer* serializer =
                 view_.GetSplitEngineSerializer()) {
-          serializer->SetMaterialParameter(GetFilamentMaterialInstance(),
-                                           parameter_name, texture, sampler);
+          serializer->SetMaterialParameter(material_id_, parameter_name,
+                                           texture, sampler);
         }
       };
   update_texture_fn(parameter_name, texture->GetTexture());
@@ -392,6 +395,15 @@ SplitEngineMaterial::GetUnownedFilamentTextures() const {
     result.emplace(parameter_name, texture->GetTexture());
   }
   return result;
+}
+
+bool SplitEngineMaterial::HoldsOwnedTextures() const {
+  for (auto& [_, texture] : parameters_to_owned_or_borrowed_textures_) {
+    if (texture.IsOwned()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void SplitEngineMaterial::ForEachTexture(

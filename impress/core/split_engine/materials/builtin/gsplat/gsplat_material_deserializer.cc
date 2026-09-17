@@ -175,7 +175,7 @@ absl::StatusOr<NodeHandle> DeserializeNodeId(BaseView& view,
 
 // Builds a precompute texture pipeline for a gsplat scene.
 // The pipeline will be created assuming it is using the main view resolution.
-// If the Gsplat is instead rendered to an offscreen texture, it is expected
+// If the GSplat is instead rendered to an offscreen texture, it is expected
 // that the correct offscreen resolution will be updated later through
 // BuiltInMaterialGsplatParameters::magic_window_offscreen_resolution or
 // view_resolution.
@@ -547,7 +547,7 @@ absl::Status GsplatMaterialDeserializer::SetParameters(
     MP_RETURN_IF_ERROR(SetMagicWindowMaterialParameters(texture_borrower,
                                                      *magic_window_params));
   } else {
-    // Mode 1: Standard Gsplat rendering.
+    // Mode 1: Standard GSplat rendering.
     const android_xr::schemas::GsplatParameters* gsplat_params =
         serialized_parameters->mode_parameters_as_GsplatParameters();
     if (gsplat_params == nullptr) {
@@ -720,13 +720,34 @@ absl::Status GsplatMaterialDeserializer::UpdatePrecomputeTexturePipeline(
   MP_ASSIGN_OR_RETURN(
       uint2 position_data_texture_size,
       GetTextureSizeFromFlatbuffer(texture_borrower, serialized_parameters));
-  MP_RETURN_IF_ERROR(precompute_texture_pipeline_->ResizePassTexture(
-      0, position_data_texture_size));
+
+  const bool precompute_pass_texture_size_changing =
+      (!precompute_pass_texture_ ||
+       precompute_pass_texture_->GetSize() != position_data_texture_size);
+
+  if (precompute_pass_texture_size_changing) {
+    // Temporarily clear the borrowed precompute pass texture since
+    // ResizePassTexture will destroy the original.
+    if (precompute_pass_texture_) {
+      absl::StatusOr<BorrowedTexturePtr> matching =
+          view_.GetTextureFactory().BorrowMatchingPlaceholderTexture(
+              precompute_pass_texture_);
+      if (!matching.ok()) {
+        return matching.status();
+      }
+      GetRenderMaterial()->TrySetParameter(
+          kSplatDataPrecomputedParameter, *matching, (*matching)->GetSampler());
+      precompute_pass_texture_ = nullptr;
+    }
+
+    MP_RETURN_IF_ERROR(precompute_texture_pipeline_->ResizePassTexture(
+        0, position_data_texture_size));
+  }
 
   // Update the view resolution used for PrecomputeTexturePipeline:
   // - When `view_resolution` is specified, use the provided resolution.
   //   This take precedence over `magic_window_offscreen_resolution`.
-  // - When `magic_window_offscreen_resolution` is specified, the Gsplat scene
+  // - When `magic_window_offscreen_resolution` is specified, the GSplat scene
   //   is meant to be rendered to an offscreen texture, and we should use the
   //   provided resolution.
   // - Otherwise, `offscreen_texture_resolution_` remains unchanged.

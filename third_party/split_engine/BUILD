@@ -69,6 +69,7 @@ flatbuffer_library_public(
         )
     ],
     flatc_args = IMP_FLATC_ARGS + [
+        "--bfbs-builtins",  # Serialize builtin attributes like bit_flags in the embedded binary schema.
         "--bfbs-gen-embed",  # Enable embedding of the flatbuffers schema in the binary.
         "--gen-name-strings",  # Generate fully qualified names for the flatbuffers tables to find them in the embedded schema.
         "--gen-object-api",  # Generate C++ classes for the flatbuffers tables.
@@ -235,6 +236,7 @@ cc_library(
     hdrs = ["headless_openxr_camera_updater.h"],
     deps = [
         "@bazel_tools//tools/jdk:jni",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

@@ -17,7 +17,9 @@
 
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/common/rememberer.h"
 #include "core/editor/widget.h"
+#include "core/ncsb/node_handle.h"
 
 namespace imp {
 class BaseView;
@@ -30,12 +32,13 @@ class ViewportRenderTarget;
 
 // A widget that renders the scene to a texture and displays it in an ImGui
 // window.
-class ViewportWidget : public Widget {
+class ViewportWidget : public Widget, public Rememberer {
  public:
   static constexpr absl::string_view kViewportWindowName = "Viewport";
 
   explicit ViewportWidget(Editor& editor, BaseView& view,
                           ViewportRenderTarget* viewport_render_target);
+  ~ViewportWidget() override;
 
   absl::string_view GetName() const override;
   void DrawImGui() override;
@@ -43,10 +46,12 @@ class ViewportWidget : public Widget {
 
  private:
   void HandleAssetDragDrop(ImVec2 screen_pos);
+  void SetOrientationWidgetEnabled(bool enabled);
 
   Editor& editor_;
   BaseView& view_;
   ViewportRenderTarget* viewport_render_target_;
+  NodeHandle camera_orientation_widget_;
 };
 
 }  // namespace imp::editor

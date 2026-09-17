@@ -156,26 +156,26 @@ union MaterialParamValue (requires_api: 1) {
   Mat4f = 17 (requires_api: 1),
   Mat4fVector = 18 (requires_api: 1),
   NilValue = 19 (requires_api: 1),
-  Uint = 20,
-  Uint2 = 21,
-  Uint3 = 22,
-  Uint4 = 23,
-  FloatVector = 24,
-  Float2Vector = 25,
-  Float3Vector = 26,
-  Float4Vector = 27,
-  IntVector = 28,
-  Int2Vector = 29,
-  Int3Vector = 30,
-  Int4Vector = 31,
-  UintVector = 32,
-  Uint2Vector = 33,
-  Uint3Vector = 34,
-  Uint4Vector = 35,
-  BoolVector = 36,
-  Bool2Vector = 37,
-  Bool3Vector = 38,
-  Bool4Vector = 39,
+  Uint = 20 (requires_api: 4, unstable_api),
+  Uint2 = 21 (requires_api: 4, unstable_api),
+  Uint3 = 22 (requires_api: 4, unstable_api),
+  Uint4 = 23 (requires_api: 4, unstable_api),
+  FloatVector = 24 (requires_api: 4, unstable_api),
+  Float2Vector = 25 (requires_api: 4, unstable_api),
+  Float3Vector = 26 (requires_api: 4, unstable_api),
+  Float4Vector = 27 (requires_api: 4, unstable_api),
+  IntVector = 28 (requires_api: 4, unstable_api),
+  Int2Vector = 29 (requires_api: 4, unstable_api),
+  Int3Vector = 30 (requires_api: 4, unstable_api),
+  Int4Vector = 31 (requires_api: 4, unstable_api),
+  UintVector = 32 (requires_api: 4, unstable_api),
+  Uint2Vector = 33 (requires_api: 4, unstable_api),
+  Uint3Vector = 34 (requires_api: 4, unstable_api),
+  Uint4Vector = 35 (requires_api: 4, unstable_api),
+  BoolVector = 36 (requires_api: 4, unstable_api),
+  Bool2Vector = 37 (requires_api: 4, unstable_api),
+  Bool3Vector = 38 (requires_api: 4, unstable_api),
+  Bool4Vector = 39 (requires_api: 4, unstable_api),
 }
 
 // Possible types of precompile constant values.
@@ -187,20 +187,20 @@ union MaterialPrecompileConstantValue (requires_api: 1) {
 
 // This should match the Filament UserVariantFilterBit enum:
 // http://google3/third_party/filament/libs/filabridge/include/filament/MaterialEnums.h;l=277
-enum VariantFilter:uint32 (bit_flags) {
-  DIRECTIONAL_LIGHTING = 0,  // (1 << 0)
-  DYNAMIC_LIGHTING = 1,  // (1 << 1)
-  SHADOW_RECEIVER = 2,  // (1 << 2)
-  SKINNING = 3,  // (1 << 3)
-  FOG = 4,  // (1 << 4)
-  VSM = 5,  // (1 << 5)
-  SSR = 6,  // (1 << 6)
-  STE = 7,  // (1 << 7)
+enum VariantFilter:uint32 (bit_flags, requires_api: 4, unstable_api) {
+  DIRECTIONAL_LIGHTING = 0 (requires_api: 4, unstable_api),  // (1 << 0)
+  DYNAMIC_LIGHTING = 1 (requires_api: 4, unstable_api),  // (1 << 1)
+  SHADOW_RECEIVER = 2 (requires_api: 4, unstable_api),  // (1 << 2)
+  SKINNING = 3 (requires_api: 4, unstable_api),  // (1 << 3)
+  FOG = 4 (requires_api: 4, unstable_api),  // (1 << 4)
+  VSM = 5 (requires_api: 4, unstable_api),  // (1 << 5)
+  SSR = 6 (requires_api: 4, unstable_api),  // (1 << 6)
+  STE = 7 (requires_api: 4, unstable_api),  // (1 << 7)
 }
 
 table MaterialPrecompileOptions (requires_api: 1) {
   precompile_constants:[MaterialPrecompileConstant] (id: 0, requires_api: 1);
-  variant_filter:VariantFilter (id: 1);
+  variant_filter:VariantFilter (id: 1, requires_api: 4, unstable_api);
 }
 
 table MaterialPrecompileConstant (requires_api: 1) {
@@ -355,11 +355,11 @@ table GenericMaterialParametersTransmission (requires_api: 1) {
 }
 
 // Defines the KHR_materials_volume parameters in a generic material.
-table GenericMaterialParametersVolume {
-  texture:GenericMaterialTextureParameter (id: 0);
-  thickness_factor:Float (id: 1);
-  attenuation_distance:Float (id: 2);
-  attenuation_color:Float3 (id: 3);
+table GenericMaterialParametersVolume (requires_api: 4) {
+  thickness_texture:GenericMaterialTextureParameter (id: 0, requires_api: 4);
+  thickness_factor:Float (id: 1, requires_api: 4);
+  attenuation_distance:Float (id: 2, requires_api: 4);
+  attenuation_color:Float3 (id: 3, requires_api: 4);
 }
 
 // Defines the refraction parameters in a generic material.
@@ -392,8 +392,16 @@ table GenericMaterialParameters (requires_api: 1) {
   transmission:GenericMaterialParametersTransmission (id: 7, requires_api: 1);
   refraction:GenericMaterialParametersRefraction (id: 8, requires_api: 1);
   masking:GenericMaterialParametersMasking (id: 9, requires_api: 1);
-  feature_id_textures:[GenericMaterialTextureParameter] (id: 10);
-  volume:GenericMaterialParametersVolume (id: 11);
+
+  // https://gltf-transform.dev/modules/extensions/classes/EXTMeshFeatures
+  feature_id_textures:[GenericMaterialTextureParameter] (
+    id: 10,
+    requires_api: 4,
+    unstable_api
+  );
+
+  // https://gltf-transform.dev/modules/extensions/classes/KHRMaterialsVolume
+  volume:GenericMaterialParametersVolume (id: 11, requires_api: 4);
 }
 
 root_type GenericMaterialParameters;
@@ -517,22 +525,25 @@ enum BuiltInMaterial1b616c8aShapeType:uint8 (requires_api: 1) {
   FULL360 = 2 (requires_api: 1),
 }
 
-enum BuiltInMaterial1b616c8aRenderEyeTarget:uint8 {
-  DEFAULT_BOTH = 0,
-  LEFT_ONLY = 1,
-  RIGHT_ONLY = 2,
+enum BuiltInMaterial1b616c8aRenderEyeTarget:uint8 (requires_api: 4) {
+  DEFAULT_BOTH = 0 (requires_api: 4),
+  LEFT_ONLY = 1 (requires_api: 4),
+  RIGHT_ONLY = 2 (requires_api: 4),
 }
 
-enum BuiltInMaterial1b616c8aBlendingMode:uint8 {
-  TRANSPARENT = 0,
-  OPAQUE = 1,
+enum BuiltInMaterial1b616c8aBlendingMode:uint8 (requires_api: 4) {
+  TRANSPARENT = 0 (requires_api: 4),
+  OPAQUE = 1 (requires_api: 4),
 }
 
 table BuiltInMaterial1b616c8a (requires_api: 1) {
   shape:BuiltInMaterial1b616c8aShapeType (id: 0, requires_api: 1);
   use_super_sampling:Bool (id: 1, requires_api: 1);
-  render_eye_target:BuiltInMaterial1b616c8aRenderEyeTarget (id: 2);
-  blending_mode:BuiltInMaterial1b616c8aBlendingMode (id: 3);
+  render_eye_target:BuiltInMaterial1b616c8aRenderEyeTarget (
+    id: 2,
+    requires_api: 4
+  );
+  blending_mode:BuiltInMaterial1b616c8aBlendingMode (id: 3, requires_api: 4);
 }
 
 enum BuiltInMaterial1b616c8aStereoType:uint8 (requires_api: 1) {
@@ -615,6 +626,17 @@ table BuiltInMaterial1b616c8aMediaColorSpaceParameter (requires_api: 1) {
 table BuiltInMaterial1b616c8aParameters (requires_api: 1) {
   primary_texture:BuiltInTextureParameter (id: 0, requires_api: 1);
   auxiliary_texture:BuiltInTextureParameter (id: 1, requires_api: 1);
+
+  // Controls how left and right eye texels are read from the Surface.
+  //
+  // If set to INTERLEAVED_LEFT_PRIMARY, INTERLEAVED_RIGHT_PRIMARY,
+  // INTERLEAVED_LEFT_PRIMARY_WITH_DEPTH, or INTERLEAVED_RIGHT_WITH_DEPTH the
+  // material will sample the left and right images from the primary and
+  // auxilery
+  // HardwareBuffer objects that come from the Surface being rendered. The
+  // primary
+  // buffer is the left or right eye, based on the stereo mode, the auxilery
+  // buffer is the other one.
   stereo_type:BuiltInMaterial1b616c8aStereoType (id: 2, requires_api: 1);
   media_color_space:BuiltInMaterial1b616c8aMediaColorSpaceParameter (
     id: 6,
@@ -623,9 +645,29 @@ table BuiltInMaterial1b616c8aParameters (requires_api: 1) {
   primary_alpha_mask:BuiltInTextureParameter (id: 3, requires_api: 1);
   auxiliary_alpha_mask:BuiltInTextureParameter (id: 4, requires_api: 1);
   feather_radius:Float2 (id: 5, requires_api: 1);
-  corner_radius:Float2 (id: 7);
-  sub_view_left:Float4 (id: 8);
-  sub_view_right:Float4 (id: 9);
+  corner_radius:Float2 (id: 7, requires_api: 4);
+
+  // The rectangle containing the left eye's texels in the surface, encoded as
+  // [left, bottom, width, height].
+  //
+  // 0,0 is the lower left corner of image and 1,1 is the upper right.
+  //
+  // If unset, sub_view_left and sub_view_right have different defaults based on
+  // the StereoMode:
+  //
+  // * MONOSCOPIC: sub_view_left=[0, 0, 1, 1], sub_view_right=[0, 0, 1, 1]
+  // * TOP_BOTTOM: sub_view_left=[0, 0.5, 1, 0.5], sub_view_right=[0, 0, 1, 0.5]
+  // * LEFT_RIGHT: sub_view_left=[0, 0, 0.5, 1], sub_view_right=[0.5, 0, 0.5, 1]
+  // * All other values: sub_view_left=[0, 0, 1, 1], sub_view_right=[0, 0, 1, 1]
+  sub_view_left:Float4 (id: 8, requires_api: 4);
+
+  // See sub_view_left.
+  sub_view_right:Float4 (id: 9, requires_api: 4);
+
+  // This field allows setting a color tint or mask for the entity.
+  // If unset, will be assumed to be [1.0, 1.0, 1.0, 1.0]
+  // The color should be expressed in a Linear color space.
+  tint_color:Float4 (id: 10, requires_api: 4);
 }
 
 table BuiltInMaterial0d0cb9aa (requires_api: 1) {
@@ -652,92 +694,100 @@ table BuiltInMaterialbd7fe08cParameters (requires_api: 1) {
   uv_scale:Float2 (id: 5, requires_api: 1);
 }
 
-enum GsplatMode:int (preview_api, unstable_api) {
-  UNSPECIFIED = 0,
-  MAGIC_WINDOW = 1,
-  GSPLAT = 2,
+enum GsplatMode:int (requires_api: 4, unstable_api) {
+  UNSPECIFIED = 0 (requires_api: 4, unstable_api),
+  MAGIC_WINDOW = 1 (requires_api: 4, unstable_api),
+  GSPLAT = 2 (requires_api: 4, unstable_api),
 }
 
 // Gsplat material mode specific spec.
-union GsplatModeSpec (preview_api, unstable_api) {
-  GsplatSpec = 1,
-  MagicWindowSpec = 2,
+union GsplatModeSpec (requires_api: 4, unstable_api) {
+  GsplatSpec = 1 (requires_api: 4, unstable_api),
+  MagicWindowSpec = 2 (requires_api: 4, unstable_api),
 }
 
 // GSPLAT mode spec.
-table GsplatSpec (preview_api, unstable_api) {
+table GsplatSpec (requires_api: 4, unstable_api) {
   // Optional: when specified, this is the render group the Gsplat scene will be
   // rendered to. This is to be used with another Gsplat material in
   // MAGIC_WINDOW mode.
-  render_group:string (id: 0);
+  render_group:string (id: 0, requires_api: 4, unstable_api);
 }
 
 // MAGIC_WINDOW mode spec.
 // All fields are required.
-table MagicWindowSpec (preview_api, unstable_api) {
+table MagicWindowSpec (requires_api: 4, unstable_api) {
   // The initial resolution of the offscreen texture.
-  magic_window_offscreen_resolution:Uint2 (id: 0);
+  magic_window_offscreen_resolution:Uint2 (
+    id: 0,
+    requires_api: 4,
+    unstable_api
+  );
 
   // The render group that contains the Gsplat scene to be rendered to an
   // offscreen texture.
-  render_group:string (id: 1);
+  render_group:string (id: 1, requires_api: 4, unstable_api);
 }
 
 // Built-in material spec for Gaussian Splat Material.
 // See go/gsplat-built-materials-api-proposal
 // All fields are required.
-table BuiltInMaterialGsplatSpec (preview_api, unstable_api) {
+table BuiltInMaterialGsplatSpec (requires_api: 4, unstable_api) {
   // The material mode. See GsplatMode.
-  material_mode:GsplatMode (id: 0);
+  material_mode:GsplatMode (id: 0, requires_api: 4, unstable_api);
 
   // Specify the client entity id this material is attached to. This built-in
   // material contains entity-specific logic, so the material cannot be
   // shared between multiple entities.
-  entity:uint32 (id: 1);
+  entity:uint32 (id: 1, requires_api: 4, unstable_api);
 
   // Mode specific spec.
-  mode_spec:GsplatModeSpec (id: 3);
+  mode_spec:GsplatModeSpec (id: 3, requires_api: 4, unstable_api);
 
   // ---------------------------------------------------------------------------
   // Experimental APIs.
 
   // Whether to use 3 vertices per splat (triangle) instead of 6 (quad).
-  use_triangles_for_splats:Bool (id: 4);
+  use_triangles_for_splats:Bool (id: 4, requires_api: 4, unstable_api);
 
   // If true, the precomputed data texture is provided and the deserializer
   // should not create a precompute texture pipeline.
-  has_precomputed_data_texture:Bool (id: 5);
+  has_precomputed_data_texture:Bool (id: 5, requires_api: 4, unstable_api);
 }
 
 // Gsplat material mode specific parameters.
-union GsplatModeParameters (preview_api, unstable_api) {
-  GsplatParameters = 1,
-  MagicWindowParameters = 2,
+union GsplatModeParameters (requires_api: 4, unstable_api) {
+  GsplatParameters = 1 (requires_api: 4, unstable_api),
+  MagicWindowParameters = 2 (requires_api: 4, unstable_api),
 }
 
 // GSPLAT mode parameters.
-table GsplatParameters (preview_api, unstable_api) {
+table GsplatParameters (requires_api: 4, unstable_api) {
   // ---------------------------------------------------------------------------
   // Required parameters.
 
   // LINT.IfChange
 
   // Additional opacity factor to apply to the splats.
-  opacity_scale:Float (id: 0);
+  opacity_scale:Float (id: 0, requires_api: 4, unstable_api);
 
   // The minimum screen size to clamp each splat to (units are in pixels).
   // This value should be greater than or equal to zero.
-  min_screen_size:Float2 (id: 1);
+  min_screen_size:Float2 (id: 1, requires_api: 4, unstable_api);
 
   // The maximum screen size to clamp each splat to (units are in pixels).
   // This value should be greater than min_screen_size.
-  max_screen_size:Float2 (id: 2);
+  max_screen_size:Float2 (id: 2, requires_api: 4, unstable_api);
 
   // Each texel value corresponds to a 3D position for a splat in the local
   // space of the node the material attached to. The XYZ positions are stored in
   // the RGB channels of an arbitrary-sized texture, with splats mapped
   // sequentially in row-major order.
-  position_data_texture:BuiltInTextureParameter (id: 3);
+  position_data_texture:BuiltInTextureParameter (
+    id: 3,
+    requires_api: 4,
+    unstable_api
+  );
 
   // Each texel value corresponds to a 3D covariance matrix for a splat. The
   // covariance matrix is symmetric, so only the upper half 6 values are packed
@@ -749,22 +799,34 @@ table GsplatParameters (preview_api, unstable_api) {
   // Because of this setup, the texture needs to have at least RGB channels, and
   // each channel needs to be 32-bit unsigned integer. The texture size should
   // be the same as position_data_texture.
-  cov3d_data_texture:BuiltInTextureParameter (id: 4);
+  cov3d_data_texture:BuiltInTextureParameter (
+    id: 4,
+    requires_api: 4,
+    unstable_api
+  );
 
   // Each texel value corresponds to a color for a splat.
   // The texture size should be the same as position_data_texture.
-  color_data_texture:BuiltInTextureParameter (id: 5);
+  color_data_texture:BuiltInTextureParameter (
+    id: 5,
+    requires_api: 4,
+    unstable_api
+  );
 
   // Each texel value corresponds to the index of a splat to render. The texture
   // size should be the same as position_data_texture, and the splats will be
   // rendered based on these indices in row-major order. The texture should have
   // at least the R channel, and the data type should be unsigned integer.
-  sorted_indices_texture:BuiltInTextureParameter (id: 6);
+  sorted_indices_texture:BuiltInTextureParameter (
+    id: 6,
+    requires_api: 4,
+    unstable_api
+  );
 
   // A scaling value controlling the size of the splats relative to their
   // covariance-matrix defined scale. Mathematically, this is the number of
   // standard deviations away from the gaussian mean.
-  splat_scale:Float (id: 7);
+  splat_scale:Float (id: 7, requires_api: 4, unstable_api);
 
   // LINT.ThenChange(
   //   //depot/google3/third_party/impress/core/gsplat/gsplat_material_params.h,
@@ -782,10 +844,18 @@ table GsplatParameters (preview_api, unstable_api) {
 
   // Specifies the pose and the dimension of the Magic Window projection quad,
   // relative to the node specified by entity in BuiltInMaterialGsplatSpec.
-  magic_window_projection_quad:ProjectionQuad (id: 8);
+  magic_window_projection_quad:ProjectionQuad (
+    id: 8,
+    requires_api: 4,
+    unstable_api
+  );
 
   // The desired Magic Window offscreen rendering resolution.
-  magic_window_offscreen_resolution:Uint2 (id: 9);
+  magic_window_offscreen_resolution:Uint2 (
+    id: 9,
+    requires_api: 4,
+    unstable_api
+  );
 
   // ---------------------------------------------------------------------------
   // Experimental APIs.
@@ -796,35 +866,47 @@ table GsplatParameters (preview_api, unstable_api) {
   // G [2x16F] Z Clip Position of Splat Center and Aspect Ratio of Splat
   // B [2x16F] X Basis Vector of Splat in Screen Space
   // A [4x8unorm] RGBA Color of Splat - If A == 0 the splat is disabled.
-  precomputed_data_texture:BuiltInTextureParameter (id: 10);
+  precomputed_data_texture:BuiltInTextureParameter (
+    id: 10,
+    requires_api: 4,
+    unstable_api
+  );
 
   // The resolution of the view the gsplat is being rendered to.
   // This parameters serves a duplicate role as
   // `magic_window_offscreen_resolution`, but we need to keep them separate
   // since `magic_window_offscreen_resolution` is going to be public, but this
   // one is not. When both are specified, `view_resolution` will be used.
-  view_resolution:Float2 (id: 11);
+  view_resolution:Float2 (id: 11, requires_api: 4, unstable_api);
 }
 
 // MAGIC_WINDOW mode parameters.
 // All fields are required.
-table MagicWindowParameters (preview_api, unstable_api) {
+table MagicWindowParameters (requires_api: 4, unstable_api) {
   // Specifies the pose and the dimension of the Magic Window projection quad,
   // relative to the node specified by entity in BuiltInMaterialGsplatSpec.
-  magic_window_projection_quad:ProjectionQuad (id: 0);
+  magic_window_projection_quad:ProjectionQuad (
+    id: 0,
+    requires_api: 4,
+    unstable_api
+  );
 
   // The desired Magic Window offscreen rendering resolution. If this does not
   // match the initial setting provided in MagicWindowSpec, the offscreen
   // texture will be updated.
-  magic_window_offscreen_resolution:Uint2 (id: 1);
+  magic_window_offscreen_resolution:Uint2 (
+    id: 1,
+    requires_api: 4,
+    unstable_api
+  );
 }
 
 // Built-in material parameters for Gaussian Splat Material.
 // See go/gsplat-built-materials-api-proposal
 // All fields are required.
-table BuiltInMaterialGsplatParameters (preview_api, unstable_api) {
+table BuiltInMaterialGsplatParameters (requires_api: 4, unstable_api) {
   // Mode specific parameters.
-  mode_parameters:GsplatModeParameters (id: 1);
+  mode_parameters:GsplatModeParameters (id: 1, requires_api: 4, unstable_api);
 }
 
 table BuiltInMaterialTextureExternal (requires_api: 1) {
@@ -845,7 +927,7 @@ union BuiltInMaterialSpec (requires_api: 1) {
   BuiltInMaterial0d0cb9aa = 7 (requires_api: 1),
   BuiltInMaterialTextureExternal = 8 (requires_api: 1),
   BuiltInMaterialbd7fe08c = 9 (requires_api: 1),
-  BuiltInMaterialGsplatSpec = 10,
+  BuiltInMaterialGsplatSpec = 10 (requires_api: 4, unstable_api),
 }
 
 // Request to create a built-in material instance and associate it with a
@@ -870,7 +952,7 @@ union BuiltInMaterialParameters (requires_api: 1) {
   BuiltInMaterial0d0cb9aaParameters = 7 (requires_api: 1),
   BuiltInMaterialTextureExternalParameters = 8 (requires_api: 1),
   BuiltInMaterialbd7fe08cParameters = 9 (requires_api: 1),
-  BuiltInMaterialGsplatParameters = 10,
+  BuiltInMaterialGsplatParameters = 10 (requires_api: 4, unstable_api),
 }
 
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/split_engine_serializer.h)
@@ -883,25 +965,29 @@ table BuiltInMaterialInstanceParameters (requires_api: 1) {
 root_type BuiltInMaterialInstanceParameters;
 
 // Spec for a filament material.
-table FilamentMaterialSpec (preview_api, unstable_api) {
+table FilamentMaterialSpec (requires_api: 4, unstable_api) {
   // The source of the material in the filament "jsonish" text format.
-  source:string (id: 0);
+  source:string (id: 0, requires_api: 4, unstable_api);
 
   // The precompile options for the material.
-  precompile_options:MaterialPrecompileOptions (id: 1);
+  precompile_options:MaterialPrecompileOptions (
+    id: 1,
+    requires_api: 4,
+    unstable_api
+  );
 }
 
 // Spec for a custom material to be compiled and used by Split Engine.
-union CustomMaterialSpec (preview_api, unstable_api) {
-  FilamentMaterialSpec = 1,
+union CustomMaterialSpec (requires_api: 4, unstable_api) {
+  FilamentMaterialSpec = 1 (requires_api: 4, unstable_api),
 }
 
 // Request to compile a material, defined by a spec.
-table AddCustomMaterialRequest (preview_api, unstable_api) {
+table AddCustomMaterialRequest (requires_api: 4, unstable_api) {
   // The ID to assign to the material.
-  material_id:uint64 (id: 0);
+  material_id:uint64 (id: 0, requires_api: 4, unstable_api);
 
   // The spec for the material to be compiled.
   // Skip id: 1 for spec_type.
-  spec:CustomMaterialSpec (id: 2);
+  spec:CustomMaterialSpec (id: 2, requires_api: 4, unstable_api);
 }

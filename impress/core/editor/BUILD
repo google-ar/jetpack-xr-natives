@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -119,6 +119,7 @@ cc_library(
         ":file_loader_helper",
         ":file_type_registry",
         ":selection_controller",
+        ":selection_group_manager",
         ":widget",
         ":widget_layout_info",
         ":widget_ui_system",
@@ -133,6 +134,7 @@ cc_library(
         "//core/common:platform_storage_interface",
         "//core/common:registry",
         "//core/common:robin_map",
+        "//core/editor/assets:outline_assets",
         "//core/editor/common:notifying_property",
         "//core/editor/components:camera_rotate",
         "//core/editor/components:camera_translate",
@@ -142,6 +144,7 @@ cc_library(
         "//core/editor/layout",
         "//core/editor/layout:editor_control_flags",
         "//core/editor/layout:editor_panel_ids",
+        "//core/editor/layout:helpers",
         "//core/editor/layout:layout_config_imp_cc_proto",
         "//core/editor/remote_editor",
         "//core/editor/visualizers:visualizer",
@@ -161,6 +164,7 @@ cc_library(
         "//core/editor/widgets:material_editor_widget",
         "//core/editor/widgets:materials_widget",
         "//core/editor/widgets:node_details",
+        "//core/editor/widgets:settings_toolbar",
         "//core/editor/widgets:settings_widget",
         "//core/editor/widgets:settings_widget_constants",
         "//core/editor/widgets:toggle_camera",
@@ -181,6 +185,8 @@ cc_library(
         "//core/ncsb",
         "//core/ncsb:ncsb_proto_cc",
         "//core/ncsb:node_flag",
+        "//core/render:primitive_shape_renderer",
+        "//core/render_passes:texture_pipeline_renderer",
         "//core/scene_handles",
         "//core/view:base_view",
         "//core/view/framework",
@@ -285,6 +291,21 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "selection_group_manager",
+    hdrs = ["selection_group_manager.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":editor",
+        ":events",
+        "//core/ncsb",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
 filegroup(
     name = "Box_glb",
     srcs = ["gltf/Box.glb"],
@@ -304,7 +325,11 @@ cc_library(
         "events.h",
     ],
     copts = imp_google3_copts(),
-    deps = ["//core/ncsb"],
+    deps = [
+        "//core/materials",
+        "//core/ncsb",
+        "//core/scene_handles:base_material_handle",
+    ],
     alwayslink = 1,
 )
 
@@ -398,6 +423,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":editor_style",
+        ":events",
         ":selection_controller",
         "//core/common",
         "//core/common:bit_flag",
@@ -414,6 +440,7 @@ cc_library(
         "//core/editor/ui:drag_and_drop_node",
         "//core/editor/widgets:asset_type_helpers",
         "//core/geometry/shapes",
+        "//core/materials",
         "//core/math",
         "//core/ncsb",
         "//core/proto:imp_editor_imp_cc_proto",
@@ -423,13 +450,16 @@ cc_library(
         "//core/proto:proto_writer",
         "//core/render:material_registry",
         "//core/resources",
-        "//core/scene_handles:material_handle",
+        "//core/scene_handles:base_material_handle",
         "//core/scene_handles:scene_handle_interface",
         "//core/view:base_view",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@dear_imgui",
     ],

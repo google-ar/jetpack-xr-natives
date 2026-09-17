@@ -72,6 +72,7 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
   void SetCornerRadius(imp::float2 corner_radius);
   void SetSubViewConfig(imp::float4 sub_view_rect_left,
                         imp::float4 sub_view_rect_right);
+  void SetTintColor(imp::float4 tint_color);
 
  private:
   JxrMediaMaterial(imp::BaseView& view, imp::OwnedMaterialPtr material);
@@ -90,6 +91,7 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
   std::optional<android_xr::schemas::Float2> corner_radius_;
   std::optional<android_xr::schemas::Float4> sub_view_rect_left_;
   std::optional<android_xr::schemas::Float4> sub_view_rect_right_;
+  std::optional<android_xr::schemas::Float4> tint_color_;
 };
 
 }  // namespace android_xr

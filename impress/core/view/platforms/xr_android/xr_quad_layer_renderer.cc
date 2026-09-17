@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <utility>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -29,6 +30,8 @@
 #include "core/async/future.h"
 #include "core/camera/camera_component.h"
 #include "core/camera/camera_manager.h"
+#include "core/camera/camera_state.proto.imp.h"
+#include "core/config.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
@@ -36,10 +39,11 @@
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
-#include "core/view/platforms/xr_android/xr_events.proto.imp.h"
 #include "core/view/platforms/xr_android/xr_native_window.h"
 #include "core/view/platforms/xr_android/xr_session_host.h"
+#include "core/view/utils/frame_time.h"
 #include "core/view/utils/render_setting_utils.h"
+#include "core/xr/openxr_events.h"
 
 namespace imp {
 
@@ -49,46 +53,50 @@ Future<absl::Status> XrQuadLayerRenderer::Setup(
     return absl::InternalError("XrQuadLayerRenderer may only be used in XR.");
   }
 
-  weight_ = options.weight;
-  group_ = options.group;
-  camera_ = options.camera ? options.camera
-                           : GetView().GetCameraManager().GetCamera();
-  quad_size_ = options.quad_size.value_or(GetView().GetSize());
+  options_ = options;
+
+  camera_ = options_.camera ? options_.camera
+                            : GetView().GetCameraManager().GetCamera();
 
   filament::Engine& engine = *BaseView::GetSharedEngine();
-  filament_view_ = engine.createView();
+  empty_scene_ = engine.createScene();
+  filament_view_ = GetView().CreateFilamentView();
   filament_view_->setCamera(camera_->GetCamera());
-  filament_view_->setViewport({0, 0, static_cast<uint32_t>(quad_size_.x),
-                               static_cast<uint32_t>(quad_size_.y)});
 
   ConfigureViewRenderSettingsWithOverrides(
       options.override_mode, filament_view_, GetView().GetHost()->GetView(),
       &options.view_render_settings, &engine);
 
-  // Because swapchain creation happens asynchronously, use a future to
-  // asynchronously handle the XrSwapchain.
-  imp::Future<XrSwapchain> swapchain_future;
-  native_window_ = std::unique_ptr<XrNativeWindow>(new XrNativeWindow{
-      .host = GetXrSessionHost(),
-      .quad_layer_data =
-          XrNativeWindow::QuadLayerData{
-              .size = quad_size_,
-              .sample_count = options.sample_count,
-              .swapchain = swapchain_future,
-          },
-  });
-  swap_chain_ =
-      engine.createSwapChain(native_window_.get(), options.swap_chain_flags);
+  imp::Dispatcher& dispatcher = GetView().GetDispatcher();
+  dispatcher.Connect(
+      [this](const XrCompositionLayerRenderEvent& event) { Render(); }, this);
 
-  // Initialize the quad layer on the foreground thread once the swapchain is
-  // created.
-  return swapchain_future.Then([this, options](XrSwapchain handle) {
-    return InitializeQuadLayer(handle, options);
+  return Resize(options.quad_size.value_or(GetView().GetSize())).Then([this]() {
+    SetRenderBehavior(options_.render_behavior);
+    return absl::OkStatus();
   });
 }
 
+void XrQuadLayerRenderer::Update(const FrameTime& frame_time) {
+  UpdateQuadLayerTransform();
+
+  bool should_add_to_host =
+      render_behavior_ != RenderBehavior::kDisabled && is_swapchain_ready_;
+  if (should_add_to_host && !is_added_to_host_) {
+    GetXrSessionHost()->AddCompositionLayer(
+        reinterpret_cast<XrCompositionLayerBaseHeader*>(&quad_layer_),
+        options_.weight, true);
+    is_added_to_host_ = true;
+  } else if (!should_add_to_host && is_added_to_host_) {
+    GetXrSessionHost()->RemoveCompositionLayer(
+        reinterpret_cast<XrCompositionLayerBaseHeader*>(&quad_layer_));
+    is_added_to_host_ = false;
+  }
+}
+
 void XrQuadLayerRenderer::InitializeQuadLayer(
-    const XrSwapchain& swapchain, const XrQuadLayerRendererOptions& options) {
+    const XrSwapchain& swapchain, int2 size,
+    const XrQuadLayerRendererOptions& options) {
   quad_layer_.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
   quad_layer_.next = nullptr;
   quad_layer_.space = GetXrSessionHost()->GetXrSpace();
@@ -96,30 +104,10 @@ void XrQuadLayerRenderer::InitializeQuadLayer(
   quad_layer_.layerFlags = options.layer_flags;
   quad_layer_.subImage.swapchain = swapchain;
   quad_layer_.subImage.imageRect = {
-      {0, 0},
-      {static_cast<int32_t>(quad_size_.x), static_cast<int32_t>(quad_size_.y)}};
+      {0, 0}, {static_cast<int32_t>(size.x), static_cast<int32_t>(size.y)}};
   quad_layer_.subImage.imageArrayIndex = 0;
 
-  // Match the transform of the node.
-  UpdateQuadLayerTransform();
-
-  // Register the quad layer with the XrSessionHost.
-  AddCompositionLayer();
-
-  imp::Dispatcher& dispatcher = GetView().GetDispatcher();
-  dispatcher.Connect(
-      [this](const XrPreAdvanceFrameEvent& event) {
-        if (IsActive() && !event.frame_skipped_reason.has_value()) {
-          // This is called once per frame, and happens before the main
-          // projection layer is rendered.
-          // The order of operations is:
-          // 1. Quad layer triggers xrBeginFrame and renders.
-          // 2. Main projection layer renders.
-          // 3. Main projection layer triggers xrEndFrame.
-          Render();
-        }
-      },
-      this);
+  is_swapchain_ready_ = true;
 }
 
 void XrQuadLayerRenderer::UpdateQuadLayerTransform() {
@@ -137,78 +125,162 @@ void XrQuadLayerRenderer::UpdateQuadLayerTransform() {
 }
 
 void XrQuadLayerRenderer::Cleanup() {
-  RemoveCompositionLayer();
+  if (is_added_to_host_) {
+    GetXrSessionHost()->RemoveCompositionLayer(
+        reinterpret_cast<XrCompositionLayerBaseHeader*>(&quad_layer_));
+    is_added_to_host_ = false;
+  }
   // Cleanup filament-owned memory.
   if (swap_chain_) {
     GetView().GetSharedEngine()->destroy(swap_chain_);
   }
   if (filament_view_) {
-    GetView().GetSharedEngine()->destroy(filament_view_);
+    GetView().DestroyFilamentView(filament_view_);
+  }
+  if (empty_scene_) {
+    GetView().GetSharedEngine()->destroy(empty_scene_);
   }
 }
 
 void XrQuadLayerRenderer::Render() {
-  filament::Scene* scene = GetView().GetGroupsManager().GetScene(group_);
-  if (!scene) {
-    // If there is no scene, there is nothing to render.
+  if (!is_added_to_host_) {
     return;
   }
-  UpdateQuadLayerTransform();
+
+  // Force at least one render to ensure that the OpenXR runtime initializes
+  // this swapchain, and that we can submit it without rendering in subsequent
+  // frames.
+  if (render_behavior_ != RenderBehavior::kRenderAndSubmit &&
+      has_swapchain_rendered_) {
+    GetXrSessionHost()->MarkCompositionLayerRenderSkipped();
+    return;
+  }
+
+  filament::Scene* scene =
+      GetView().GetGroupsManager().GetScene(options_.group);
+  if (!scene) {
+    scene = empty_scene_;
+  }
 
   filament_view_->setScene(scene);
   filament::Camera* camera = camera_->GetCamera();
   filament::Renderer* renderer = GetView().GetHost()->GetRenderer();
-  renderer->beginFrame(swap_chain_, 0);
 
-  // Adjust the camera's projection matrix to match the quad layer.
-  const double fov =
-      camera->getFieldOfViewInDegrees(filament::Camera::Fov::VERTICAL);
+#if IMP_MATERIAL_API(VULKAN)
+  // The vulkan backend will not call EndFrame() if beginFrame() fails, so we
+  // need to mark the composition layer as skipped here.
+  if (!renderer->beginFrame(swap_chain_, 0)) {
+    GetXrSessionHost()->MarkCompositionLayerRenderSkipped();
+  }
+#else
+  renderer->beginFrame(swap_chain_, 0);
+#endif
+
+  filament::Renderer::ClearOptions original_clear_options =
+      renderer->getClearOptions();
+  renderer->setClearOptions(options_.clear_options);
+
   const double near = camera->getNear();
   const double far = camera->getCullingFar();
-  const double original_aspect_ratio =
-      GetView().GetSize().x * 1.0 / GetView().GetSize().y;
   const double aspect_ratio = quad_layer_.subImage.imageRect.extent.width *
                               1.0 /
                               quad_layer_.subImage.imageRect.extent.height;
+  const double original_aspect_ratio =
+      GetView().GetSize().x * 1.0 / GetView().GetSize().y;
 
-  // Set the projection matrix, render, and restore the original.
-  camera->setProjection(fov, aspect_ratio, near, far,
-                        filament::Camera::Fov::VERTICAL);
-  renderer->render(filament_view_);
-  camera->setProjection(fov, original_aspect_ratio, near, far,
-                        filament::Camera::Fov::VERTICAL);
-  renderer->endFrame();
-}
+  bool is_orthographic =
+      camera_->GetProjectionType() == CameraState::ORTHOGRAPHIC;
 
-void XrQuadLayerRenderer::OnActiveStatusChanged(bool is_active) {
-  if (is_active) {
-    AddCompositionLayer();
+  // We need to update the camera's projection matrix to match the quad layer's
+  // aspect ratio. For an orthographic camera, we can just pass in the
+  // dimensions. For a perspective camera, we need to adjust the FOV.
+  if (is_orthographic) {
+    double height = camera_->GetOrthographicScale();
+    double width = height * aspect_ratio;
+    double half_width = width * 0.5;
+    double half_height = height * 0.5;
+    camera->setProjection(filament::Camera::Projection::ORTHO, -half_width,
+                          half_width, -half_height, half_height, near, far);
+
+    renderer->render(filament_view_);
+
+    double original_width = height * original_aspect_ratio;
+    double half_orig_width = original_width * 0.5;
+    camera->setProjection(filament::Camera::Projection::ORTHO, -half_orig_width,
+                          half_orig_width, -half_height, half_height, near,
+                          far);
   } else {
-    RemoveCompositionLayer();
+    const double fov =
+        camera->getFieldOfViewInDegrees(filament::Camera::Fov::VERTICAL);
+    camera->setProjection(fov, aspect_ratio, near, far,
+                          filament::Camera::Fov::VERTICAL);
+    renderer->render(filament_view_);
+    camera->setProjection(fov, original_aspect_ratio, near, far,
+                          filament::Camera::Fov::VERTICAL);
   }
+
+  renderer->setClearOptions(original_clear_options);
+  renderer->endFrame();
+
+  has_swapchain_rendered_ = true;
 }
 
-void XrQuadLayerRenderer::AddCompositionLayer() {
-  if (is_composition_layer_added_) {
-    return;
-  }
-  GetXrSessionHost()->AddCompositionLayer(
-      reinterpret_cast<XrCompositionLayerBaseHeader*>(&quad_layer_), weight_);
-  is_composition_layer_added_ = true;
+Future<absl::Status> XrQuadLayerRenderer::Resize(int2 new_size) {
+  pending_resize_future_ = pending_resize_future_.Then(
+      [this, new_size]() { return ResizeImpl(new_size); });
+
+  return pending_resize_future_;
 }
 
-void XrQuadLayerRenderer::RemoveCompositionLayer() {
-  if (!is_composition_layer_added_) {
-    return;
-  }
-  GetXrSessionHost()->RemoveCompositionLayer(
-      reinterpret_cast<XrCompositionLayerBaseHeader*>(&quad_layer_));
-  is_composition_layer_added_ = false;
+Future<absl::Status> XrQuadLayerRenderer::ResizeImpl(int2 new_size) {
+  imp::Future<XrSwapchain> swapchain_future;
+  auto new_native_window = std::make_unique<XrNativeWindow>(XrNativeWindow{
+      .host = GetXrSessionHost(),
+      .quad_layer_data =
+          XrNativeWindow::QuadLayerData{
+              .size = new_size,
+              .sample_count = options_.sample_count,
+              .swapchain = swapchain_future,
+          },
+  });
+
+  filament::SwapChain* old_swap_chain = swap_chain_;
+  filament::Engine& engine = *BaseView::GetSharedEngine();
+  // Trigger asynchronous swapchain creation.
+  filament::SwapChain* new_swap_chain = engine.createSwapChain(
+      new_native_window.get(), options_.swap_chain_flags);
+
+  // std::move and capture the native window so it's not destroyed until the new
+  // swapchain is created and Filament is done with it.
+  return swapchain_future.Then(
+      [this, new_swap_chain, old_swap_chain,
+       new_native_window = std::move(new_native_window),
+       new_size](XrSwapchain handle) {
+        swap_chain_ = new_swap_chain;
+        filament_view_->setViewport({0, 0, static_cast<uint32_t>(new_size.x),
+                                     static_cast<uint32_t>(new_size.y)});
+        InitializeQuadLayer(handle, new_size, options_);
+        has_swapchain_rendered_ = false;
+        UpdateQuadLayerTransform();
+
+        if (old_swap_chain) {
+          GetXrSessionHost()->DeferSwapChainDestruction(old_swap_chain);
+        }
+      });
 }
 
 XrSessionHost* XrQuadLayerRenderer::GetXrSessionHost() {
   // This is safe since we check that the host is in XR in Setup().
   return static_cast<XrSessionHost*>(GetView().GetHost());
+}
+
+void XrQuadLayerRenderer::SetRenderBehavior(RenderBehavior render_behavior) {
+  render_behavior_ = render_behavior;
+}
+
+XrQuadLayerRenderer::RenderBehavior XrQuadLayerRenderer::GetRenderBehavior()
+    const {
+  return render_behavior_;
 }
 
 }  // namespace imp

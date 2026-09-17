@@ -25,6 +25,7 @@ load(
     "imp_copts",
     "imp_defines",
     "imp_embed_generic_materials",
+    "imp_google3_copts",
 )
 load(
     "//build_tools:imp_gstatic_urls.bzl",
@@ -117,13 +118,14 @@ cc_library(
 cc_library(
     name = "generic_material",
     srcs = [
+        "generic_material.cc",
         "generic_material_impl.cc",
     ],
     hdrs = [
         "generic_material.h",
         "generic_material_impl.h",
     ],
-    copts = imp_copts(),
+    copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
         ":generic_material_constants",
@@ -133,6 +135,7 @@ cc_library(
         ":material_param_value",
         "//core:config",
         "//core/async:future",
+        "//core/common:owned_ptr",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/common:typed_ids",
@@ -145,6 +148,8 @@ cc_library(
         "//core/view/utils:string_map",
         "//core/view/utils:string_set",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/memory",
@@ -162,6 +167,20 @@ cc_library(
 )
 
 cc_library(
+    name = "generic_material_parameter_constants",
+    hdrs = [
+        "generic_material_parameter_constants.h",
+    ],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    linkstatic = True,
+    deps = [
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "generic_material_constants",
     hdrs = [
         "generic_material_constants.h",
@@ -170,6 +189,7 @@ cc_library(
     defines = imp_defines(),
     linkstatic = True,
     deps = [
+        ":generic_material_parameter_constants",
         "//core/math",
         "@com_google_absl//absl/strings:string_view",
     ],

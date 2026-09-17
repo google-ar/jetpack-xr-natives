@@ -95,6 +95,12 @@ material {
           name : rightEyeViewRect,
           default: [0.0, 0.0, 1.0, 1.0]
         },
+        {
+          // Modifies (multiplies) the final color (RGBA).
+          type : float4,
+          name : tintColor,
+          default: [1.0, 1.0, 1.0, 1.0]
+        },
         // Below three parameters are used for color correction.
         // TODO - (broken link): Move max luminance float conversion out of the
         // material and pass a float instead.
@@ -241,6 +247,8 @@ precision highp float;
       getEdgeFeatheredAlpha(
         alpha_uv, materialParams.featherRadius, materialParams.cornerRadius.xy);
 
+    highp float4 tintColor = materialParams.tintColor;
+
     if ({IS_OPAQUE}) {
       if (alpha == 0.0) {
         // Discard fragments with zero alpha to cut rounded corners.
@@ -249,18 +257,24 @@ precision highp float;
       alpha = 1.0;
       // Ignore texture alpha for opaque materials.
       textureColor.a = 1.0;
+      // Force tint to full opacity, even if alpha was 0.
+      tintColor.a = 1.0;
     }
 
-    alpha *= textureColor.a;
+    alpha *= textureColor.a * tintColor.a;
+    // ColorTint blends happen in the same color space as the MediaTexture.
+    // This is usually Linear space, since the MediaTexture is linearized by
+    // the hardware sampler in Filament.
+    textureColor.rgb *= tintColor.rgb;
 
     if (materialConstants_enableColorCorrection) {
       material.baseColor = vec4(convertColor(textureColor.rgb, materialParams.colorConversionMatrix) * alpha, alpha);
     } else if (materialConstants_enableColorConversion) {
-      material.baseColor = vec4(sRGBToLinear(textureColor).rgb*alpha, alpha);
+      material.baseColor = vec4(sRGBToLinear(textureColor).rgb * alpha, alpha);
       material.baseColor.xyz =
         applyGlobalMaterialConversionMatrix(material.baseColor.xyz);
     } else {
-      material.baseColor = vec4(sRGBToLinear(textureColor).rgb*alpha, alpha);
+      material.baseColor = vec4(sRGBToLinear(textureColor).rgb * alpha, alpha);
     }
   }
 }

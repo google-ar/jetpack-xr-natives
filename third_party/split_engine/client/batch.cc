@@ -1131,9 +1131,7 @@ size_t GetSerializedSize(const AddTexturesInfo& info, int32_t api_level) {
     }
 
     flatbuffers::Offset<flatbuffers::String> name_offset = 0;
-    SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
-        /*production_api_level=*/1);
-    if (api_level == android_xr::kSplitEngineExperimentalApiLevel) {
+    if (api_level >= 4) {
       name_offset = calc.CreateString(tex.name);
     }
 
@@ -1177,10 +1175,7 @@ flatbuffers::Offset<android_xr::schemas::AddTextures> Pack(
     }
 
     flatbuffers::Offset<flatbuffers::String> name_offset = 0;
-    SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
-        /*production_api_level=*/1);
-    IMP_LOG(imp::INFO) << "api_level: " << api_level;
-    if (api_level == android_xr::kSplitEngineExperimentalApiLevel) {
+    if (api_level >= 4) {
       name_offset = fbb.CreateString(tex.name);
     }
 

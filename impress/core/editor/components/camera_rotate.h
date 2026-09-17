@@ -40,6 +40,7 @@ class Editor;
 class CameraRotate : public Component {
  public:
   void Setup(NodeHandle pivot, float pitch, float yaw);
+  void InterpolateToPitchAndYaw(float pitch, float yaw);
   void Update(const FrameTime& frame_time);
 
   bool UseLegacyCameraControls() const;
@@ -53,11 +54,16 @@ class CameraRotate : public Component {
   void HandleRotation();
   // Handles the movement of the pivot based on keyboard input.
   void HandleMovement(const FrameTime& frame_time);
+  // Handles the smooth animation of the camera to a target orientation.
+  void HandleSnapToOrientation(const FrameTime& frame_time);
 
   bool InvertCameraY() const;
 
   float pitch_;
   float yaw_;
+  float target_pitch_ = 0.0f;
+  float target_yaw_ = 0.0f;
+  bool is_snap_animating_ = false;
   NodeHandle pivot_;
   Editor* editor_ = nullptr;
 

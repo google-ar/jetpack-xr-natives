@@ -100,9 +100,10 @@ cc_library(
     hdrs = ["desktop_font_holder.h"],
     copts = imp_copts(),
     data = if_linux([
-        "//core/fonts:googlesans_arabic_medium.ttf",
-        "//core/fonts:googlesans_japanese_medium.ttf",
-        "//core/fonts:googlesans_medium.ttf",
+        "//core/fonts:GoogleSans-ArabicMedium.ttf",
+        "//core/fonts:GoogleSans-JapaneseMedium.ttf",
+        "//core/fonts:GoogleSans-Medium.ttf",
+        "//core/fonts:GoogleSans-MyanmarMedium.ttf",
     ]),
     deps = [
         ":font_holder",

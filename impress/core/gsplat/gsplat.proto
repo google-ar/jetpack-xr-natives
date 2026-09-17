@@ -1,0 +1,184 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2023";
+
+package imp;
+
+
+option java_package = "com.google.ar.imp.proto";
+option java_multiple_files = true;
+
+// A 1-dimensional range.
+message Range {
+  // Always set.
+  float min = 1;
+
+  // Always set.
+  float max = 2;
+}
+
+// A 3-dimensional bounding volume.
+message Range3D {
+  // Always set.
+  Range range_x = 1;
+
+  // Always set.
+  Range range_y = 2;
+
+  // Always set.
+  Range range_z = 3;
+}
+
+// Chunks are individually renderable subsections of an overall GSplat. This
+// chunk data contains the information required to do basic rendering of a chunk
+// of gsplats.
+// All repeated fields have the same number of entries.
+// Coordinate space is Right Hand, Z Up, Meters.
+//
+// We use normalized formats to quantize and reduce the size of the data.
+// The normalized formats store floating point values in the range [0, 1] in
+// a fixed point integer format.
+// To decode the integer value to the floating point value, the following
+// formula is used:
+//   normalized_value = integer_value / 2^BITS
+// where BITS is the number of bits used for the element.
+//
+// Normalized formats used (little endian):
+//   * Norm11: 3 elements stored in the 11.11.10 bits of a uint32
+//   * Norm10_2: 4 elements stored in the 10.10.10.2 bits of a uint32
+//   * Norm8: 4 elements stored in the 8.8.8.8 bits of a uint32
+//
+// For interpolated data, the following formula is used to decode from the
+// interpolant across the chunk:
+//   actual_value = (range.max - range.min) * interpolant_value + range.min
+message GSplatChunkRequired {
+  // Extents of the splat positions within the chunk; Represents an axis-aligned
+  // bounding box.
+  // Always set.
+  Range3D position_range = 1;
+
+  // Extents of the splat scales within the chunk. These values are
+  // axis-aligned.
+  // Always set.
+  Range3D scale_range = 2;
+
+  // Interpolants for the splat position across the chunk.
+  // Format: Norm11 encoding {x, y, z}
+  // Stride: 1 per splat.
+  repeated fixed32 positions_data = 3;
+
+  // Interpolants for the splat scale across the chunk.
+  // Format: Norm11 encoding {x, y, z}
+  // Stride: 1 per splat.
+  repeated fixed32 scales_data = 4;
+
+  // Splat rotations.
+  // Format: Norm10_2 encoding quat {x, y, z, w} in “smallest three” format
+  // Stride: 1 per splat.
+  //
+  // Note: The "smallest three" format is used to pack quaternions into a single
+  // uint32 by taking advantage of the fact that the quaternion is normalized
+  // and reconstructing the 4th largest quaternion component from the "smallest
+  // three" other components. We can also assume that the smallest three other
+  // components will be within the range [-1/sqrt(2), 1/sqrt(2)] also due to
+  // reconstructing a normalized quaternion.
+  // We specify which component is being reconstructed in the last two bits of
+  // the uint32:
+  //   * 00: YZW encoded, X reconstructed
+  //   * 01: XZW encoded, Y reconstructed
+  //   * 10: XYW encoded, Z reconstructed
+  //   * 11: XYZ encoded, W reconstructed
+  repeated fixed32 rotations_data = 5;
+
+  // Splat colors and alphas.
+  // Format: Norm8 encoding {r, g, b, a}
+  // Stride: 1 per splat.
+  repeated fixed32 colors_data = 6;
+}
+
+// Parent message containing all required info for basic splat rendering.
+message GSplatRequiredData {
+  repeated GSplatChunkRequired chunk_data = 1;
+}
+
+// Additional data for rendering a chunk of gsplats.
+message GSplatChunkOptional {
+  // Extents of the spherical harmonic coefficients within the chunk.
+  // Note: Range is named {x, y, z} but for spherical harmonics map to {r, g, b}
+  // in that order.
+  // Always set.
+  Range3D spherical_harmonic_range = 1;
+
+  // Normalized interpolant for spherical harmonic lighting coefficients across
+  //   its containing chunk; used for view-dependent lighting.
+  // For each splat, there are 15 RGB spherical harmonic coefficient
+  // interpolants, which are stored in 8 fixed32 elements. Each spherical
+  // harmonic coefficient interpolant is a uint16 in a normalized integer format
+  // using the 5 lower bits for red, 6 bits for green, and 5 upper bits for
+  // blue. We pack two spherical harmonic coefficient interpolants per fixed32,
+  // little endian. The upper 16 bits of the last fixed32 for a splat will
+  // always be zero (as padding).
+  repeated fixed32 spherical_harmonic_data = 2;
+}
+
+// Additional data for rendering gsplats.
+message GSplatOptionalData {
+  repeated GSplatChunkOptional chunk_optional_data = 1;
+}
+
+// Data for precomputed visibility culling.
+// To reduce overdraw at runtime, We precompute a list of Voronoi cells
+// (called nodes) generated using k-means on the input cameras.
+// Then, for each node, we pre-compute visibility of each splat by rendering a
+// sample of views from within each voronoi volume to get an approximation
+// of volumetric coverage of possible views.
+// At runtime we use this precomputed data to skip rendering occluded splats.
+// More details: go/radsplat-visibility-filtering-primer.
+
+message GSplatVisibilityData {
+  // Packed array of visibility bitfields for each splat in the same
+  // splat order and number as GSplatRequiredData.
+  // Each splat's bitfield is bytesize=ceil(len(NodePositions.x)/8) bytes long.
+  // Little-endian and padded with 0s to byte alignment in MSB.
+  // Each bitfield represents whether that splat is visible
+  // from node_positions[bit_index], with bit_index 0 as LSB.
+  // If a particular splat is visible from node bit_index,
+  // then the bit for node bit_index in that splat's bitfield is set to 1.
+  // If the splat is occluded (eg. by a wall or a tree) then it is 0.
+  bytes splat_visible_from_node = 1;
+
+  // The positions of the visibility nodes.
+  // These are distributed throughout the viewable area of the gsplat.
+  // x, y, and z need to have the same number of elements.
+  // These are parallel arrays for better packing.
+  message NodePositions {
+    repeated float x = 1;
+    repeated float y = 2;
+    repeated float z = 3;
+  }
+  // The number of nodes is implicitly encoded in
+  // the number of elements in node_positions.x ( or y or z).
+  // len(NodePositions.x) <= bytes_per_splat*8
+  NodePositions node_positions = 3;
+}
+
+// Everything about gsplat.
+message GSplatPointCloudData {
+  GSplatRequiredData required_data = 1;
+  GSplatOptionalData optional_data = 2;
+  // Radsplat-specific occlusion culling data. Not necessary for rendering, but
+  // improves performance in indoor scenes with a lot of occlusion.
+  GSplatVisibilityData visibility_data = 3;
+}

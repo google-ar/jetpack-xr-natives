@@ -30,10 +30,6 @@ SettingsWidget::SettingsWidget(BaseView& view)
 
 void SettingsWidget::DrawImGui() {
   PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
-  bool grid_enabled = editor_.GetSettings().show_grid.Get();
-  if (ImGui::MenuItem(kGridText.data(), nullptr, &grid_enabled)) {
-    editor_.GetSettings().show_grid.Set(grid_enabled);
-  }
   bool skybox_enabled = editor_.GetSettings().skybox_enabled.Get();
   if (ImGui::MenuItem(kSkyboxText.data(), nullptr, &skybox_enabled)) {
     editor_.GetSettings().skybox_enabled.Set(skybox_enabled);
@@ -85,6 +81,15 @@ void SettingsWidget::DrawImGui() {
                       &is_post_processing_enabled)) {
     filament_view->setPostProcessingEnabled(is_post_processing_enabled);
     storage.SetBool(kPostProcessingEnabledKey, is_post_processing_enabled);
+  }
+
+  if (editor_.IsSandbox()) {
+    bool auto_switch =
+        editor_.GetSettings().auto_switch_to_app_camera_on_play.Get();
+    if (ImGui::MenuItem(kAutoSwitchToAppCameraOnPlayText.data(), nullptr,
+                        &auto_switch)) {
+      editor_.GetSettings().auto_switch_to_app_camera_on_play.Set(auto_switch);
+    }
   }
 
   // Saving assets is only supported on desktop, so only show the option on

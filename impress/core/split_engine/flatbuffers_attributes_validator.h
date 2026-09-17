@@ -860,6 +860,47 @@ void FlatbuffersAttributesValidator<SchemaProvider>::EnumFieldVisitor::Visit(
     enum_value =
         table->template GetField<T>(field->offset(), field->default_integer());
   }
+  const bool is_bit_flags =
+      enum_def->attributes() != nullptr &&
+      enum_def->attributes()->LookupByKey("bit_flags") != nullptr;
+  if (is_bit_flags) {
+    using UnsignedT = std::make_unsigned_t<T>;
+    uint64_t remaining_bits = static_cast<UnsignedT>(enum_value);
+    if (remaining_bits == 0) {
+      // Technically, for bit_flags enums, LookupByKey(0) will return nullptr,
+      // so checking the zero value here is unnecessary. This is because the
+      // reflection API does not record an enumerator unless explicitly declared
+      // in the .fbs file, even though the C++ generator creates NONE.
+      // Additionally, even if we explicitly declared an enumerator with value
+      // 0, it would be interpreted as bit index 0 (1 << 0 = 1), meaning a value
+      // of 0 cannot technically be declared in the schema. However, we just
+      // keep the nullptr check for future-proofing so that if FlatBuffers ever
+      // changes its schema parser, zero-value attributes will still be
+      // validated correctly.
+      if (const reflection::EnumVal* zero_val =
+              enum_def->values()->LookupByKey(0);
+          zero_val != nullptr) {
+        status = self.ValidateAttributes(zero_val->attributes());
+      }
+      return;
+    }
+    for (const reflection::EnumVal* enum_value_def : *enum_def->values()) {
+      const uint64_t flag_val = static_cast<uint64_t>(enum_value_def->value());
+      if (flag_val != 0 && (remaining_bits & flag_val) == flag_val) {
+        remaining_bits &= ~flag_val;
+        status = self.ValidateAttributes(enum_value_def->attributes());
+        if (!status.ok()) {
+          return;
+        }
+      }
+    }
+    if (remaining_bits != 0) {
+      status = absl::NotFoundError(
+          absl::StrCat("Definition for enum value ", enum_value,
+                       " is not found in the schema."));
+    }
+    return;
+  }
   const reflection::EnumVal* enum_value_def =
       enum_def->values()->LookupByKey(enum_value);
   if (enum_value_def == nullptr) {

@@ -25,6 +25,7 @@
 #include "core/render/texture.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 
 namespace imp {
 
@@ -106,6 +107,8 @@ TextureRegistry::ScopedTextureRegistration TextureRegistry::RegisterTexture(
 
   if (split_engine::SplitEngineSerializer* serializer =
           view_->GetSplitEngineSerializer()) {
+    SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+        /*production_api_level=*/4);
     if (serializer->GetApiLevel() ==
         split_engine::kSplitEngineExperimentalApiLevel) {
       serializer->RegisterNamedTexture(*texture->GetTexture(), texture_name);
@@ -127,6 +130,8 @@ TextureRegistry::ScopedTextureRegistration TextureRegistry::RegisterTexture(
 
   if (split_engine::SplitEngineSerializer* serializer =
           view_->GetSplitEngineSerializer()) {
+    SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+        /*production_api_level=*/4);
     if (serializer->GetApiLevel() ==
         split_engine::kSplitEngineExperimentalApiLevel) {
       serializer->RegisterNamedTexture(*texture->GetTexture(), texture_name);

@@ -15,21 +15,24 @@
 #include "core/editor/widgets/fallback_component_widget.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
-#if IMP_RUNTIME(DEV)
+#include <utility>
 #include <vector>
-#endif
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "dear_imgui/imgui_internal.h"
 #include "core/common/registry.h"
 #include "core/config.h"
+#include "core/editor/command.h"
 #include "core/editor/command_manager.h"
+#include "core/editor/composite_command.h"
 #include "core/editor/editor_field_control.h"
-#include "core/editor/editor_style.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
 #include "core/editor/node_value_command.h"
@@ -45,18 +48,25 @@
 
 namespace imp::editor {
 
+namespace {
+
 static constexpr int32_t kEnabledLineWidth = 50;
 
-FallbackComponentWidget::FallbackComponentWidget(NodeHandle node,
-                                                 BaseComponentPool* pool)
-    : node_(node),
+}  // namespace
+
+FallbackComponentWidget::FallbackComponentWidget(
+    absl::flat_hash_set<NodeHandle> nodes, BaseComponentPool* pool)
+    : nodes_(std::move(nodes)),
+      reference_node_(*nodes_.begin()),
       pool_(pool),
-      command_manager_(node->GetView()
+      command_manager_(reference_node_->GetView()
                            .GetRegistry()
                            .template GetOrCreate<CommandManager>()) {
-  Component* comp = pool->TryGetRawComponentFromEntity(node.GetEntity());
-  if (comp) {
-    component_ = ComponentHandle<Component>(*comp);
+  for (const NodeHandle& node : nodes_) {
+    Component* comp = pool->TryGetRawComponentFromEntity(node.GetEntity());
+    if (comp) {
+      components_.insert(ComponentHandle<Component>(*comp));
+    }
   }
 
 #if IMP_RUNTIME(DEV)
@@ -64,23 +74,31 @@ FallbackComponentWidget::FallbackComponentWidget(NodeHandle node,
       absl::StrSplit(std::string(pool->GetTypeName()), "::");
   name_ = segments.back();
 #else
-  name_ = absl::StrFormat("Component Id: %i", component_->GetComponentId());
+  if (!components_.empty()) {
+    name_ = absl::StrFormat("Component Id: %i",
+                            (*components_.begin())->GetComponentId());
+  }
 #endif
 
-  metadata_ = node_->GetComponent<SceneMetadata>();
+  metadata_ = reference_node_->GetComponent<SceneMetadata>();
 }
 
 absl::string_view FallbackComponentWidget::GetName() const { return name_; }
 
 bool FallbackComponentWidget::HasContent() const {
-  return component_.IsValid();
+  return !components_.empty();
 }
 
 void FallbackComponentWidget::DrawImGui() {
+  if (components_.empty()) return;
+
+  auto first_component = *components_.begin();
+  if (!first_component.IsValid()) return;
+
   // First render enabled and active details
   ImGui::PushItemWidth(kEnabledLineWidth);
 
-  bool enabled = component_->IsEnabled();
+  bool enabled = first_component->IsEnabled();
 
   std::string label =
       GenerateUniqueImGuiLabel("enabled", this, EditorControlFlags::kDefault);
@@ -94,7 +112,21 @@ void FallbackComponentWidget::DrawImGui() {
   }
   bool* base_enabled_ptr = base_enabled ? &base_enabled.value() : nullptr;
 
-  EditorFieldControl::EditingElementMode mode =
+  bool all_same_enabled = true;
+  for (const ComponentHandle<Component>& comp : components_) {
+    if (!comp.IsValid()) continue;
+
+    if (comp->IsEnabled() != enabled) {
+      all_same_enabled = false;
+      break;
+    }
+  }
+
+  if (!all_same_enabled) {
+    ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+  }
+
+  const EditorFieldControl::EditingElementMode mode =
       EditorFieldControl::BeginEditingElement(
           &enabled, base_enabled_ptr, editor::EditorControlFlags::kNone);
 
@@ -102,36 +134,50 @@ void FallbackComponentWidget::DrawImGui() {
   is_enabled_changed |=
       EditorFieldControl::EndEditingElement(mode, &enabled, base_enabled_ptr);
 
+  if (!all_same_enabled) {
+    ImGui::PopItemFlag();  // ImGuiItemFlags_MixedValue
+  }
+
   if (is_enabled_changed) {
-    command_manager_.PerformCommand<NodeValueCommand<bool>>(
-        component_->GetNode(), !enabled, enabled,
-        [this](NodeHandle target, bool value) mutable {
-          if (component_) {
-            SetComponentEnabled(value);
-            return absl::OkStatus();
-          }
-          return absl::NotFoundError("component not found.");
-        });
+    CreateUndoCommand(components_, enabled);
   }
 
   ImGui::SameLine();
 
-  bool active = component_->IsActive();
-
-  ImGui::PushStyleColor(ImGuiCol_Text, active ? kDarkGreen : kDarkRed);
-  ImGui::LabelText(active ? "active" : "inactive", "");
-  ImGui::PopStyleColor();
+  DrawActiveLabel(components_);
 
   ImGui::PopItemWidth();
 
 // Draw custom editor UI for this component.
 #if IMP_RUNTIME(DEV)
-  pool_->DrawEditorUi(node_.GetEntity());
+  pool_->DrawEditorUi(reference_node_.GetEntity());
 #endif
 }
 
+void FallbackComponentWidget::DrawActiveLabel(
+    const absl::flat_hash_set<ComponentHandle<Component>>& active_components) {
+  bool all_active = true;
+  bool all_inactive = true;
+
+  for (const ComponentHandle<Component>& comp : active_components) {
+    if (!comp.IsValid()) continue;
+
+    if (comp->IsActive()) {
+      all_inactive = false;
+    } else {
+      all_active = false;
+    }
+  }
+
+  DrawActiveLabelUi(all_active, all_inactive);
+}
+
 void FallbackComponentWidget::SetComponentEnabled(bool enabled) {
-  component_->SetEnabled(enabled);
+  for (auto& comp : components_) {
+    if (comp.IsValid()) {
+      comp.Get()->SetEnabled(enabled);
+    }
+  }
 }
 
 CommandManager& FallbackComponentWidget::GetCommandManager() const {
@@ -145,6 +191,37 @@ ComponentHandle<SceneMetadata> FallbackComponentWidget::GetMetadata() const {
 const SceneMetadata::ComponentSource*
 FallbackComponentWidget::GetBaseComponentSource() const {
   return nullptr;
+}
+
+void FallbackComponentWidget::CreateUndoCommand(
+    const absl::flat_hash_set<ComponentHandle<Component>>& components,
+    const bool enabled) {
+  std::vector<std::unique_ptr<Command>> commands;
+  commands.reserve(components.size());
+
+  auto command = [pool = pool_](NodeHandle target, bool value) mutable {
+    Component* active_comp =
+        pool->TryGetRawComponentFromEntity(target.GetEntity());
+
+    if (!active_comp) return absl::NotFoundError("component not found.");
+
+    active_comp->SetEnabled(value);
+
+    return absl::OkStatus();
+  };
+
+  for (const ComponentHandle<Component>& comp : components) {
+    if (!comp.IsValid()) continue;
+
+    const bool node_prev_enabled = comp->IsEnabled();
+
+    commands.push_back(std::make_unique<NodeValueCommand<bool>>(
+        comp->GetNode(), node_prev_enabled, enabled, command));
+  }
+
+  if (commands.empty()) return;
+
+  command_manager_.PerformCommand<CompositeCommand>(std::move(commands));
 }
 
 }  // namespace imp::editor

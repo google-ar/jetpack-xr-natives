@@ -57,7 +57,7 @@ class SplitEngineRenderableInfo : public Component {
 
   absl::Span<const MeshVertexAndIndexData> GetAllMeshData();
 
-  void UpdateBones(const std::vector<mat4f>& bone_transforms);
+  void UpdateBones(const std::vector<mat4f>& bone_transforms, uint32_t offset);
 
   void SetMorphTargetBuffer(BorrowedMorphTargetBufferPtr morph_target_buffer);
 
@@ -124,6 +124,10 @@ class SplitEngineRenderableInfo : public Component {
   BorrowedIndexBufferPtr index_buffer_;
 
   uint32_t skinning_bone_count_ = 0;
+
+  // Stores the complete array of bones for this renderable, updated
+  // incrementally.
+  std::vector<mat4f> bone_transforms_;
 
   std::optional<uint8_t> channel_;
 

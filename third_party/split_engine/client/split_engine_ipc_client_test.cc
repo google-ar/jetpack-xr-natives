@@ -286,7 +286,7 @@ TEST_F(SplitEngineIpcClientTest, RequestBuiltInMaterialInstance_Request) {
   serializer_->RequestBuiltInMaterialInstance(
       std::move(request), [&](absl::Status s) { status = s; });
 
-  EXPECT_OK(status);
+  MP_EXPECT_OK(status);
   EXPECT_EQ(fake_transport_->GetSentRequests().size(), 1);
 }
 
@@ -298,7 +298,7 @@ TEST_F(SplitEngineIpcClientTest, AddCustomMaterial_Request) {
   serializer_->AddCustomMaterial(std::move(request),
                                  [&](absl::Status s) { status = s; });
 
-  EXPECT_OK(status);
+  MP_EXPECT_OK(status);
   EXPECT_EQ(fake_transport_->GetSentRequests().size(), 1);
 }
 

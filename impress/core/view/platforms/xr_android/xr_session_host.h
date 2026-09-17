@@ -41,6 +41,7 @@
 #include "filament/filament/include/filament/SwapChain.h"
 #include "filament/filament/include/filament/View.h"
 #include "filament/libs/utils/include/utils/AsyncJobQueue.h"
+#include "core/async/executor.h"
 #include "core/camera/camera_component.h"
 #include "core/common/invocable.h"
 #include "core/common/optional_error.h"
@@ -321,6 +322,11 @@ class XrSessionHost : public ViewHost {
   // takes ownership of the file descriptor and is responsible for closing it.
   void SetAfterEndFrameCallback(Invocable<void(int /*fence_fd*/)> callback);
 
+  // Defers the destruction of the given swap chain to the end of the next
+  // frame. If there are no pending frames, the swap chain will be destroyed
+  // immediately.
+  void DeferSwapChainDestruction(filament::SwapChain* swap_chain_to_destroy);
+
   // This notes that the CPU-side calls for rendering a frame have been
   // completed, and informs xr_session_host that it is safe to create a Sync
   // object that will signal when all rendering operations for the frame have
@@ -375,9 +381,21 @@ class XrSessionHost : public ViewHost {
   // Negative weights are drawn in front of the impress-rendered projection
   // layer, and positive weights are drawn behind.  A weight of 0 is
   // indeterminate compared to the projection layer.
-  void AddCompositionLayer(XrCompositionLayerBaseHeader* layer, int weight);
+  // If the composition layer is an imp::XrSwapChain, then expect_render must be
+  // true so that XrSessionHost knows to expect calls to XrBeginFrame and
+  // XrEndFrame.
+  void AddCompositionLayer(XrCompositionLayerBaseHeader* layer, int weight,
+                           bool expect_render = false);
 
   void RemoveCompositionLayer(XrCompositionLayerBaseHeader* layer);
+
+  // Notifies XrSessionHost that a composition layer will not be rendered this
+  // frame. This MUST be called if AddCompositionLayer was called with
+  // expect_render == true, and the composition layer will not be rendered this
+  // frame. The rendering could be skipped, for example, when Filament fails to
+  // begin a frame, which is something that may not be known at the time that
+  // AddCompositionLayer is called.
+  void MarkCompositionLayerRenderSkipped();
 
   // Sets model and projection matrices on a camera from the pose and views.
   void SetCameraModelAndProjection(ComponentHandle<CameraComponent> camera,
@@ -404,41 +422,33 @@ class XrSessionHost : public ViewHost {
   };
   absl::StatusOr<LocateViewsResult> LocateViews(XrTime predictedDisplayTime);
 
-  // Thread-safe queue used to defer the destruction of Filament Sync objects.
-  //
-  // Filament requires that all engine resources (including Sync objects) be
-  // destroyed on the main/engine thread. However, GPU fence completion
-  // callbacks are executed asynchronously on a background thread.
-  //
-  // To avoid thread-confinement violations, background callbacks push completed
-  // Sync objects to this queue via Push(). The main thread then safely drains
-  // and destroys them during its frame tick or session teardown via Flush().
-  class SyncDestructionQueue {
+  template <typename T>
+  class FilamentResourceDestructionQueue {
    public:
-    SyncDestructionQueue() = default;
-    ~SyncDestructionQueue() = default;
+    FilamentResourceDestructionQueue() = default;
+    ~FilamentResourceDestructionQueue() = default;
 
-    void Push(filament::Sync* sync) {
+    void Push(T* resource) {
       absl::MutexLock lock(mutex_);
-      syncs_.push_back(sync);
+      resources_.push_back(resource);
     }
 
     void Flush(filament::Engine* engine) {
-      std::vector<filament::Sync*> to_destroy;
+      std::vector<T*> to_destroy;
       {
         absl::MutexLock lock(mutex_);
-        to_destroy = std::move(syncs_);
+        to_destroy = std::move(resources_);
       }
-      for (auto* sync : to_destroy) {
-        if (engine != nullptr && sync != nullptr) {
-          engine->destroy(sync);
+      for (auto* r : to_destroy) {
+        if (engine != nullptr && r != nullptr) {
+          engine->destroy(r);
         }
       }
     }
 
    private:
     absl::Mutex mutex_;
-    std::vector<filament::Sync*> syncs_;
+    std::vector<T*> resources_;
   };
 
   // Offloads asynchronous swapchain buffer release fence callbacks from the
@@ -474,7 +484,7 @@ class XrSessionHost : public ViewHost {
     filament::Sync* sync;
     std::unique_ptr<Invocable<void(int /*fence_file_descriptor*/)>>
         after_end_frame_callback;
-    SyncDestructionQueue* sync_destruction_queue;
+    FilamentResourceDestructionQueue<filament::Sync>* sync_destruction_queue;
   };
 
   // Used to enqueue frame information to the Filament Render thread to ensure
@@ -486,6 +496,16 @@ class XrSessionHost : public ViewHost {
     Invocable<void()> before_end_frame_callback;
     Invocable<void(int)> after_end_frame_callback;
     filament::Sync* sync;
+    RobinMap<XrCompositionLayerBaseHeader*, int> composition_layers;
+    // Used to snapshot XrCompositionLayerQuads by value making them
+    // thread-safe.
+    std::vector<XrCompositionLayerQuad> copied_quad_layers;
+    Executor* foreground_executor = Executor::ForegroundExecutor();
+    bool is_main_projection_layer_enabled = true;
+    // The number of pending renders for this frame, which is equal to the
+    // number of calls to EndFrame. Used to determine if the frame is
+    // complete.
+    int pending_renders = 0;
   };
 
   absl::StatusOr<XrInstance> CreateInstance(JNIEnv* env, JavaVM* vm,
@@ -705,27 +725,19 @@ class XrSessionHost : public ViewHost {
   // layer, and positive weights are drawn behind.  A weight of 0 is
   // indeterminate compared to the projection layer.
   RobinMap<XrCompositionLayerBaseHeader*, int> composition_layers_;
+  RobinSet<XrCompositionLayerBaseHeader*> rendering_composition_layers_;
   bool is_main_projection_layer_enabled_ = true;
   std::unique_ptr<struct XrNativeWindow> native_window_;
   mutable absl::Mutex frame_active_mutex_;
   bool is_frame_active_ ABSL_GUARDED_BY(frame_active_mutex_) = false;
 
-  // Queue to defer Filament Sync object destructions.
-  //
-  // Fence completion callbacks are offloaded to our background
-  // sync_callback_handler_ to avoid blocking the main compositor rendering
-  // path. Because Filament requires that all Engine Sync objects be destroyed
-  // on the main thread, the background thread pushes completed syncs to this
-  // queue, which is then safely flushed on the main thread during
-  // AdvanceFrame().
-  //
-  // Lifetime Safety:
-  // Because sync_destruction_queue_ is declared BEFORE
-  // sync_callback_handler_, C++ guarantees that the callback handler (and its
-  // associated background thread) is blockingly joined and terminated first
-  // on destruction, ensuring that the background thread can never access a
-  // dangling queue pointer.
-  SyncDestructionQueue sync_destruction_queue_;
+  // Updates the composition layers in the queued frame. This is called after
+  // Update() and before rendering.
+  void UpdateQueuedCompositionLayers();
+
+  FilamentResourceDestructionQueue<filament::Sync> sync_destruction_queue_;
+  FilamentResourceDestructionQueue<filament::SwapChain>
+      swap_chain_destruction_queue_;
   SyncCallbackHandler sync_callback_handler_;
 };
 

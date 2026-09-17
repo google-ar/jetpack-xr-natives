@@ -60,26 +60,26 @@ struct Int4 (requires_api: 1) {
   w:int (id: 3, requires_api: 1);
 }
 
-struct Uint {
-  value:uint (id: 0);
+struct Uint (requires_api: 4, unstable_api) {
+  value:uint (id: 0, requires_api: 4, unstable_api);
 }
 
-struct Uint2 {
-  x:uint (id: 0);
-  y:uint (id: 1);
+struct Uint2 (requires_api: 4, unstable_api) {
+  x:uint (id: 0, requires_api: 4, unstable_api);
+  y:uint (id: 1, requires_api: 4, unstable_api);
 }
 
-struct Uint3 {
-  x:uint (id: 0);
-  y:uint (id: 1);
-  z:uint (id: 2);
+struct Uint3 (requires_api: 4, unstable_api) {
+  x:uint (id: 0, requires_api: 4, unstable_api);
+  y:uint (id: 1, requires_api: 4, unstable_api);
+  z:uint (id: 2, requires_api: 4, unstable_api);
 }
 
-struct Uint4 {
-  x:uint (id: 0);
-  y:uint (id: 1);
-  z:uint (id: 2);
-  w:uint (id: 3);
+struct Uint4 (requires_api: 4, unstable_api) {
+  x:uint (id: 0, requires_api: 4, unstable_api);
+  y:uint (id: 1, requires_api: 4, unstable_api);
+  z:uint (id: 2, requires_api: 4, unstable_api);
+  w:uint (id: 3, requires_api: 4, unstable_api);
 }
 
 struct Float (requires_api: 1) {
@@ -161,68 +161,68 @@ struct Mat4 (requires_api: 1) {
   m33:double (id: 15, requires_api: 1);
 }
 
-table FloatVector {
-  data:[Float] (required, id: 0);
+table FloatVector (requires_api: 4, unstable_api) {
+  data:[Float] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Float2Vector {
-  data:[Float2] (required, id: 0);
+table Float2Vector (requires_api: 4, unstable_api) {
+  data:[Float2] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Float3Vector {
-  data:[Float3] (required, id: 0);
+table Float3Vector (requires_api: 4, unstable_api) {
+  data:[Float3] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Float4Vector {
-  data:[Float4] (required, id: 0);
+table Float4Vector (requires_api: 4, unstable_api) {
+  data:[Float4] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table IntVector {
-  data:[Int] (required, id: 0);
+table IntVector (requires_api: 4, unstable_api) {
+  data:[Int] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Int2Vector {
-  data:[Int2] (required, id: 0);
+table Int2Vector (requires_api: 4, unstable_api) {
+  data:[Int2] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Int3Vector {
-  data:[Int3] (required, id: 0);
+table Int3Vector (requires_api: 4, unstable_api) {
+  data:[Int3] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Int4Vector {
-  data:[Int4] (required, id: 0);
+table Int4Vector (requires_api: 4, unstable_api) {
+  data:[Int4] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table UintVector {
-  data:[Uint] (required, id: 0);
+table UintVector (requires_api: 4, unstable_api) {
+  data:[Uint] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Uint2Vector {
-  data:[Uint2] (required, id: 0);
+table Uint2Vector (requires_api: 4, unstable_api) {
+  data:[Uint2] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Uint3Vector {
-  data:[Uint3] (required, id: 0);
+table Uint3Vector (requires_api: 4, unstable_api) {
+  data:[Uint3] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Uint4Vector {
-  data:[Uint4] (required, id: 0);
+table Uint4Vector (requires_api: 4, unstable_api) {
+  data:[Uint4] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table BoolVector {
-  data:[Bool] (required, id: 0);
+table BoolVector (requires_api: 4, unstable_api) {
+  data:[Bool] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Bool2Vector {
-  data:[Bool2] (required, id: 0);
+table Bool2Vector (requires_api: 4, unstable_api) {
+  data:[Bool2] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Bool3Vector {
-  data:[Bool3] (required, id: 0);
+table Bool3Vector (requires_api: 4, unstable_api) {
+  data:[Bool3] (required, id: 0, requires_api: 4, unstable_api);
 }
 
-table Bool4Vector {
-  data:[Bool4] (required, id: 0);
+table Bool4Vector (requires_api: 4, unstable_api) {
+  data:[Bool4] (required, id: 0, requires_api: 4, unstable_api);
 }
 
 table Mat3fVector (requires_api: 1) {

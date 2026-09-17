@@ -20,11 +20,12 @@
 #include <memory>
 
 #include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
 #include "core/async/executor.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/remote_editor/android/android_remote_editor_wrapper.h"
+#include "core/editor/remote_editor/base_remote_editor_renderer.h"
 #include "core/editor/remote_editor/remote_editor_info.h"
-#include "core/editor/remote_editor/remote_editor_renderer.h"
 #include "core/editor/remote_editor/web_ui_remote_editor.h"
 #include "core/view/base_view.h"
 
@@ -47,7 +48,14 @@ class AndroidWebUiRemoteEditor : public WebUiRemoteEditor,
   void NotifyClientConnected();
   void NotifyClientDisconnected();
 
+  // Returns true when at least one remote client is connected and ready to
+  // receive UI streaming frames.
   bool IsReadyToSendDataToRemote() const override;
+
+  // Forwards offscreen readback/blit callbacks to the XR streaming renderer
+  // right after the offscreen UI pass completes.
+  void BlitFromRenderTarget(filament::Renderer* renderer,
+                            filament::RenderTarget* render_target) override;
 
   // Sets the native rendering window and resizes the
   // internal offscreen texture. Called during the initial setup of the
@@ -82,10 +90,12 @@ class AndroidWebUiRemoteEditor : public WebUiRemoteEditor,
 
   // --- Rendering state ---
   // Renders the remote editor UI for streaming.
-  std::unique_ptr<editor::RemoteEditorRenderer> remote_editor_renderer_;
+  std::unique_ptr<editor::BaseRemoteEditorRenderer> remote_editor_renderer_;
 
   // The native window where the UI is rendered.
   void* native_window_ = nullptr;
+  std::unique_ptr<ActiveWindowInfo> active_window_info_ =
+      std::make_unique<ActiveWindowInfo>();
 
   // Dimensions of the rendering target.
   int width_ = 0;

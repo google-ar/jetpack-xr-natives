@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_TRANSFORM_WIDGET_ASPECT_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_TRANSFORM_WIDGET_ASPECT_H_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -108,8 +109,6 @@ class TransformWidgetAspect : public imp::Component {
   // The nodes that are currently selected and being transformed.
   std::vector<NodeHandle> selected_nodes_;
 
-  bool use_local_space_ = true;
-
   // The pointer position when a drag starts. (Screen-space)
   float2 pointer_start_;
 
@@ -179,6 +178,7 @@ class TransformWidgetAspect : public imp::Component {
   // The active axes for this widget aspect.
   AxisFlags active_axes_;
   PropertyBinding<float> transform_widget_scale_binding_;
+  PropertyBinding<bool> transform_widget_local_space_binding_;
 };
 
 }  // namespace imp::editor

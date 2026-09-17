@@ -52,17 +52,21 @@ const absl::flat_hash_set<HashValue>& SceneComponentDeserializer::GetDeps(
 }
 
 #if IMP_RUNTIME(DEV)
-void SceneComponentDeserializer::ShowAddComponentUi(NodeHandle node) {
-  selected_node_ = node;
-  command_manager_ =
-      &node->GetView().GetRegistry().GetOrCreate<editor::CommandManager>();
+void SceneComponentDeserializer::ShowAddComponentUi(
+    const absl::flat_hash_set<NodeHandle>& nodes) {
+  selected_nodes_ = nodes;
+  if (selected_nodes_.empty()) return;
+  command_manager_ = &(*selected_nodes_.begin())
+                          ->GetView()
+                          .GetRegistry()
+                          .GetOrCreate<editor::CommandManager>();
   add_component_ui_.DrawImGui();
 }
 
 std::unique_ptr<editor::Widget>
 SceneComponentDeserializer::CreateComponentWidget(
-    HashValue component_state_type_url_hash, NodeHandle node,
-    Dispatcher& editor_dispatcher) {
+    HashValue component_state_type_url_hash,
+    absl::flat_hash_set<NodeHandle> nodes, Dispatcher& editor_dispatcher) {
   const Handler* handler = GetHandler(component_state_type_url_hash);
   if (handler == nullptr) {
     return {};
@@ -72,7 +76,7 @@ SceneComponentDeserializer::CreateComponentWidget(
     return {};
   }
 
-  return handler->create_component_widget(node, editor_dispatcher);
+  return handler->create_component_widget(std::move(nodes), editor_dispatcher);
 }
 #endif
 

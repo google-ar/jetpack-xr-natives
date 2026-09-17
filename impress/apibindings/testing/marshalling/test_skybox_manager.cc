@@ -59,7 +59,7 @@ void TestSkyboxManager::LoadImageBasedLightingAsset(
   
 
   if (context.load_image_based_lighting_asset_bytes.expect_test_pattern) {
-    EXPECT_OK(VerifyTestPattern(
+    MP_EXPECT_OK(VerifyTestPattern(
         data, context.load_image_based_lighting_asset_bytes.expected_size))
         << "IBL Asset JNI Marshalling Data Corruption Detected";
   }

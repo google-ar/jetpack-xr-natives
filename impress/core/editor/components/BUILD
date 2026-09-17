@@ -164,6 +164,7 @@ cc_library(
         "//core/common:registry",
         "//core/editor",
         "//core/editor/common:notifying_property",
+        "//core/materials",
         "//core/math",
         "//core/ncsb",
         "//core/render:primitive_shape_renderer",

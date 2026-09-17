@@ -17,13 +17,14 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_SERIALIZER_DATA_TYPES_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_SERIALIZER_DATA_TYPES_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <variant>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -56,6 +57,58 @@ using VectorOffset = std::vector<flatbuffers::Offset<T>>;
 template <typename T>
 using EntityMap = imp::RobinMap<utils::Entity, T, EntityHasher>;
 using EntitySet = imp::RobinSet<utils::Entity, EntityHasher>;
+
+// A wrapper around a map that caches the last accessed key and its value.
+// This is a fast-path optimization for the common case where multiple
+// operations are performed on the same key in a row (e.g., setting multiple
+// parameters on the same material, or updating multiple properties on the
+// same node).
+//
+// This class is designed to be a drop-in replacement for the underlying map
+// (supporting operator[], empty(), size(), and iteration via begin()/end()).
+//
+// SAFETY NOTE: Storing a raw pointer to map elements is safe here because:
+// 1. The underlying map is private and can only be mutated via operator[].
+// 2. Any call to operator[] that could trigger rehashing (by inserting a new
+//    key) also immediately overwrites the cached pointer with a valid one.
+// 3. The batch data is accessed single-threaded.
+template <typename Key, typename Value,
+          typename Map = absl::flat_hash_map<Key, Value>>
+class CachedMap {
+ public:
+  using const_iterator = typename Map::const_iterator;
+  using iterator = typename Map::iterator;
+
+  const Map& GetMap() const { return map_; }
+
+  Value& operator[](const Key& key) {
+    if (last_key_ == key) {
+      return *last_value_;
+    }
+    last_key_ = key;
+    last_value_ = &map_[key];
+    return *last_value_;
+  }
+
+  bool empty() const { return map_.empty(); }
+  size_t size() const { return map_.size(); }
+
+  const_iterator begin() const { return map_.begin(); }
+  const_iterator end() const { return map_.end(); }
+  iterator begin() { return map_.begin(); }
+  iterator end() { return map_.end(); }
+
+  void clear() {
+    map_.clear();
+    last_key_.reset();
+    last_value_ = nullptr;
+  }
+
+ private:
+  Map map_;
+  std::optional<Key> last_key_;
+  Value* last_value_ = nullptr;
+};
 
 // Below are data structures used to track the changes to the scene graph that
 // have occurred within a frame. These data structures are then serialized
@@ -221,7 +274,9 @@ struct DataSelector<android_xr::schemas::CommandTypes::RemoveRenderables> {
 template <>
 struct DataSelector<android_xr::schemas::CommandTypes::UpdateRenderables> {
   using data_type =
-      SerializerDataTypes::EntityMap<SerializerDataTypes::UpdateRenderableInfo>;
+      CachedMap<utils::Entity, SerializerDataTypes::UpdateRenderableInfo,
+                SerializerDataTypes::EntityMap<
+                    SerializerDataTypes::UpdateRenderableInfo>>;
 };
 template <>
 struct DataSelector<android_xr::schemas::CommandTypes::UpdateMeshData> {
@@ -251,10 +306,11 @@ struct DataSelector<android_xr::schemas::CommandTypes::AddMaterials> {
   using data_type =
       SerializerDataTypes::VectorOffset<android_xr::schemas::Material>;
 };
+
 template <>
 struct DataSelector<android_xr::schemas::CommandTypes::SetMaterialParameters> {
-  using data_type = std::unordered_map<SerializerDataTypes::ResourceId,
-                                       SerializerDataTypes::MaterialParameters>;
+  using data_type = CachedMap<SerializerDataTypes::ResourceId,
+                              SerializerDataTypes::MaterialParameters>;
 };
 template <>
 struct DataSelector<android_xr::schemas::CommandTypes::RemoveMaterials> {
@@ -262,8 +318,8 @@ struct DataSelector<android_xr::schemas::CommandTypes::RemoveMaterials> {
 };
 template <>
 struct DataSelector<android_xr::schemas::CommandTypes::AddMaterialInstances> {
-  using data_type = std::unordered_map<SerializerDataTypes::ResourceId,
-                                       SerializerDataTypes::ResourceId>;
+  using data_type = absl::flat_hash_map<SerializerDataTypes::ResourceId,
+                                        SerializerDataTypes::ResourceId>;
 };
 template <>
 struct DataSelector<
@@ -296,8 +352,9 @@ struct DataSelector<android_xr::schemas::CommandTypes::RemoveNodes> {
 };
 template <>
 struct DataSelector<android_xr::schemas::CommandTypes::UpdateNodes> {
-  using data_type =
-      SerializerDataTypes::EntityMap<SerializerDataTypes::UpdateNodeInfo>;
+  using data_type = CachedMap<
+      utils::Entity, SerializerDataTypes::UpdateNodeInfo,
+      SerializerDataTypes::EntityMap<SerializerDataTypes::UpdateNodeInfo>>;
 };
 template <>
 struct DataSelector<android_xr::schemas::CommandTypes::AssignUserIdToNodes> {
@@ -351,6 +408,7 @@ struct Batch : public CommandBatchBase {
       flatbuffers::FlatBufferBuilder& fbb) override;
   typename DataSelector<CommandT>::data_type data;
 };
+
 }  // namespace SerializerDataTypes
 
 }  // namespace imp::split_engine

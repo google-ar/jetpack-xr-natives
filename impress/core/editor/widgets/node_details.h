@@ -17,13 +17,18 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_NODE_DETAILS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_NODE_DETAILS_H_
 
+#include <string>
+
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
 #include "core/editor/command_manager.h"
 #include "core/editor/editor_constants.h"
 #include "core/editor/widget.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
+#include "core/ncsb/scene_metadata.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -38,12 +43,27 @@ class NodeDetails : public editor::Widget, public imp::Rememberer {
   bool HasContent() const override;
 
  private:
+  // Draws a text field to change the name of the active nodes.
+  void DrawNameField(NodeHandle first_node);
+
+  // Draws a label showing the base URL of the active node.
+  void DrawBaseUrlLabel(ComponentHandle<SceneMetadata> scene_metadata);
+
+  // Draws a checkbox to enable/disable the active nodes.
+  void DrawEnabledCheckbox(NodeHandle first_node,
+                           ComponentHandle<SceneMetadata> scene_metadata);
+
+  // Draws a button to save the active node to file.
+  void DrawSaveButton(NodeHandle first_node,
+                      ComponentHandle<SceneMetadata> scene_metadata);
+
   // Saves the active node to file.
   absl::Status Save(NodeHandle target_node);
 
   BaseView& view_;
   CommandManager& command_manager_;
-  NodeHandle active_node_;
+  absl::flat_hash_set<NodeHandle> active_nodes_;
+  std::string display_name_;
 };
 
 }  // namespace imp::editor

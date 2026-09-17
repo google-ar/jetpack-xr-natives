@@ -82,7 +82,7 @@ void SceneMetadata::PushBaseComponentSources(
 }
 
 const SceneMetadata::ComponentSource* SceneMetadata::GetBaseComponentSource(
-    HashValue component_type) {
+    HashValue component_type) const {
   auto itr = base_component_sources_.find(component_type);
   if (itr == base_component_sources_.end()) {
     return nullptr;

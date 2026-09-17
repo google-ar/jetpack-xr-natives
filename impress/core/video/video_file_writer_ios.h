@@ -31,7 +31,7 @@ class VideoFileWriterIos : public VideoWriter {
 };
 
 std::unique_ptr<VideoWriter> CreateVideoFileWriterIos(
-    bool record_microphone_audio);
+    filament::Engine& engine, bool record_microphone_audio);
 
 }  // namespace video
 }  // namespace imp

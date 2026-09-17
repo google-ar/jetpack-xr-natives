@@ -97,6 +97,7 @@ cc_library(
         "@third_party//filament/filament/backend:backend_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
+        "@third_party//split_engine:split_engine_schema_version",
     ] + if_emscripten([
         "@third_party//gl:GLES3_headers",
         "//core/image:wasm_decode_image",
@@ -188,6 +189,7 @@ cc_library(
         "//core/common:trace",
         "//core/ncsb",
         "//core/view:base_view",
+        "//core/view:view_events",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
@@ -196,6 +198,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament/backend:platform",

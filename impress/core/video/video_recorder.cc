@@ -15,8 +15,12 @@
 #include "core/video/video_recorder.h"
 
 #include <memory>
+#include <string>
 
+#include "absl/memory/memory.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "filament/filament/include/filament/Engine.h"
 #include "core/config.h"
 #include "core/math/vec.h"
 
@@ -28,9 +32,10 @@
 
 namespace imp {
 namespace video {
-VideoRecorder::VideoRecorder(bool record_microphone_audio)
+VideoRecorder::VideoRecorder(filament::Engine& engine,
+                             bool record_microphone_audio)
 #if IMP_PLATFORM(IOS)
-    : video_writer_(CreateVideoFileWriterIos(record_microphone_audio))
+    : video_writer_(CreateVideoFileWriterIos(engine, record_microphone_audio))
 #else
     : video_writer_(std::make_unique<VideoWriterNoop>())
 #endif
@@ -42,12 +47,16 @@ VideoRecorder::~VideoRecorder() { Close().Get().IgnoreError(); }
 Future<std::unique_ptr<VideoRecorder>> VideoRecorder::Open(
     BaseView* view, absl::string_view filename, bool record_microphone_audio) {
   uint2 dimensions = view->GetHost()->GetPixelDimensions();
+  filament::Engine* engine = view->GetHost()->GetEngine();
+  if (engine == nullptr) {
+    return absl::InternalError("Filament Engine is null.");
+  }
   return Future<std::unique_ptr<VideoRecorder>>::Schedule(
-             [dimensions, filename = std::string(filename),
+             [engine, dimensions, filename = std::string(filename),
               record_microphone_audio]() mutable
                  -> absl::StatusOr<std::unique_ptr<VideoRecorder>> {
-               auto video_recorder =
-                   absl::WrapUnique(new VideoRecorder(record_microphone_audio));
+               auto video_recorder = absl::WrapUnique(
+                   new VideoRecorder(*engine, record_microphone_audio));
                MP_RETURN_IF_ERROR(
                    video_recorder->video_writer_->Open(dimensions, filename));
 

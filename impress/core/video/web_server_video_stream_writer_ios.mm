@@ -18,10 +18,12 @@
 
 #include <functional>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #import <Foundation/Foundation.h>
 #import <VideoToolbox/VideoToolbox.h>
+#include "third_party/absl/cleanup/cleanup.h"
 #include "core/common/log.h"
 #include "third_party/absl/memory/memory.h"
 #include "third_party/absl/status/status.h"
@@ -39,6 +41,7 @@
 #include "core/ui_stream/web_server.h"
 #include "core/video/video_writer.h"
 #include "core/video/video_writer_frame.h"
+#include "core/view/base_view.h"
 #include "core/window/filament_host.h"
 
 namespace imp {
@@ -54,7 +57,13 @@ using imp::ui_stream::WebServer;
 
 WebServerVideoStreamWriterIos::WebServerVideoStreamWriterIos() {}
 
-WebServerVideoStreamWriterIos::~WebServerVideoStreamWriterIos() { static_cast<void>(Close()); }
+WebServerVideoStreamWriterIos::~WebServerVideoStreamWriterIos() {
+  static_cast<void>(Close());
+  if (engine_) {
+    if (headless_swap_chain_) engine_->destroy(headless_swap_chain_);
+    if (renderer_) engine_->destroy(renderer_);
+  }
+}
 
 // Callback for VTCompressionSession. This is called on a thread managed by
 // VideoToolbox when the compression session has finished encoding a frame.
@@ -77,7 +86,7 @@ void WebServerVideoStreamWriterIos::CompressionCallback(void* outputCallbackRefC
   std::vector<char> output_buffer;
 
   {
-    absl::MutexLock lock(&writer->mutex_);
+    absl::MutexLock lock(writer->mutex_);
     if (!writer->web_server_) return;
 
     CMFormatDescriptionRef format = CMSampleBufferGetFormatDescription(sampleBuffer);
@@ -119,7 +128,7 @@ void WebServerVideoStreamWriterIos::CompressionCallback(void* outputCallbackRefC
 
 // Opens the web server and initializes the compression session.
 absl::Status WebServerVideoStreamWriterIos::Open(uint2 dimensions, absl::string_view filename) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (dimensions.x > 0 && dimensions.y > 0) {
     dimensions_ = {static_cast<int>(dimensions.x), static_cast<int>(dimensions.y)};
   } else {
@@ -134,13 +143,13 @@ absl::Status WebServerVideoStreamWriterIos::Open(uint2 dimensions, absl::string_
 
   web_server_ = std::make_unique<WebServer>();
   {
-    absl::MutexLock lock(&callback_mutex_);
+    absl::MutexLock lock(callback_mutex_);
     // set web server port before starting
     web_server_->SetPorts(http_port_, ui_stream_port_, script_port_);
   }
   MP_RETURN_IF_ERROR(web_server_->Start());
   {
-    absl::MutexLock lock(&callback_mutex_);
+    absl::MutexLock lock(callback_mutex_);
     if (client_connected_callback_) {
       web_server_->SetOnConnectionChangedCallback(client_connected_callback_);
     }
@@ -148,12 +157,16 @@ absl::Status WebServerVideoStreamWriterIos::Open(uint2 dimensions, absl::string_
       web_server_->SetOnScriptMessageCallback(on_script_message_callback_);
     }
     web_server_->SetOnWebSocketConnectedCallback([this]() {
-      absl::MutexLock lock(&mutex_);
+      absl::MutexLock lock(mutex_);
       is_ready_ = true;
       sent_config_ = false;
       force_key_frame_ = true;
       if (web_server_) web_server_->BroadcastTextMessage("{\"type\": \"ready\"}");
     });
+  }
+  engine_ = BaseView::GetSharedEngine();
+  if (!engine_) {
+    return absl::InternalError("Failed to get shared Filament engine");
   }
   open_ = true;
   return absl::OkStatus();
@@ -165,12 +178,30 @@ absl::Status WebServerVideoStreamWriterIos::Open(uint2 dimensions, absl::string_
 void WebServerVideoStreamWriterIos::CaptureFrame(window::FilamentHost* filament_host) {
   VTCompressionSessionRef old_session = nullptr;
   CVPixelBufferPoolRef old_pool = nullptr;
+  filament::SwapChain* swap_chain_to_destroy = nullptr;
+  filament::Renderer* renderer_to_destroy = nullptr;
   std::vector<std::unique_ptr<VideoFrame>> frames_to_wait_on;
   bool just_resized = false;
   {
-    absl::MutexLock lock(&mutex_);
-    if (!open_ || !is_ready_) return;
-    if (needs_resize_) {
+    absl::MutexLock lock(mutex_);
+    if (pending_cleanup_) {
+      if (!video_frames_.empty()) {
+        video_frames_.back()->SetFence(filament_host->GetEngine()->createFence());
+      }
+      frames_to_wait_on = std::move(video_frames_);
+      video_frames_.clear();
+      swap_chain_to_destroy = headless_swap_chain_;
+      headless_swap_chain_ = nullptr;
+      renderer_to_destroy = renderer_;
+      renderer_ = nullptr;
+      pending_cleanup_ = false;
+    }
+    if (!open_) {
+      // Continue cleanup if needed, even if not open.
+    } else if (is_ready_ && needs_resize_) {
+      if (!video_frames_.empty()) {
+        video_frames_.back()->SetFence(filament_host->GetEngine()->createFence());
+      }
       frames_to_wait_on = std::move(video_frames_);
       video_frames_.clear();
       old_pool = pixel_buffer_pool_;
@@ -185,6 +216,11 @@ void WebServerVideoStreamWriterIos::CaptureFrame(window::FilamentHost* filament_
       force_key_frame_ = true;
     }
   }
+  // Perform potentially blocking or cross-thread unsafe operations outside the lock.
+  for (std::unique_ptr<VideoFrame>& frame : frames_to_wait_on) {
+    frame->WaitOnFence();
+  }
+  frames_to_wait_on.clear();
 
   if (old_session) {
     VTCompressionSessionInvalidate(old_session);
@@ -193,19 +229,33 @@ void WebServerVideoStreamWriterIos::CaptureFrame(window::FilamentHost* filament_
   if (old_pool) {
     CFRelease(old_pool);
   }
+  if (swap_chain_to_destroy && engine_) {
+    engine_->destroy(swap_chain_to_destroy);
+  }
+  if (renderer_to_destroy && engine_) {
+    engine_->destroy(renderer_to_destroy);
+  }
 
   filament::math::int2 capture_dims;
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     if (!open_ || !is_ready_ || needs_resize_) return;
     capture_dims = dimensions_;
   }
-
   absl::StatusOr<std::unique_ptr<VideoFrame>> video_frame_or =
       CreateVideoFrame(filament_host, capture_dims);
   if (video_frame_or.ok()) {
-    absl::MutexLock lock(&mutex_);
+    window::FilamentHost::DevModeExtension* extension = filament_host->TryGetExtension();
+    if (extension) {
+      extension->ApplyTextureRenderTarget(video_frame_or.value()->GetTexture());
+    }
+    absl::MutexLock lock(mutex_);
     if (open_ && is_ready_ && !needs_resize_) {
+      // The previously added frame (if any) just had its rendering commands submitted.
+      // We can now create a fence to wait on those commands.
+      if (!video_frames_.empty()) {
+        video_frames_.back()->SetFence(filament_host->GetEngine()->createFence());
+      }
       video_frames_.push_back(std::move(video_frame_or.value()));
     }
   }
@@ -216,7 +266,7 @@ void WebServerVideoStreamWriterIos::WriteFrame() {
   std::unique_ptr<VideoFrame> frame_to_write;
   VTCompressionSessionRef session = nullptr;
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     if (!open_ || !is_ready_) return;
     if (video_frames_.size() < kMinFramesToCapture) return;
     frame_to_write = std::move(video_frames_.front());
@@ -235,20 +285,17 @@ Future<absl::Status> WebServerVideoStreamWriterIos::Close() {
   std::shared_ptr<WebServer> server_to_stop;
   VTCompressionSessionRef session_to_release = nullptr;
   CVPixelBufferPoolRef pool_to_release = nullptr;
-  filament::Renderer* renderer_to_destroy = nullptr;
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     if (!open_) return Future<absl::Status>(absl::OkStatus());
     open_ = false;
     is_ready_ = false;
+    pending_cleanup_ = true;
     server_to_stop = std::move(web_server_);
     session_to_release = compression_session_;
     compression_session_ = nullptr;
     pool_to_release = pixel_buffer_pool_;
     pixel_buffer_pool_ = nullptr;
-    renderer_to_destroy = renderer_;
-    renderer_ = nullptr;
-    video_frames_.clear();
   }
   if (session_to_release) {
     VTCompressionSessionInvalidate(session_to_release);
@@ -256,7 +303,6 @@ Future<absl::Status> WebServerVideoStreamWriterIos::Close() {
   }
   if (server_to_stop) server_to_stop->Stop();
   if (pool_to_release) CFRelease(pool_to_release);
-  if (renderer_to_destroy && engine_) engine_->destroy(renderer_to_destroy);
   return Future<absl::Status>(absl::OkStatus());
 }
 
@@ -273,7 +319,7 @@ uint2 WebServerVideoStreamWriterIos::GetDimensions() const {
 void WebServerVideoStreamWriterIos::ProcessInput(window::FilamentHost* host) {
   if (!web_server_) return;
   std::vector<WebInputEvent> inputs = web_server_->PopInputs();
-  for (const auto& event : inputs) {
+  for (const WebInputEvent& event : inputs) {
     int width = event.width & ~1;
     int height = event.height & ~1;
     if (width > 0 && height > 0) {
@@ -300,10 +346,13 @@ void WebServerVideoStreamWriterIos::SetOnClientConnectedCallback(
     {
       absl::MutexLock lock(&mutex_);
       if (connected) {
-        SetRemoteScreenMode();
+        is_ready_ = true;
+        needs_resize_ = true;
+        sent_config_ = false;
+        force_next_resize_ = true;
+        initial_time_ = absl::nullopt;
       } else {
         is_ready_ = false;
-        // video_frames_.clear() moved to thread-safe locations (Close/CaptureFrame)
         needs_resize_ = true;
         sent_config_ = false;
       }
@@ -313,6 +362,9 @@ void WebServerVideoStreamWriterIos::SetOnClientConnectedCallback(
   {
     absl::MutexLock lock(&callback_mutex_);
     client_connected_callback_ = wrapped_callback;
+  }
+  {
+    absl::MutexLock lock(&mutex_);
     if (web_server_) web_server_->SetOnConnectionChangedCallback(wrapped_callback);
   }
 }
@@ -372,15 +424,12 @@ absl::StatusOr<CVPixelBufferRef> WebServerVideoStreamWriterIos::GetPixelBuffer()
 }
 
 bool WebServerVideoStreamWriterIos::CreateCompressionSession(int2 dims) {
-  if (compression_session_) VTCompressionSessionInvalidate(compression_session_);
-  OSStatus res = VTCompressionSessionCreate(
-      nullptr, dims.x, dims.y, kCMVideoCodecType_H264, nullptr, nullptr, 0,
-      [](void* outputCallbackRefCon, void* sourceFrameRefCon, OSStatus status,
-         VTEncodeInfoFlags infoFlags, CMSampleBufferRef sampleBuffer) {
-        CompressionCallback(outputCallbackRefCon, sourceFrameRefCon, status, infoFlags,
-                            sampleBuffer);
-      },
-      this, &compression_session_);
+  // Note: Caller MUST NOT hold mutex_ when calling this, as it may call back on another thread
+  // that tries to acquire mutex_ (e.g. during invalidation).
+  // Actually, here we just do creation. Invalidation happens outside in CaptureFrame.
+  OSStatus res =
+      VTCompressionSessionCreate(nullptr, dims.x, dims.y, kCMVideoCodecType_H264, nullptr, nullptr,
+                                 0, CompressionCallback, this, &compression_session_);
   if (res != noErr) return false;
   VTSessionSetProperty(compression_session_, kVTCompressionPropertyKey_RealTime, kCFBooleanTrue);
   VTSessionSetProperty(compression_session_, kVTCompressionPropertyKey_AllowFrameReordering,
@@ -405,6 +454,8 @@ absl::StatusOr<std::unique_ptr<VideoFrame>> WebServerVideoStreamWriterIos::Creat
     window::FilamentHost* filament_host, int2 dims) {
   absl::StatusOr<CVPixelBufferRef> pxbuffer_or = GetPixelBuffer();
   MP_RETURN_IF_ERROR(pxbuffer_or.status());
+  CVPixelBufferRef pxbuffer = pxbuffer_or.value();
+  absl::Cleanup release_buffer = [pxbuffer] { CVPixelBufferRelease(pxbuffer); };
   double seconds = 0;
   {
     absl::MutexLock lock(&mutex_);
@@ -412,37 +463,14 @@ absl::StatusOr<std::unique_ptr<VideoFrame>> WebServerVideoStreamWriterIos::Creat
     seconds = absl::ToDoubleSeconds(absl::Now() - initial_time_.value());
   }
   std::unique_ptr<VideoFrame> video_frame =
-      std::make_unique<VideoFrame>(*filament_host->GetEngine(), pxbuffer_or.value(), seconds);
+      std::make_unique<VideoFrame>(*filament_host->GetEngine(), pxbuffer, seconds);
 
-  filament::Renderer* local_renderer = nullptr;
-  {
-    absl::MutexLock lock(&mutex_);
-    if (!open_) return video_frame;
-    if (!renderer_) {
-      renderer_ = filament_host->GetEngine()->createRenderer();
-      engine_ = filament_host->GetEngine();
-    }
-    local_renderer = renderer_;
-  }
+  // Note: the original manual beginFrame/render/endFrame cycle has been removed because
+  // DefaultDevModeExtension::OffscreenRender will now do the rendering if we pass the
+  // texture directly to it via ApplyTextureRenderTarget.
 
-  if (!local_renderer) return video_frame;
-
-  auto* extension = filament_host->TryGetExtension();
-  if (!extension) return video_frame;
-  window::detail::FilamentView* ui_view_wrapper = extension->GetUiView();
-  if (!ui_view_wrapper || !ui_view_wrapper->Get()) return video_frame;
-
-  filament::View* view = ui_view_wrapper->Get();
-  if (local_renderer->beginFrame(video_frame->GetSwapChain())) {
-    filament::Renderer::ClearOptions clear_options;
-    clear_options.clearColor = {0.0f, 0.0f, 0.0f, 0.0f};
-    clear_options.clear = true;
-    local_renderer->setClearOptions(clear_options);
-    local_renderer->render(view);
-    local_renderer->endFrame();
-  } else {
-    return absl::InternalError("Failed to begin frame for video stream");
-  }
+  // We no longer create a fence here because the rendering commands haven't been
+  // submitted yet. We must create the fence AFTER the frame has been rendered.
   return video_frame;
 }
 

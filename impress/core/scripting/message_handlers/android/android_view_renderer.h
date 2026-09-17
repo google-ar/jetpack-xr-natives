@@ -141,6 +141,9 @@ class AndroidViewRenderer : public Component {
   // Returns the scale of renderer_node_.
   imp::float2 GetQuadNodeLocalScale();
 
+  // Returns the scale of renderer_node_.
+  imp::float2 GetQuadNodeWorldScale();
+
  private:
   // A variant of the default unlit material or a custom material.
   using TextureMaterialVariant =

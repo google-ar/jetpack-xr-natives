@@ -71,6 +71,28 @@ cc_library(
 )
 
 cc_library(
+    name = "base_material_handle",
+    srcs = [
+        "base_material_handle.cc",
+    ],
+    hdrs = [
+        "base_material_handle.h",
+    ],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        "//core/async:future",
+        "//core/common:hash",
+        "//core/common:small_source_location",
+        "//core/materials",
+        "//core/proto:proto_common",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "material_handle",
     srcs = [
         "material_handle.cc",
@@ -81,10 +103,17 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        "//core/common:hash",
-        "//core/common:small_source_location",
+        ":base_material_handle",
+        "//core/assets",
+        "//core/assets:proto_asset",
+        "//core/async:future",
+        "//core/common:registry",
         "//core/materials",
-        "//core/proto:proto_common",
+        "//core/render:material_registry",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "//core/view/framework:framework_proto_cc",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
     ],
     alwayslink = 1,

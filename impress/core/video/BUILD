@@ -413,6 +413,7 @@ cc_library(
         "@com_google_absl//absl/types:optional",
         "@third_party//filament/filament:filament_hdrs",
         "//core/ui_stream:web_server_ios",
+        "//core:config",
     ]),
     alwayslink = 1,
 )
@@ -441,6 +442,7 @@ cc_library(
         "//core/view/framework",
         "//core/view/utils:asset",
         "//core/window:filament_host",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@third_party//filament/filament:filament_hdrs",
@@ -485,16 +487,19 @@ objc_library(
     copts = imp_google3_copts(),
     features = ["-layering_check"],
     deps = [
+        "//core:config",
         "//core/async:future",
         "//core/common",
         "//core/math",
         "//core/ui_stream:web_server_ios",
+        "//core/view:base_view",
         "//core/window:filament_host",
         "//third_party/apple_frameworks:AVFoundation",
         "//third_party/apple_frameworks:CoreMedia",
         "//third_party/apple_frameworks:CoreVideo",
         "//third_party/apple_frameworks:Foundation",
         "//third_party/apple_frameworks:VideoToolbox",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -505,7 +510,6 @@ objc_library(
         "@com_google_absl//absl/types:optional",
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
-        "@third_party//filament/filament/backend:backend_hdrs",
     ],
 )
 

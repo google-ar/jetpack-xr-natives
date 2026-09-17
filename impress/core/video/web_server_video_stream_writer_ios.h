@@ -29,6 +29,7 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "filament/filament/include/filament/Renderer.h"
+#include "core/config.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/ui_stream/web_server.h"
@@ -52,6 +53,7 @@ typedef const struct __CFDictionary* CFDictionaryRef;
 typedef const struct __CFArray* CFArrayRef;
 typedef struct opaqueCMFormatDescription* CMFormatDescriptionRef;
 typedef int OSStatus;
+typedef unsigned int VTEncodeInfoFlags;
 #endif
 
 namespace imp {
@@ -95,7 +97,7 @@ class WebServerVideoStreamWriterIos : public VideoWriter {
  private:
   static void CompressionCallback(void* outputCallbackRefCon,
                                   void* sourceFrameRefCon, OSStatus status,
-                                  unsigned int infoFlags,
+                                  VTEncodeInfoFlags infoFlags,
                                   CMSampleBufferRef sampleBuffer);
 
   absl::StatusOr<CVPixelBufferRef> GetPixelBuffer();
@@ -115,14 +117,20 @@ class WebServerVideoStreamWriterIos : public VideoWriter {
   bool open_ = false;
   bool needs_resize_ = false;
   bool is_ready_ = false;
+  bool pending_cleanup_ = false;
   bool force_key_frame_ = false;
   bool sent_config_ = false;
   bool force_next_resize_ = false;
   std::string codec_string_;
   std::unique_ptr<ui_stream::WebServer> web_server_;
+
   VTCompressionSessionRef compression_session_ = nullptr;
   CVPixelBufferPoolRef pixel_buffer_pool_ = nullptr;
+
   filament::Renderer* renderer_ = nullptr;
+  filament::SwapChain* headless_swap_chain_ = nullptr;
+  int headless_swap_chain_width_ = 0;
+  int headless_swap_chain_height_ = 0;
   filament::Engine* engine_ = nullptr;
   absl::Mutex callback_mutex_;
   std::function<void(bool)> client_connected_callback_;

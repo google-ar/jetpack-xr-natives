@@ -24,12 +24,18 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/async/future.h"
 #include "core/common/trace.h"
+#include "core/material_library/generic_material.h"
+#include "core/material_library/generic_material_impl.h"
+#include "core/material_library/generic_material_spec.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/custom_material.h"
 #include "core/materials/material.h"
 #include "core/render/image_asset.h"
@@ -38,16 +44,20 @@
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
 #include "core/view/utils/asset.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
 
 namespace {
-bool IsPlaceholderSplitEngineMaterial(const filament::Material* material) {
+// When running in split engine mode, this is used to determine if the material
+// is a split engine material or an app-side material. If the material has
+// no source available at runtime, it can't be serialized to the backend and
+// thus should be treated as a local material.
+bool IsLocalMaterial(const filament::Material* material) {
   if (material) {
-    // TODO: (broken link) - Find a better way to check the placeholder material.
-    return strcmp(material->getName(), "Split Engine Placeholder") == 0;
+    return material->getSource().empty();
   }
-  return false;
+  return true;
 }
 }  // namespace
 
@@ -103,8 +113,7 @@ MaterialPtr MaterialFactory::CreateMaterial(
           ->enable_filament_material_instance_destruction_check.Value()));
 
   if (auto serializer = view_->GetSplitEngineSerializer();
-      serializer && !IsPlaceholderSplitEngineMaterial(
-                        material_asset->GetFilamentMaterial())) {
+      serializer && !IsLocalMaterial(material_asset->GetFilamentMaterial())) {
     serializer->AddMaterialInstance(material_asset->GetFilamentMaterial(),
                                     material->GetFilamentMaterialInstance());
     return serializer->CreateCustomMaterial(std::move(material));
@@ -140,8 +149,7 @@ MaterialPtr MaterialFactory::WrapMaterial(
           ->enable_filament_material_instance_destruction_check.Value()));
 
   if (auto serializer = view_->GetSplitEngineSerializer();
-      serializer &&
-      !IsPlaceholderSplitEngineMaterial(material_instance->getMaterial())) {
+      serializer && !IsLocalMaterial(material_instance->getMaterial())) {
     serializer->AddMaterialInstance(material_instance->getMaterial(),
                                     material_instance);
     return serializer->CreateCustomMaterial(std::move(material));
@@ -194,6 +202,30 @@ Future<absl::Status> MaterialFactory::SetMaterialParameters(
     }
   }
   return parameters_future;
+}
+
+Future<OwnedGenericMaterialPtr> MaterialFactory::LoadGltfMaterial(
+    const GenericMaterialSpec& spec,
+    absl::optional<GltfAsset::LoadOptions> options) {
+  // Steps to load a glTF generic material:
+  // 1. Get the material package for the given glTF LoadOptions.
+  //    This contains the set of materials, one is picked based on the spec.
+  // 2. Get the materials from the material package for the given spec.
+  // 3. Create a GenericMaterial from the materials provided by the package.
+  // 4. Initialize the parameters to their default values.
+  return view_->GetAssetManager()
+      .GetGltfGenericMaterialPackage(options)
+      .GetOrLoadMaterials(*view_, BaseView::GetSharedEngine(), {spec})
+      .Then([this, spec](MaterialPackage::MaterialCache material_cache) {
+        return GenericMaterialImpl::Create(*view_, spec, material_cache);
+      })
+      .Then([](GenericMaterialPtr generic_material)
+                -> absl::StatusOr<OwnedGenericMaterialPtr> {
+        // Ensure default parameters are assigned.
+        MP_RETURN_IF_ERROR(generic_material->AssignTexturesAndParams({}, {}));
+
+        return OwnedGenericMaterialPtr(std::move(generic_material));
+      });
 }
 
 }  // namespace imp

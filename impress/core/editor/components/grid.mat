@@ -17,6 +17,16 @@ material {
     requires : [
         "position"
     ],
+    parameters : [
+        {
+            type : float,
+            name : majorGridScale
+        },
+        {
+            type : float,
+            name : minorGridScale
+        }
+    ],
     shadingModel : "unlit",
     blending : "transparent",
     depthWrite: false,
@@ -26,7 +36,6 @@ material {
 
 fragment {
     float getGridIntensity(vec2 pos, vec2 dpdx, vec2 dpdy, float gridScale) {
-        float lineScale = 500.0; // lines per cell
         const float oo_root2 = 0.70710678118654757;
         float m =
           length(vec2(length(dpdx), length(dpdy))) * oo_root2 * gridScale;
@@ -34,8 +43,9 @@ fragment {
         vec2 cellCoord = fract(gridCoord);
         vec2 distFromCenter = 0.5 - abs(vec2(0.5) - cellCoord);
         vec2 distFromSides = 0.5 - distFromCenter;
-        float lineBoundary = 1.0 / lineScale;
-        vec2 sdf = vec2(0.5 + (1.0 * lineBoundary)) - distFromSides;
+        float thickness = 1.0;
+        float lineBoundary = thickness * m;
+        vec2 sdf = vec2(0.5 + lineBoundary) - distFromSides;
         float alphaX = smoothstep(0.5 - m, 0.5 + m, sdf.x);
         float alphaY = smoothstep(0.5 - m, 0.5 + m, sdf.y);
         float fadeTerm = max(0.0, pow(1.0 - min(m, 1.0), 8.0));
@@ -52,15 +62,11 @@ fragment {
         // Based on (broken link).
         const vec3 colorM = vec3(0.12, 0.12, 0.14);
         const vec3 colorDM = vec3(0.23, 0.25, 0.26);
-        const vec3 colorCM = vec3(0.37, 0.38, 0.40);
-        const vec3 colorMM = vec3(0.50, 0.52, 0.54);
 
-        float alphaM = getGridIntensity(pos, dpdx, dpdy, 1.0);
-        float alphaDM = max(0.0, getGridIntensity(pos, dpdx, dpdy, 10.0) - alphaM);
-        float alphaCM = max(0.0, getGridIntensity(pos, dpdx, dpdy, 100.0) - (alphaM + alphaDM));
-        float alphaMM = max(0.0, getGridIntensity(pos, dpdx, dpdy, 1000.0) - (alphaM + alphaDM + alphaCM));
-        float c = alphaM + alphaDM + alphaCM + alphaMM;
-        vec3 rgb = colorM * alphaM + colorDM * alphaDM + colorCM * alphaCM + colorMM * alphaMM;
+        float alphaM = getGridIntensity(pos, dpdx, dpdy, materialParams.majorGridScale);
+        float alphaDM = max(0.0, getGridIntensity(pos, dpdx, dpdy, materialParams.minorGridScale) - alphaM);
+        float c = alphaM + alphaDM;
+        vec3 rgb = colorM * alphaM + colorDM * alphaDM;
         material.baseColor = vec4(rgb, c);
     }
 }

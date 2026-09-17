@@ -195,6 +195,7 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//split_engine:split_engine_schema_version",
     ],
     alwayslink = 1,
 )

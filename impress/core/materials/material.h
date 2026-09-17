@@ -256,6 +256,10 @@ class Material {
   virtual imp::StringMap<const filament::Texture*> GetUnownedFilamentTextures()
       const = 0;
 
+  // Returns true if the material owns the memory (and is therefore responsible
+  // for the destruction) of any textures assigned to its parameters.
+  virtual bool HoldsOwnedTextures() const = 0;
+
   // Invokes the given function on each texture used by the material.
   virtual void ForEachTexture(absl::FunctionRef<void(BorrowedTexturePtr)> fn,
                               SmallSourceLocation loc) = 0;

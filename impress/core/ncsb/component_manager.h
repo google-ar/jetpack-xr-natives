@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -298,31 +299,11 @@ Component::AddResult<T, Args...> ComponentManager::Add(NodeHandle node,
 template <typename T, typename... Args>
 Component::AddWithStateResult<T, Args...> ComponentManager::AddWithState(
     NodeHandle node, typename T::IsfInfo::StateT state, Args&&... args) {
-  if constexpr (component_traits::kComponentRequiresAsyncPreload<T>) {
-    Future<absl::Status> preload_future =
-        AsyncPreloadVisitor::Preload(state, *view_);
-    // TODO: Consider passing in the preload future to
-    // AddWithoutSetup.
-    return preload_future.Then(
-        [this, node, state = std::move(state),
-         args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
-          ComponentHandle<T> comp = AddWithoutSetup<T>(node);
-          T::IsfInfo::GetState(comp) = std::move(state);
-          return std::apply(
-              [this, comp](auto&&... args) {
-                return this
-                    ->SetupComponentAfterAdd<SetupMode::kSetupWithStateOrSetup>(
-                        comp, std::forward<decltype(args)>(args)...);
-              },
-              std::move(args));
-        });
-  } else {
-    ComponentHandle<T> comp = AddWithoutSetup<T>(node);
-    // Copy the state to the component's state field.
-    T::IsfInfo::GetState(comp) = std::move(state);
-    return SetupComponentAfterAdd<SetupMode::kSetupWithStateOrSetup>(
-        comp, std::forward<Args>(args)...);
-  }
+  ComponentHandle<T> comp = AddWithoutSetup<T>(node);
+  // Copy the state to the component's state field.
+  T::IsfInfo::GetState(comp) = std::move(state);
+  return SetupComponentAfterAdd<SetupMode::kSetupWithStateOrSetup>(
+      comp, std::forward<Args>(args)...);
 }
 
 template <ComponentManager::SetupMode setup_mode, typename T, typename... Args>
@@ -337,14 +318,25 @@ auto ComponentManager::SetupComponentAfterAdd(ComponentHandle<T> comp,
                 "Component Setup method must return either "
                 "imp::Future<absl::Status>, absl::Status, or void.");
 
+  // "kSetupWithStateOrSetup" implies that the Setup call is coming from either
+  // AddComponentWithState, or loading an Isf file. That situation indicates
+  // that the State has been assigned so we must check if the state requires
+  // preloading.
+  constexpr bool kRequiresPreload =
+      setup_mode == SetupMode::kSetupWithStateOrSetup &&
+      component_traits::kComponentRequiresAsyncPreload<T>;
+
+  using SetupWithoutAddResultT =
+      std::conditional_t<kRequiresPreload, Future<absl::Status>, SetupResultT>;
+
   // Call Setup method and transform the result of Setup (i.e. void,
   // absl::Status, or Future<absl::Status>) into the result of Add (i.e.
   // ComponentHandle<T>, absl::StatusOr<ComponentHandle<T>>, or
   // Future<ComponentHandle<T>>).
-  if constexpr (std::is_same_v<SetupResultT, void>) {
+  if constexpr (std::is_same_v<SetupWithoutAddResultT, void>) {
     SetupWithoutAdd<setup_mode>(comp, true, std::forward<Args>(args)...);
     return comp;
-  } else if constexpr (std::is_same_v<SetupResultT, absl::Status>) {
+  } else if constexpr (std::is_same_v<SetupWithoutAddResultT, absl::Status>) {
     using ReturnT = absl::StatusOr<ComponentHandle<T>>;
     absl::Status status =
         SetupWithoutAdd<setup_mode>(comp, true, std::forward<Args>(args)...);
@@ -353,7 +345,7 @@ auto ComponentManager::SetupComponentAfterAdd(ComponentHandle<T> comp,
     }
     return ReturnT(comp);
   } else {
-    static_assert(std::is_same_v<SetupResultT, Future<absl::Status>>);
+    static_assert(std::is_same_v<SetupWithoutAddResultT, Future<absl::Status>>);
     return SetupWithoutAdd<setup_mode>(comp, true, std::forward<Args>(args)...)
         .Then([comp]() { return comp; });
   }
@@ -399,48 +391,87 @@ auto ComponentManager::SetupWithoutAdd(ComponentHandle<T> comp,
 
   ComponentPool<T>& pool = GetComponentPool<T>();
 
+  // "kSetupWithStateOrSetup" implies that the Setup call is coming from either
+  // AddComponentWithState, or loading an Isf file. That situation indicates
+  // that the State has been assigned so we must check if the state requires
+  // preloading.
+  constexpr bool kRequiresPreload =
+      setup_mode == SetupMode::kSetupWithStateOrSetup &&
+      component_traits::kComponentRequiresAsyncPreload<T>;
+
   // If the editor is in edit mode, skip running Setup for components that
   // shouldn't run in edit mode. This is so components remain in their initial
   // state until the Play button is pressed. When switching to Play mode, the
   // entire scene graph is re-created which will cause this method to be called
   // again and Setup to be invoked.
 #if IMP_RUNTIME(DEV)
+  using FinalResultT =
+      std::conditional_t<kRequiresPreload, Future<absl::Status>, SetupResultT>;
   if (!comp->IsEditorStaging()) {
     if constexpr (!component_traits::kShouldRunInEditMode<T>) {
       if (editor::IsInEditMode(view_->GetRegistry())) {
         pool.PostSetup(*comp, should_enable_component);
 
-        if constexpr (std::is_same_v<SetupResultT, void>) {
+        if constexpr (std::is_same_v<FinalResultT, void>) {
           return;
-        } else if constexpr (std::is_same_v<SetupResultT, absl::Status>) {
+        } else if constexpr (std::is_same_v<FinalResultT, absl::Status>) {
           return absl::OkStatus();
         } else {
-          static_assert(std::is_same_v<SetupResultT, Future<absl::Status>>);
+          static_assert(std::is_same_v<FinalResultT, Future<absl::Status>>);
           return Future<absl::Status>(absl::OkStatus());
         }
       }
     }
   }
 #endif
+  if constexpr (kRequiresPreload) {
+    typename T::IsfInfo::StateT& state = T::IsfInfo::GetState(comp);
+    Future<absl::Status> preload_future =
+        AsyncPreloadVisitor::Preload(state, *view_);
 
-  if constexpr (std::is_same_v<SetupResultT, void>) {
-    InvokeSetupVoid<setup_mode>(comp, std::forward<Args>(args)...);
-    pool.PostSetup(*comp, should_enable_component);
-    return;
-  } else if constexpr (std::is_same_v<SetupResultT, absl::Status>) {
-    absl::Status status =
-        InvokeSetup<setup_mode>(comp, std::forward<Args>(args)...);
-    if (!status.ok()) {
-      pool.Remove(comp.GetEntity());
-      return status;
-    }
-    pool.PostSetup(*comp, should_enable_component);
-    return absl::OkStatus();
+    Future<absl::Status> setup_chain = preload_future.Then(
+        [this, comp,
+         args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+          return std::apply(
+              [this, comp](auto&&... args) {
+                if constexpr (std::is_same_v<SetupResultT, void>) {
+                  this->InvokeSetupVoid<setup_mode>(
+                      comp, std::forward<decltype(args)>(args)...);
+                } else if constexpr (std::is_same_v<SetupResultT,
+                                                    absl::Status>) {
+                  return this->InvokeSetup<setup_mode>(
+                      comp, std::forward<decltype(args)>(args)...);
+                } else {
+                  static_assert(
+                      std::is_same_v<SetupResultT, Future<absl::Status>>);
+                  return this->InvokeSetup<setup_mode>(
+                      comp, std::forward<decltype(args)>(args)...);
+                }
+              },
+              std::move(args));
+        });
+
+    return pool.MakeSetupFuture(*comp, setup_chain, should_enable_component);
   } else {
-    static_assert(std::is_same_v<SetupResultT, Future<absl::Status>>);
-    return pool.MakeSetupFuture(
-        *comp, InvokeSetup<setup_mode>(comp, std::forward<Args>(args)...),
-        should_enable_component);
+    if constexpr (std::is_same_v<SetupResultT, void>) {
+      InvokeSetupVoid<setup_mode>(comp, std::forward<Args>(args)...);
+      pool.PostSetup(*comp, should_enable_component);
+      return;
+    } else if constexpr (std::is_same_v<SetupResultT, absl::Status>) {
+      absl::Status status =
+          InvokeSetup<setup_mode>(comp, std::forward<Args>(args)...);
+      if (!status.ok()) {
+        pool.Remove(comp.GetEntity());
+        return status;
+      }
+      pool.PostSetup(*comp, should_enable_component);
+      return absl::OkStatus();
+    } else {
+      static_assert(std::is_same_v<SetupResultT, Future<absl::Status>>);
+      return pool.MakeSetupFuture(
+          *comp, InvokeSetup<setup_mode>(comp, std::forward<Args>(args)...),
+          should_enable_component);
+    }
   }
 }
 
@@ -554,10 +585,6 @@ Component::AddResult<T, Args...> ComponentManager::GetOrAdd(NodeHandle node,
 template <typename T, typename... Args>
 Component::AddWithStateResult<T, Args...> ComponentManager::GetOrAddWithState(
     NodeHandle node, typename T::IsfInfo::StateT state, Args&&... args) {
-  // TODO: Support async preload for GetOrAddWithState.
-  static_assert(!component_traits::kComponentRequiresAsyncPreload<T>,
-                "GetOrAddWithState requires a component with a state that "
-                "requires async preload, which is not supported.");
   std::optional<Component::AddWithStateResult<T, Args...>> result =
       GetOrAddHelper<SetupMode::kSetupWithStateOrSetup, T, Args...>(
           node.GetEntity());

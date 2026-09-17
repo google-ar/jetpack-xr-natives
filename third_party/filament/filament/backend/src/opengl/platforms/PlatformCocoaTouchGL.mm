@@ -49,7 +49,7 @@ struct PlatformCocoaTouchGLImpl {
     GLuint mDefaultDepthbuffer = 0;
     CVOpenGLESTextureCacheRef mTextureCache = nullptr;
     CocoaTouchExternalImage::SharedGl* mExternalImageSharedGl = nullptr;
-    struct ExternalImageCocoaTouchGL : public Platform::ExternalImage {
+    struct ExternalImageCocoaTouchGL final : public Platform::ExternalImage {
         CVPixelBufferRef cvBuffer;
     protected:
         ~ExternalImageCocoaTouchGL() noexcept final;

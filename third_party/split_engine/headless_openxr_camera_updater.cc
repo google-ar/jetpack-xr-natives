@@ -20,6 +20,7 @@
 #include <memory>
 #include <vector>
 
+#include "absl/base/macros.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
@@ -112,8 +113,13 @@ absl::Status HeadlessOpenXrCameraUpdater::Setup() {
     }
   }
 
-  const char* extensions[] = {XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
-                              XR_MND_HEADLESS_EXTENSION_NAME};
+  const char* extensions[] = {
+      XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
+      XR_MND_HEADLESS_EXTENSION_NAME,
+      // Needed to get headpose in 'unbounded' space which is the space that the
+      // SplitEngine scene is rooted in.
+      XR_ANDROID_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
+  };
 
   XrInstanceCreateInfoAndroidKHR instance_create_info_android = {
       .type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR,
@@ -131,7 +137,7 @@ absl::Status HeadlessOpenXrCameraUpdater::Setup() {
               .engineVersion = 1,
               .apiVersion = XR_MAKE_VERSION(1, 0, 34),
           },
-      .enabledExtensionCount = 2,
+      .enabledExtensionCount = ABSL_ARRAYSIZE(extensions),
       .enabledExtensionNames = extensions,
   };
   absl::SNPrintF(instance_create_info.applicationInfo.applicationName,
@@ -162,7 +168,7 @@ absl::Status HeadlessOpenXrCameraUpdater::Setup() {
 
   XrReferenceSpaceCreateInfo space_create_info = {
       .type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
-      .referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL,
+      .referenceSpaceType = XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
       .poseInReferenceSpace =
           {
               .orientation = {0, 0, 0, 1},

@@ -38,6 +38,9 @@ enum class PanelId {
   kRightPanel,
   // The menu bar contains the widgets that are pinned to the top of the screen.
   kMenuBar,
+  // The settings bar is a panel directly below the menu bar, that contains
+  // settings features/toolbar.
+  kSettingsBar,
   // The tool bar is a panel in the top-middle of the screen, that houses
   // play/pause, etc.
   kToolBar,
@@ -61,6 +64,8 @@ inline std::string PanelIdToString(PanelId panel_id) {
       return "Right Panel";
     case PanelId::kMenuBar:
       return "Menu Bar";
+    case PanelId::kSettingsBar:
+      return "Settings Bar";
     case PanelId::kToolBar:
       return "Tool Bar";
     case PanelId::kTabBar:

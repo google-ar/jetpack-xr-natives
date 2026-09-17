@@ -14,12 +14,14 @@
 
 #include "core/split_engine/split_engine_renderable_info.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/span.h"
@@ -109,7 +111,18 @@ absl::Status SplitEngineRenderableInfo::SetPrimitiveMeshData(
 }
 
 void SplitEngineRenderableInfo::UpdateBones(
-    const std::vector<mat4f>& bone_transforms) {
+    const std::vector<mat4f>& bone_transforms, uint32_t offset) {
+  if (bone_transforms_.size() < skinning_bone_count_) {
+    bone_transforms_.resize(skinning_bone_count_);
+  }
+
+  // Check that the provided transforms are within the bone transforms bounds.
+  
+
+  // Copy updated transforms into the stored array.
+  std::copy_n(bone_transforms.begin(), bone_transforms.size(),
+              bone_transforms_.begin() + offset);
+
   for (PrimitiveInfo& primitive : primitives_) {
     if (!primitive.unskinned_mesh_data.vertex_data ||
         !primitive.unskinned_mesh_data.index_data ||
@@ -118,7 +131,7 @@ void SplitEngineRenderableInfo::UpdateBones(
     }
 
     UpdateSkinning(primitive.unskinned_mesh_data,
-                   *primitive.skinned_vertex_data, bone_transforms);
+                   *primitive.skinned_vertex_data, bone_transforms_);
   }
 }
 
@@ -169,6 +182,7 @@ SplitEngineRenderableInfo::GetAllMeshData() {
 void SplitEngineRenderableInfo::SetSkinningBoneCount(
     uint32_t skinning_bone_count) noexcept {
   skinning_bone_count_ = skinning_bone_count;
+  bone_transforms_.resize(skinning_bone_count_);
 }
 
 void SplitEngineRenderableInfo::SetRenderableBounds(

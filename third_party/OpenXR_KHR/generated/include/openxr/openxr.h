@@ -940,6 +940,9 @@ typedef enum XrStructureType {
     XR_TYPE_SPATIAL_MARKER_SIZE_EXT = 1000743004,
     XR_TYPE_SPATIAL_MARKER_STATIC_OPTIMIZATION_EXT = 1000743005,
     XR_TYPE_SPATIAL_COMPONENT_MARKER_LIST_EXT = 1000743006,
+    XR_TYPE_SPATIAL_BOUNDS_SPHEREF_ANDROID = 1000761000,
+    XR_TYPE_SPATIAL_BOUNDS_BOXF_ANDROID = 1000761001,
+    XR_TYPE_SPATIAL_BOUNDS_FRUSTUMF_ANDROID = 1000761002,
     XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ANCHOR_EXT = 1000762000,
     XR_TYPE_SPATIAL_COMPONENT_ANCHOR_LIST_EXT = 1000762001,
     XR_TYPE_SPATIAL_ANCHOR_CREATE_INFO_EXT = 1000762002,
@@ -12206,6 +12209,9 @@ typedef enum XrSpatialCapabilityEXT {
 typedef enum XrSpatialCapabilityFeatureEXT {
     XR_SPATIAL_CAPABILITY_FEATURE_MARKER_TRACKING_FIXED_SIZE_MARKERS_EXT = 1000743000,
     XR_SPATIAL_CAPABILITY_FEATURE_MARKER_TRACKING_STATIC_MARKERS_EXT = 1000743001,
+    XR_SPATIAL_CAPABILITY_FEATURE_SPHERE_BOUNDS_FILTER_ANDROID = 1000761000,
+    XR_SPATIAL_CAPABILITY_FEATURE_BOX_BOUNDS_FILTER_ANDROID = 1000761001,
+    XR_SPATIAL_CAPABILITY_FEATURE_FRUSTUM_BOUNDS_FILTER_ANDROID = 1000761002,
     XR_SPATIAL_CAPABILITY_FEATURE_MAX_ENUM_EXT = 0x7FFFFFFF
 } XrSpatialCapabilityFeatureEXT;
 
@@ -12734,6 +12740,39 @@ typedef struct XrSpatialComponentMarkerListEXT {
 #define XR_LOGITECH_mx_ink_stylus_interaction 1
 #define XR_LOGITECH_mx_ink_stylus_interaction_SPEC_VERSION 1
 #define XR_LOGITECH_MX_INK_STYLUS_INTERACTION_EXTENSION_NAME "XR_LOGITECH_mx_ink_stylus_interaction"
+
+
+// XR_ANDROID_spatial_discovery_bounds is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROID_spatial_discovery_bounds 1
+#define XR_ANDROID_spatial_discovery_bounds_SPEC_VERSION 1
+#define XR_ANDROID_SPATIAL_DISCOVERY_BOUNDS_EXTENSION_NAME "XR_ANDROID_spatial_discovery_bounds"
+// XrSpatialBoundsSpherefANDROID extends XrSpatialDiscoverySnapshotCreateInfoEXT
+typedef struct XrSpatialBoundsSpherefANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrSpace                     space;
+    XrTime                      time;
+    XrSpheref                   sphere;
+} XrSpatialBoundsSpherefANDROID;
+
+// XrSpatialBoundsBoxfANDROID extends XrSpatialDiscoverySnapshotCreateInfoEXT
+typedef struct XrSpatialBoundsBoxfANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrSpace                     space;
+    XrTime                      time;
+    XrBoxf                      box;
+} XrSpatialBoundsBoxfANDROID;
+
+// XrSpatialBoundsFrustumfANDROID extends XrSpatialDiscoverySnapshotCreateInfoEXT
+typedef struct XrSpatialBoundsFrustumfANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrSpace                     space;
+    XrTime                      time;
+    XrFrustumf                  frustum;
+} XrSpatialBoundsFrustumfANDROID;
+
 
 
 // XR_EXT_spatial_anchor is a preprocessor guard. Do not pass it to API calls.

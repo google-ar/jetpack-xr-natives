@@ -1,0 +1,41 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2024";
+
+package imp.editor;
+
+import "core/scene_handles/scene_handles.proto";
+
+message ViewportCameraOrientationWidgetState {
+  enum Corner {
+    CORNER_UNSPECIFIED = 0;
+    TOP_LEFT = 1;
+    TOP_RIGHT = 2;
+    BOTTOM_LEFT = 3;
+    BOTTOM_RIGHT = 4;
+  }
+  Corner corner = 1;
+  int32 padding = 2;
+  int32 radius = 3;
+  float depth = 4;
+
+  imp.GltfNodeSceneHandle center = 5;
+  imp.GltfNodeSceneHandle x_negative = 6;
+  imp.GltfNodeSceneHandle x_positive = 7;
+  imp.GltfNodeSceneHandle y_negative = 8;
+  imp.GltfNodeSceneHandle y_positive = 9;
+  imp.GltfNodeSceneHandle z_negative = 10;
+  imp.GltfNodeSceneHandle z_positive = 11;
+}

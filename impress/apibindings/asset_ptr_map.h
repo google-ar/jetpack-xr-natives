@@ -28,6 +28,7 @@
 #include "absl/strings/string_view.h"
 #include "apibindings/base_asset_loader.h"
 #include "core/assets/asset_ptr.h"
+#include "core/gsplat/gsplat_asset.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_asset.h"
@@ -125,6 +126,8 @@ class AssetPtrMap : public Rememberer {
       gltf_asset_map_;
   absl::flat_hash_map<std::intptr_t, RefCountedAsset<ImageBasedLightingAsset>>
       ibl_asset_map_;
+  absl::flat_hash_map<std::intptr_t, RefCountedAsset<GSplatAsset>>
+      gsplat_asset_map_;
 
   // Regular expression pattern for matching URLs.
   static constexpr absl::string_view kRegexPattern =

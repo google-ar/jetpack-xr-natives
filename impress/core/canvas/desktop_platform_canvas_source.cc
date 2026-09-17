@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <string>
 #include <utility>
@@ -83,6 +84,17 @@ using skia::textlayout::Paragraph;
 using skia::textlayout::ParagraphBuilder;
 using skia::textlayout::ParagraphStyle;
 
+constexpr char kNotoSansFontName[] = "Noto Sans";
+constexpr char kGoogleSansFontName[] = "Google Sans";
+constexpr char kNotoSansSymbolsFontName[] = "Noto Sans Symbols";
+constexpr char kNotoSansSymbols2FontName[] = "Noto Sans Symbols2";
+
+constexpr char kNotoColorEmojiFontName[] = "Noto Color Emoji";
+constexpr char kAppleColorEmojiFontName[] = "Apple Color Emoji";
+constexpr char kSegoeUiEmojiFontName[] = "Segoe UI Emoji";
+constexpr char kColorEmojiFontName[] = "Color Emoji";
+constexpr char kEmojiFontName[] = "Emoji";
+
 U8CPU ColorComponentRatioToByte(float color_component_ratio) {
   return round(color_component_ratio * 255.0f);
 }
@@ -137,10 +149,16 @@ class EmojiScanner {
  public:
   explicit EmojiScanner(absl::string_view text) : text_(text), index_(0) {}
 
+  enum class SpanType {
+    kText,
+    kEmoji,
+    kSymbol,
+  };
+
   struct Span {
     size_t start;
     size_t end;
-    bool is_emoji;
+    SpanType type;
   };
 
   std::vector<Span> Scan() {
@@ -148,26 +166,26 @@ class EmojiScanner {
     if (text_.empty()) return spans;
 
     size_t run_start = 0;
-    std::optional<bool> in_emoji;
+    std::optional<SpanType> in_type;
 
     while (index_ < text_.length()) {
       size_t char_start = index_;
       size_t char_len = 0;
-      bool is_emoji = NextEmojiLength(&char_len);
+      SpanType type = NextEmojiType(&char_len);
 
-      if (!in_emoji.has_value()) {
-        in_emoji = is_emoji;
-      } else if (is_emoji != *in_emoji) {
-        spans.push_back({run_start, char_start, *in_emoji});
+      if (!in_type.has_value()) {
+        in_type = type;
+      } else if (type != *in_type) {
+        spans.push_back({run_start, char_start, *in_type});
         run_start = char_start;
-        in_emoji = is_emoji;
+        in_type = type;
       }
 
       index_ += char_len;
     }
 
-    if (in_emoji.has_value()) {
-      spans.push_back({run_start, text_.length(), *in_emoji});
+    if (in_type.has_value()) {
+      spans.push_back({run_start, text_.length(), *in_type});
     }
     return spans;
   }
@@ -176,10 +194,10 @@ class EmojiScanner {
   absl::string_view text_;
   size_t index_;
 
-  bool NextEmojiLength(size_t* length) const {
+  SpanType NextEmojiType(size_t* length) const {
     if (index_ >= text_.length()) {
       *length = 0;
-      return false;
+      return SpanType::kText;
     }
 
     int32_t temp_index = index_;
@@ -189,7 +207,7 @@ class EmojiScanner {
 
     if (c < 0) {
       *length = first_char_len;
-      return false;
+      return SpanType::kText;
     }
 
     if (IsKeycapBase(c)) {
@@ -200,12 +218,14 @@ class EmojiScanner {
         UChar32 next2 = PeekCodepoint(temp_index + char_len1, &char_len2);
         if (next2 == 0x20E3) {
           *length = first_char_len + char_len1 + char_len2;
-          return true;
+          return SpanType::kEmoji;
         }
       } else if (next1 == 0x20E3) {
         *length = first_char_len + char_len1;
-        return true;
+        return SpanType::kEmoji;
       }
+      *length = first_char_len;
+      return SpanType::kText;
     }
 
     if (IsRegionalIndicator(c)) {
@@ -213,10 +233,10 @@ class EmojiScanner {
       UChar32 next1 = PeekCodepoint(temp_index, &char_len1);
       if (IsRegionalIndicator(next1)) {
         *length = first_char_len + char_len1;
-        return true;
+        return SpanType::kEmoji;
       }
       *length = first_char_len;
-      return true;
+      return SpanType::kEmoji;
     }
 
     bool is_emoji = u_hasBinaryProperty(c, UCHAR_EMOJI);
@@ -228,7 +248,7 @@ class EmojiScanner {
       UChar32 next1 = PeekCodepoint(temp_index, &char_len1);
       if (next1 == 0xFE0E) {  // VS15
         *length = first_char_len + char_len1;
-        return false;
+        return SpanType::kSymbol;
       }
       if (next1 == 0xFE0F) {  // VS16
         *length = first_char_len + char_len1;
@@ -236,7 +256,7 @@ class EmojiScanner {
         if (IsSequencedEmoji(temp_index + char_len1, &seq_len)) {
           *length += seq_len;
         }
-        return true;
+        return SpanType::kEmoji;
       }
 
       *length = first_char_len;
@@ -252,11 +272,11 @@ class EmojiScanner {
         *length += seq_len;
       }
 
-      return is_emoji_presentation;
+      return is_emoji_presentation ? SpanType::kEmoji : SpanType::kSymbol;
     }
 
     *length = first_char_len;
-    return false;
+    return SpanType::kText;
   }
 
   UChar32 PeekCodepoint(size_t byte_idx, size_t* len) const {
@@ -337,7 +357,7 @@ bool DesktopPlatformCanvasSource::IsFeatureSupported(
     ScopedCanvas::Feature feature) {
   switch (feature) {
     case ScopedCanvas::Feature::kGlyphs:
-      return false;
+      return true;
     case ScopedCanvas::Feature::kKeepContents:
       return true;
   }
@@ -412,6 +432,9 @@ TextMetrics DesktopPlatformCanvasSource::GetTextMetrics(
         CreateParagraph(text, text_options, /*draw_stroke_only=*/false);
     paragraph->getLineMetricsAt(0, &metrics);
   }
+  std::vector<float> text_widths = GetTextWidths(text, text_options);
+  float typographical_width =
+      std::accumulate(text_widths.begin(), text_widths.end(), 0.0f);
   // The stroke straddles the font, half in and half out.
   float stroke_padding = text_options.stroke_width_pixels;
   TextMetrics text_metrics;
@@ -421,8 +444,7 @@ TextMetrics DesktopPlatformCanvasSource::GetTextMetrics(
   // Size does include the stroke width.
   text_metrics.set_size_x(metrics.fWidth + stroke_padding);
   text_metrics.set_size_y(metrics.fHeight + stroke_padding);
-  text_metrics.set_typographical_width(0.0f);
-  // TODO: Return proper metrics here
+  text_metrics.set_typographical_width(typographical_width);
   // Font origin does not include the stroke width.
   text_metrics.set_font_origin_y(static_cast<float>(-metrics.fDescent));
   text_metrics.set_font_size_y(
@@ -444,6 +466,8 @@ TextMetrics DesktopPlatformCanvasSource::GetGlyphMetrics(
   }
 
   SkFont font(typeface, text_options.size_pixels);
+  font.setSubpixel(true);
+  font.setHinting(SkFontHinting::kSlight);
   SkGlyphID sk_glyph = static_cast<SkGlyphID>(glyph.Get());
 
   SkRect bounds = font.getBounds(sk_glyph, nullptr);
@@ -458,11 +482,24 @@ TextMetrics DesktopPlatformCanvasSource::GetGlyphMetrics(
   float max_font_ascent = -std::min(bounds.fTop, font_metrics.fAscent);
   float padding = text_options.stroke_width_pixels;
 
+  float glyph_width = bounds.width();
+  float glyph_height = bounds.height();
+  float origin_x = bounds.fLeft;
+  float origin_y = -bounds.fBottom;
+  if (glyph_width == 0.0f && width > 0.0f) {
+    glyph_width = width;
+    origin_x = 0.0f;
+  }
+  if (glyph_height == 0.0f) {
+    glyph_height = max_font_ascent + max_font_descent;
+    origin_y = -max_font_descent;
+  }
+
   TextMetrics metrics;
-  metrics.set_origin_x(bounds.fLeft);
-  metrics.set_origin_y(-bounds.fBottom);
-  metrics.set_size_x(bounds.width() + padding);
-  metrics.set_size_y(bounds.height() + padding);
+  metrics.set_origin_x(origin_x);
+  metrics.set_origin_y(origin_y);
+  metrics.set_size_x(glyph_width + padding);
+  metrics.set_size_y(glyph_height + padding);
   metrics.set_typographical_width(width);
   metrics.set_font_origin_y(-max_font_descent);
   metrics.set_font_size_y(max_font_ascent + max_font_descent + padding);
@@ -470,8 +507,6 @@ TextMetrics DesktopPlatformCanvasSource::GetGlyphMetrics(
   return metrics;
 }
 
-// TODO: Either implement this for desktop if glyph support is
-// added, or find another way to support combining characters.
 std::vector<ScopedCanvas::GlyphGroup>
 DesktopPlatformCanvasSource::GetCombinedCharacterGroups(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
@@ -482,15 +517,26 @@ DesktopPlatformCanvasSource::GetCombinedCharacterGroups(
   }
 
   std::vector<ScopedCanvas::GlyphGroup> result;
-  paragraph->visit(
-      [&result](int line_number, const Paragraph::VisitorInfo* info) {
-        if (!info) return;
-        result.reserve(result.size() + info->count);
-        for (int i = 0; i < info->count; ++i) {
-          result.push_back(
-              static_cast<ScopedCanvas::GlyphGroup>(info->utf8Starts[i]));
-        }
-      });
+  ScopedCanvas::GlyphGroup current_group = 0;
+  paragraph->visit([&result, &current_group](
+                       int line_number, const Paragraph::VisitorInfo* info) {
+    if (!info) return;
+    result.reserve(result.size() + info->count);
+    for (int i = 0; i < info->count; ++i) {
+      float current_x = info->positions[i].x();
+      float next_x;
+      if (i < info->count - 1) {
+        next_x = info->positions[i + 1].x();
+      } else {
+        next_x = info->advanceX - info->origin.x();
+      }
+
+      if (!result.empty() && current_x < next_x) {
+        current_group++;
+      }
+      result.push_back(current_group);
+    }
+  });
 
   return result;
 }
@@ -574,21 +620,32 @@ DesktopPlatformCanvasSource::GetTextGlyphs(
 
     bool is_emoji = IsEmojiTypeface(run_typeface);
 
-    std::vector<SkScalar> widths(info->count);
-    info->font.getWidths(SkSpan(info->glyphs, info->count),
-                         SkSpan(widths.data(), info->count));
-
     glyph_advances.reserve(glyph_advances.size() + info->count);
-    for (int i = 0; i < info->count; ++i) {
-      float advance = widths[i];
-      if (i < info->count - 1) {
-        advance = std::abs(info->positions[i + 1].x() - info->positions[i].x());
+
+    std::vector<int> sorted_indices(info->count);
+    std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
+    std::stable_sort(sorted_indices.begin(), sorted_indices.end(),
+                     [info](int a, int b) {
+                       return info->positions[a].x() < info->positions[b].x();
+                     });
+
+    for (int k = 0; k < info->count; ++k) {
+      int i = sorted_indices[k];
+      float advance;
+      if (k < info->count - 1) {
+        int next_i = sorted_indices[k + 1];
+        advance = info->positions[next_i].x() - info->positions[i].x();
+      } else {
+        advance = (info->advanceX - info->origin.x()) - info->positions[i].x();
       }
 
       std::unique_ptr<FontHolder> glyph_fallback_font = nullptr;
       if (run_fallback_font) {
-        glyph_fallback_font =
-            std::make_unique<DesktopFontHolder>(*run_fallback_font);
+        glyph_fallback_font = std::make_unique<DesktopFontHolder>(
+            run_fallback_font->GetFontName(),
+            run_fallback_font->GetFontWeight(),
+            run_fallback_font->GetTextStyle(),
+            run_fallback_font->GetFontCollection());
       }
 
       glyph_advances.push_back({
@@ -599,6 +656,29 @@ DesktopPlatformCanvasSource::GetTextGlyphs(
       });
     }
   });
+
+  if (glyph_advances.empty() && !text.empty()) {
+    std::vector<float> widths = GetTextWidths(text, text_options);
+    glyph_advances.reserve(widths.size());
+    sk_sp<SkTypeface> typeface;
+    {
+      absl::MutexLock lock(paragraph_mutex_);
+      typeface = GetTypeface(text_options);
+    }
+    SkFont font(typeface, text_options.size_pixels);
+    int text_idx = 0;
+    for (float width : widths) {
+      char32_t unichar = (text_idx < text.size()) ? text[text_idx] : ' ';
+      SkGlyphID gid = font.unicharToGlyph(unichar);
+      glyph_advances.push_back({
+          ScopedCanvas::GlyphId(gid),
+          width,
+          nullptr,
+          /*is_emoji=*/false,
+      });
+      text_idx++;
+    }
+  }
 
   return glyph_advances;
 }
@@ -672,6 +752,11 @@ DesktopPlatformCanvasSource::FontCollectionFromTextOptions(
 
 sk_sp<SkTypeface> DesktopPlatformCanvasSource::GetTypeface(
     const ScopedCanvas::TextOptions& text_options) {
+#if IMP_PLATFORM(LINUX)
+  // FontConfig has a memory leak we should suppress.
+  // (broken link)
+  absl::LeakCheckDisabler disabler;
+#endif
   sk_sp<FontCollection> font_collection =
       FontCollectionFromTextOptions(text_options);
   const FontHolder* font_holder =
@@ -697,7 +782,10 @@ sk_sp<SkTypeface> DesktopPlatformCanvasSource::GetTypeface(
     }
   } else {
     std::vector<SkString> families = {
-        SkString(family_name.data(), family_name.size())};
+        SkString(family_name.data(), family_name.size()),
+        SkString(kNotoSansFontName), SkString(kGoogleSansFontName),
+        SkString(kNotoSansSymbolsFontName),
+        SkString(kNotoSansSymbols2FontName)};
     std::vector<sk_sp<SkTypeface>> typefaces =
         font_collection->findTypefaces(families, font_style);
     if (!typefaces.empty()) {
@@ -712,16 +800,8 @@ sk_sp<SkTypeface> DesktopPlatformCanvasSource::GetTypeface(
   return resolved_typeface;
 }
 
-skia::textlayout::TextStyle DesktopPlatformCanvasSource::CreateTextStyle(
+SkPaint DesktopPlatformCanvasSource::CreatePaint(
     const ScopedCanvas::TextOptions& text_options, bool draw_stroke_only) {
-  skia::textlayout::TextStyle text_style;
-  text_style.setFontSize(text_options.size_pixels);
-  if (text_options.font_holder) {
-    text_style.setFontFamilies(
-        {SkString(text_options.font_holder->GetFontName())});
-  } else {
-    text_style.setFontFamilies({SkString(font_holder_.GetFontName())});
-  }
   SkPaint paint;
   paint.setAntiAlias(true);
   if (draw_stroke_only) {
@@ -732,9 +812,30 @@ skia::textlayout::TextStyle DesktopPlatformCanvasSource::CreateTextStyle(
     paint.setColor(ToSkColor(text_options.color));
     paint.setStyle(SkPaint::Style::kFill_Style);
   }
+  return paint;
+}
+
+skia::textlayout::TextStyle DesktopPlatformCanvasSource::CreateTextStyle(
+    const ScopedCanvas::TextOptions& text_options, bool draw_stroke_only) {
+  skia::textlayout::TextStyle text_style;
+  text_style.setFontSize(text_options.size_pixels);
+  std::vector<SkString> font_families;
+  if (text_options.font_holder) {
+    font_families.push_back(SkString(text_options.font_holder->GetFontName()));
+  } else {
+    font_families.push_back(SkString(font_holder_.GetFontName()));
+  }
+  font_families.push_back(SkString(kNotoSansFontName));
+  font_families.push_back(SkString(kGoogleSansFontName));
+  font_families.push_back(SkString(kNotoSansSymbolsFontName));
+  font_families.push_back(SkString(kNotoSansSymbols2FontName));
+  text_style.setFontFamilies(font_families);
+  SkPaint paint = CreatePaint(text_options, draw_stroke_only);
   text_style.setForegroundPaint(paint);
   text_style.setLetterSpacing(text_options.text_tracking *
                               text_options.size_pixels);
+  text_style.setSubpixel(true);
+  text_style.setFontHinting(SkFontHinting::kSlight);
   if (text_options.locale.has_value()) {
     text_style.setLocale(SkString(*text_options.locale));
   }
@@ -788,16 +889,26 @@ DesktopPlatformCanvasSource::CreateParagraph(
     for (const auto& span : spans) {
       absl::string_view run_text =
           text.substr(span.start, span.end - span.start);
-      if (span.is_emoji) {
+      if (span.type == EmojiScanner::SpanType::kEmoji) {
         skia::textlayout::TextStyle emoji_style = sk_text_style;
         emoji_style.setFontFamilies({
-            SkString("Noto Color Emoji"),
-            SkString("Apple Color Emoji"),
-            SkString("Segoe UI Emoji"),
-            SkString("Color Emoji"),
-            SkString("Emoji"),
+            SkString(kNotoColorEmojiFontName),
+            SkString(kAppleColorEmojiFontName),
+            SkString(kSegoeUiEmojiFontName),
+            SkString(kColorEmojiFontName),
+            SkString(kEmojiFontName),
         });
         paragraph_builder->pushStyle(emoji_style);
+        paragraph_builder->addText(run_text.data(), run_text.size());
+        paragraph_builder->pop();
+      } else if (span.type == EmojiScanner::SpanType::kSymbol) {
+        skia::textlayout::TextStyle symbol_style = sk_text_style;
+        std::vector<SkString> families = {SkString(font_holder->GetFontName())};
+        families.push_back(SkString(kNotoSansSymbolsFontName));
+        families.push_back(SkString(kNotoSansSymbols2FontName));
+        symbol_style.setFontFamilies(families);
+
+        paragraph_builder->pushStyle(symbol_style);
         paragraph_builder->addText(run_text.data(), run_text.size());
         paragraph_builder->pop();
       } else {
@@ -977,7 +1088,48 @@ void DesktopPlatformCanvasSource::DesktopScopedCanvas::DrawText(
 void DesktopPlatformCanvasSource::DesktopScopedCanvas::DrawGlyph(
     GlyphId glyph, float2 pos, const TextOptions& text_options,
     const TextMetrics* pre_cached_metrics) {
-  IMP_LOG(imp::FATAL) << "ScopedCanvas::DrawGlyph is unavailable on Desktop.";
+  sk_sp<SkTypeface> typeface;
+  {
+    absl::MutexLock lock(source_.paragraph_mutex_);
+    typeface = source_.GetTypeface(text_options);
+  }
+  if (!typeface) {
+    IMP_LOG(imp::ERROR) << "Failed to get typeface for DrawGlyph.";
+    return;
+  }
+
+  TextMetrics metrics_storage;
+  if (!pre_cached_metrics) {
+    metrics_storage = source_.GetGlyphMetrics(glyph, text_options);
+    pre_cached_metrics = &metrics_storage;
+  }
+
+  SkFont font(typeface, text_options.size_pixels);
+  font.setSubpixel(true);
+  font.setHinting(SkFontHinting::kSlight);
+  SkGlyphID sk_glyph = static_cast<SkGlyphID>(glyph.Get());
+
+  float half_stroke = text_options.stroke_width_pixels / 2.0f;
+  float max_font_ascent = pre_cached_metrics->font_size_y() +
+                          pre_cached_metrics->font_origin_y() -
+                          text_options.stroke_width_pixels;
+
+  SkPoint sk_pos =
+      SkPoint::Make(pos.x + half_stroke - pre_cached_metrics->origin_x(),
+                    pos.y + half_stroke + max_font_ascent);
+
+  if (text_options.stroke_width_pixels > 0 &&
+      text_options.stroke_color != kZero4) {
+    SkPaint stroke_paint =
+        source_.CreatePaint(text_options, /*draw_stroke_only=*/true);
+    canvas_->drawGlyphs(SkSpan(&sk_glyph, 1), SkSpan(&sk_pos, 1),
+                        /*origin=*/{0, 0}, font, stroke_paint);
+  }
+
+  SkPaint fill_paint =
+      source_.CreatePaint(text_options, /*draw_stroke_only=*/false);
+  canvas_->drawGlyphs(SkSpan(&sk_glyph, 1), SkSpan(&sk_pos, 1),
+                      /*origin=*/{0, 0}, font, fill_paint);
 }
 
 void DesktopPlatformCanvasSource::DesktopScopedCanvas::ClearRect(

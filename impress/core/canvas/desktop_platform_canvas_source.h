@@ -40,6 +40,7 @@
 #include "core/view/base_view.h"
 #include "third_party/skia/HEAD/include/core/SkBitmap.h"
 #include "third_party/skia/HEAD/include/core/SkCanvas.h"
+#include "third_party/skia/HEAD/include/core/SkPaint.h"
 #include "third_party/skia/HEAD/include/core/SkRefCnt.h"
 #include "third_party/skia/HEAD/modules/skparagraph/include/FontCollection.h"
 
@@ -145,6 +146,9 @@ class DesktopPlatformCanvasSource : public PlatformCanvasSource {
 
   sk_sp<SkTypeface> GetTypeface(const ScopedCanvas::TextOptions& text_options)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(paragraph_mutex_);
+
+  SkPaint CreatePaint(const ScopedCanvas::TextOptions& text_options,
+                      bool draw_stroke_only);
 
   // Creates TextStyle from TextOptions which specifies font properties and
   // coloring.

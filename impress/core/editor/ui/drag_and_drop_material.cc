@@ -25,7 +25,7 @@
 #include "core/editor/widgets/asset_type_helpers.h"
 #include "core/proto/proto_reader.h"
 #include "core/render/material_registry.h"
-#include "core/scene_handles/material_handle.h"
+#include "core/scene_handles/base_material_handle.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -38,11 +38,11 @@ std::optional<DragAndDropMaterialResult> AcceptDragAndDropPayloadMaterial(
 
   // Try MaterialHandle payload first.
   std::string payload_type = absl::StrCat(
-      kProtoDragAndDropScheme, GetPayloadTypeForMessage<MaterialHandle>());
+      kProtoDragAndDropScheme, GetPayloadTypeForMessage<BaseMaterialHandle>());
 
   std::optional<std::string> payload = AcceptDragAndDropPayload(payload_type);
   if (payload.has_value()) {
-    MaterialHandle handle;
+    BaseMaterialHandle handle;
     if (proto::ParseMessage(*payload, &handle)) {
       std::string url = std::string(handle.GetUrl());
       if (!url.empty()) {

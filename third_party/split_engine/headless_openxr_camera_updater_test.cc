@@ -88,7 +88,7 @@ TEST_F(HeadlessOpenXrCameraUpdaterTest,
 
   absl::StatusOr<std::unique_ptr<HeadlessOpenXrCameraUpdater>> updater =
       HeadlessOpenXrCameraUpdater::Create(*view_);
-  EXPECT_OK(updater.status());
+  MP_EXPECT_OK(updater.status());
 }
 
 }  // namespace

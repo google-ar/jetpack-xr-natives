@@ -151,8 +151,10 @@ cc_library(
     deps = [
         "//core/lighting:environment_light",
         "//core/ncsb",
+        "//core/render:display_color_space",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ],
     alwayslink = 1,
 )
@@ -297,6 +299,7 @@ cc_library(
         ":split_engine_texture_serializer",
         "//core:config",
         "//core/assets/material:material_load_options_proto_cc",
+        "//core/async:executor",
         "//core/async:future",
         "//core/common:buffer_access",
         "//core/common:invocable",
@@ -498,6 +501,7 @@ cc_library(
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/common:type_helpers",
+        "//core/common:type_traits",
         "//core/geometry/shapes",
         "//core/lighting:image_based_lighting_types",
         "//core/loader/provider:fbs",
@@ -551,6 +555,7 @@ cc_library(
         "@third_party//filament/libs:utils_hdrs",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
+        "@third_party//split_engine:split_engine_schema_version",
     ] + if_android([
         "//core/render/android:definitions",
         "//core/render/android:platform_android_external_texture_surface",
@@ -710,7 +715,6 @@ cc_library(
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
-        "@third_party//split_engine:split_engine_schema_version",
     ],
     alwayslink = 1,
 )
@@ -731,22 +735,18 @@ cc_library(
         "//core/common:buffer_access",
         "//core/common:invocable",
         "//core/common:small_source_location",
-        "//core/common:typed_ids",
         "//core/geometry/shapes",
         "//core/lighting:image_based_lighting_types",
         "//core/material_library:fbs_deps",  # buildcleaner: keep
         "//core/material_library:generic_material",
-        "//core/material_library:generic_material_parameters",
         "//core/material_library:generic_material_spec",
         "//core/material_library:material_param_value",
         "//core/materials",
         "//core/math",
-        "//core/model:model_data_details",
         "//core/model/mesh:base_mesh_builder",
         "//core/render",
         "//core/render:base_texture_builder",
         "//core/split_engine/android:split_engine_android_bridge",
-        "//core/view/utils:string_map",
         "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status",
@@ -762,6 +762,33 @@ cc_library(
     ] + if_android([
         "//core/render/android:android_external_texture_surface",
     ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_generic_material_mock",
+    testonly = True,
+    hdrs = ["split_engine_generic_material_mock.h"],
+    copts = imp_test_copts(),
+    defines = imp_defines(),
+    deps = [
+        "//core/common:small_source_location",
+        "//core/common:typed_ids",
+        "//core/material_library:generic_material",
+        "//core/material_library:generic_material_parameters",
+        "//core/material_library:material_param_value",
+        "//core/materials",
+        "//core/math",
+        "//core/model:model_data_details",
+        "//core/render",
+        "//core/view/utils:string_map",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@mediapipe//mediapipe/framework/port:gtest",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
     alwayslink = 1,
 )
 
@@ -801,6 +828,7 @@ cc_library(
         "//core/model/mesh:mesh_data",
         "//core/ncsb",
         "//core/render:base_renderable_manager",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",

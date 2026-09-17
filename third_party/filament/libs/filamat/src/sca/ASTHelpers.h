@@ -17,9 +17,10 @@
 #ifndef TNT_SCAHELPERS_H_H
 #define TNT_SCAHELPERS_H_H
 
+#include "glslang/Include/intermediate.h"
+
 #include <string>
 #include <vector>
-#include "glslang/Include/intermediate.h"
 
 class TIntermNode;
 

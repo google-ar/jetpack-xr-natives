@@ -16,9 +16,12 @@
 
 #include <sys/stat.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <list>
 #include <optional>
 #include <string>
 #include <utility>
@@ -29,8 +32,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "filament/filament/backend/include/backend/Platform.h"
 #include "core/async/executor.h"
@@ -40,8 +45,10 @@
 #include "core/common/file_helpers.h"
 #include "core/common/trace.h"
 #include "core/config.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/system.h"
 #include "core/view/base_view.h"
+#include "core/view/view_events.h"
 
 #if IMP_PLATFORM(ANDROID)
 #include "core/view/platforms/android/wrappers/activity_context.h"
@@ -52,6 +59,7 @@ namespace {
 constexpr absl::string_view kShaderCacheFileName = "shader_blob_cache.bin";
 constexpr size_t kKeySize = sizeof(uint32_t);
 constexpr size_t kBlobSize = sizeof(uint32_t);
+static std::atomic<size_t> cache_write_counter = 0;
 
 // We store all compiled shader binaries inside a single database file.
 // The file is structured as a sequential Key-Length-Value (KLV) binary stream
@@ -117,6 +125,18 @@ std::optional<BlobEntry> ReadNextEntry(absl::Span<const uint8_t> data,
   return BlobEntry{.key = key_view, .blob = blob_view};
 }
 
+size_t GetMaxNumCacheEntry(absl::optional<int32_t> max_num_cache_entry) {
+  // Each shader cache entry size 20-25KB. This will roughly consume 20-25MB of
+  // disk storage.
+  static constexpr size_t kDefaultMaxNumEntry = 1000;
+
+  if (max_num_cache_entry.has_value()) {
+    
+    return *max_num_cache_entry;
+  }
+  return kDefaultMaxNumEntry;
+}
+
 };  // namespace
 
 namespace imp {
@@ -139,53 +159,30 @@ void ShaderCacheSystem::WriteCache(const void* key, size_t keySize,
   absl::Cord value_cord(
       absl::string_view(static_cast<const char*>(value), valueSize));
   {
+    // The key exists. Update the entry in the tracker to the front.
     absl::MutexLock lock(cache_lock_);
-    auto [it, inserted] = cache_blobs_.try_emplace(key_str, value_cord);
-    if (!inserted) {
-      IMP_LOG(imp::ERROR) << "Failed to insert shader cache blob into in-memory map.";
+    if (auto map_it = cache_blobs_.find(key_str);
+        map_it != cache_blobs_.end()) {
+      auto lru_it = map_it->second.lru_it;
+      lru_keys_.splice(lru_keys_.begin(), lru_keys_, lru_it);
       return;
     }
+
+    // The key is new. Check if we are at capacity.
+    if (lru_keys_.size() >= max_num_cache_entry_) {
+      auto evict_key = lru_keys_.back();
+      if (auto evict_it = cache_blobs_.find(evict_key);
+          evict_it != cache_blobs_.end()) {
+        cache_blobs_.erase(evict_it);
+      }
+      // Also remove the key from the LRU keys.
+      lru_keys_.pop_back();
+    }
+    // Now we insert the entry into the map and the lru keys.
+    lru_keys_.emplace_front(key_str);
+    cache_blobs_.try_emplace(key_str,
+                             ShaderCacheEntry{value_cord, lru_keys_.begin()});
   }
-
-  // Write it to disk in the background.
-  background_executor_->Schedule([resolved_cache_path = resolved_cache_path_,
-                                  key_str = std::move(key_str), value_cord]() {
-    // Cast sizes to uint32_t to keep the binary file format consistent.
-    uint32_t key_len = static_cast<uint32_t>(key_str.size());
-    uint32_t val_len = static_cast<uint32_t>(value_cord.size());
-
-    // Pack the entry data into a single contiguous buffer.
-    BufferAccess buffer;
-    const size_t total_size = kKeySize + key_len + kBlobSize + val_len;
-    uint8_t* write_ptr = BufferAccess::Create(total_size, &buffer);
-
-    std::memcpy(write_ptr, &key_len, kKeySize);
-    write_ptr += kKeySize;
-
-    std::memcpy(write_ptr, key_str.data(), key_len);
-    write_ptr += key_len;
-
-    std::memcpy(write_ptr, &val_len, kBlobSize);
-    write_ptr += kBlobSize;
-
-    // Note: ideally we should use absl::CopyCordToSpan, but it doesn't exist on
-    // Moohan.
-    size_t offset = 0;
-    for (absl::string_view chunk : value_cord.Chunks()) {
-      memcpy(write_ptr + offset, chunk.data(), chunk.size());
-      offset += chunk.size();
-    }
-    
-
-    absl::Status append_status =
-        AppendBinary(resolved_cache_path, buffer.Data(), buffer.Size());
-
-    if (!append_status.ok()) {
-      IMP_LOG(imp::ERROR) << "Failed to append cache entry: "
-                 << append_status.ToString();
-      // Note: we don't necessarily remove the entry from the in-memory map.
-    }
-  });
 }
 
 size_t ShaderCacheSystem::ReadCache(const void* key, size_t keySize,
@@ -199,7 +196,9 @@ size_t ShaderCacheSystem::ReadCache(const void* key, size_t keySize,
     return 0;
   }
 
-  absl::Cord shader_data = it->second;
+  absl::Cord shader_data = it->second.blob;
+  // Update the order of the lru_keys.
+  lru_keys_.splice(lru_keys_.begin(), lru_keys_, it->second.lru_it);
 
   // Need to make sure the allocated `value` buffer has enough space for the
   // shader binary.
@@ -220,11 +219,11 @@ size_t ShaderCacheSystem::ReadCache(const void* key, size_t keySize,
   return shader_data.size();
 }
 
-Future<ShaderCacheSystem::ShaderCacheBlobs>
-ShaderCacheSystem::LoadCacheFromFile(absl::string_view file_path) {
-  return Future<ShaderCacheBlobs>::Schedule(
-      [file_path =
-           std::string(file_path)]() -> absl::StatusOr<ShaderCacheBlobs> {
+Future<absl::flat_hash_map<std::string, absl::Cord>>
+ShaderCacheSystem::LoadCacheFromDisk(absl::string_view file_path) {
+  return Future<absl::flat_hash_map<std::string, absl::Cord>>::Schedule(
+      [file_path = std::string(file_path)]()
+          -> absl::StatusOr<absl::flat_hash_map<std::string, absl::Cord>> {
         IMP_TRACE();
         BufferAccess buffer;
         absl::Status load_status = LoadBinary(file_path, &buffer);
@@ -235,7 +234,7 @@ ShaderCacheSystem::LoadCacheFromFile(absl::string_view file_path) {
                     << load_status.ToString();
           return load_status;
         }
-        ShaderCacheBlobs cache_blobs;
+        absl::flat_hash_map<std::string, absl::Cord> cache_blobs;
         size_t offset = 0;
         while (std::optional<BlobEntry> entry =
                    ReadNextEntry(buffer.View(), offset)) {
@@ -253,8 +252,101 @@ ShaderCacheSystem::LoadCacheFromFile(absl::string_view file_path) {
       Executor::Type::kBackground);
 }
 
-ShaderCacheSystem::ShaderCacheSystem(BaseView* view)
-    : System(view), view_(view) {}
+Future<absl::Status> ShaderCacheSystem::WriteCacheToDisk(
+    std::string file_path, ShaderCacheBlobs cache_blobs,
+    std::list<std::string> lru_keys) {
+  return Future<absl::Status>::Schedule(
+      [file_path = std::move(file_path), cache_blobs = std::move(cache_blobs),
+       lru_keys = std::move(lru_keys)]() {
+        size_t buffer_size = 0;
+        size_t num_entries = 0;
+        num_entries = lru_keys.size();
+        // Note: we iterate over the lru_keys_ to preserve the LRU order.
+        // 1) Get the size of the BufferAcess.
+        for (const std::string& key : lru_keys) {
+          auto map_it = cache_blobs.find(key);
+          // If the key exists in lru_keys, it should exist in the cache_blobs.
+          
+          const ShaderCacheEntry& entry = map_it->second;
+
+          uint32_t key_len = static_cast<uint32_t>(key.size());
+          uint32_t val_len = static_cast<uint32_t>(entry.blob.size());
+          buffer_size += kKeySize;
+          buffer_size += key_len;
+          buffer_size += kBlobSize;
+          buffer_size += val_len;
+        }
+
+        // 2) Now actually fill in the buffer.
+        BufferAccess buffer;
+        uint8_t* write_ptr = BufferAccess::Create(buffer_size, &buffer);
+        for (const std::string& key : lru_keys) {
+          auto map_it = cache_blobs.find(key);
+          // If the key exists in lru_keys, it should exist in the cache_blobs.
+          
+          const ShaderCacheEntry& entry = map_it->second;
+
+          uint32_t key_len = static_cast<uint32_t>(key.size());
+          uint32_t val_len = static_cast<uint32_t>(entry.blob.size());
+          std::memcpy(write_ptr, &key_len, kKeySize);
+          write_ptr += kKeySize;
+
+          std::memcpy(write_ptr, key.data(), key_len);
+          write_ptr += key_len;
+
+          std::memcpy(write_ptr, &val_len, kBlobSize);
+          write_ptr += kBlobSize;
+
+          // Note: ideally we should use absl::CopyCordToSpan, but it doesn't
+          // exist on Moohan.
+          size_t offset = 0;
+          for (absl::string_view chunk : entry.blob.Chunks()) {
+            memcpy(write_ptr + offset, chunk.data(), chunk.size());
+            offset += chunk.size();
+          }
+          
+          write_ptr += val_len;
+        }
+
+        // There may be a race condition where WriteCacheToDisk is called before
+        // the current WriteCacheToDisk has been completed. The policy is to
+        // write cache for each call, but with a temp file name, then rename it
+        // to the actual file name. With this, we don't have to manage states
+        // checking if it's writing, if there's any pending writing etc.
+        // The downside of this approach is that there's no guarantee that the
+        // lastest WriteCacheToDisk will be the one preserved on disk. However,
+        // this is acceptable given that multiple pause events within a short
+        // period of time are rare in practice.
+        std::string temp_file_path =
+            absl::StrCat(file_path, ".", ++cache_write_counter, ".tmp");
+
+        // 3) Save binary (no need to clear the file, `SaveBinary` uses "wb")
+        absl::Status write_status = SaveBinary(temp_file_path, buffer);
+        if (write_status.ok()) {
+          // 4) Then rename the file to the correct one.
+          if (std::rename(temp_file_path.c_str(), file_path.c_str())) {
+            IMP_LOG(imp::ERROR) << "Failed to rename the shader cache file.";
+            return absl::InternalError(
+                "Failed to rename the shader cache file.");
+          }
+          IMP_LOG(imp::INFO) << "Successfully wrote shader cache: "
+                     << (buffer.Size() / 1024.0 / 1024.0) << " MB ("
+                     << buffer.Size() << " bytes), " << num_entries
+                     << " entries to " << file_path;
+        } else {
+          IMP_LOG(imp::ERROR) << "Failed to write shader cache to disk: "
+                     << write_status.ToString();
+        }
+        return write_status;
+      },
+      Executor::Type::kBackground);
+}
+
+ShaderCacheSystem::ShaderCacheSystem(
+    BaseView* view, absl::optional<int32_t> max_num_cache_entry)
+    : System(view),
+      view_(view),
+      max_num_cache_entry_(GetMaxNumCacheEntry(max_num_cache_entry)) {}
 
 ShaderCacheSystem::~ShaderCacheSystem() {
   // Without calling this, the LoadCacheFromFile future in Setup will be
@@ -276,22 +368,59 @@ void ShaderCacheSystem::Setup() {
   cache_dir_ = activity_context.GetCacheDir().GetPath();
 #endif
   resolved_cache_path_ = JoinPath(cache_dir_, kShaderCacheFileName);
-
-  background_executor_ = imp::Executor::BackgroundExecutor();
-  
   // TODO: Investigate if we can avoid a race condition where the
   // user requests shader before the shader cache blob is loaded.
-  LoadCacheFromFile(resolved_cache_path_)
-      .Then([this](ShaderCacheBlobs&& cache_blobs) {
+  LoadCacheFromDisk(resolved_cache_path_)
+      .Then([this](absl::StatusOr<absl::flat_hash_map<std::string, absl::Cord>>
+                       cache_blobs) {
         {
           absl::MutexLock lock(cache_lock_);
-          cache_blobs_ = std::move(cache_blobs);
+          if (cache_blobs.ok()) {
+            size_t count = 0;
+            for (auto& [key, blob] : *cache_blobs) {
+              if (count >= max_num_cache_entry_) break;
+              lru_keys_.emplace_front(key);
+              cache_blobs_.try_emplace(
+                  key, ShaderCacheEntry{std::move(blob), lru_keys_.begin()});
+              count++;
+            }
+          }
+          // Regardless of whether the load was successful, we need to mark it
+          // as true to allow disk writes.
+          cache_loaded_ = true;
         }
       })
       .KeptBy(this);
+
+  view_->GetDispatcher().Connect(
+      [this](const ViewPausedEvent& event) {
+        ShaderCacheBlobs cache_blobs;
+        std::list<std::string> lru_keys;
+
+        // Since WriteCacheToDisk is an async task, it may run after
+        // ShaderCacheSystem has been destroyed. To avoid accessing the members
+        // (cache_blobs_ and lru_keys_) of a deleted object, we need to copy
+        // the map and the list.
+        {
+          absl::MutexLock lock(cache_lock_);
+          if (!cache_loaded_) {
+            return;
+          }
+          cache_blobs = cache_blobs_;
+          lru_keys = lru_keys_;
+        }
+
+        WriteCacheToDisk(resolved_cache_path_, std::move(cache_blobs),
+                         std::move(lru_keys))
+            .KeptBy(this);
+      },
+      this);
 }
 
 void ShaderCacheSystem::EnableShaderCaching() {
+  if (!IsSupportedOnCurrentPlatform(view_)) {
+    return;
+  }
   // Setup filament platform function pointers.
   view_->GetSharedEngine()->getPlatform()->setBlobFunc(
       [this](const void* key, size_t keySize, const void* value,
@@ -301,6 +430,9 @@ void ShaderCacheSystem::EnableShaderCaching() {
 }
 
 void ShaderCacheSystem::DisableShaderCaching() {
+  if (!IsSupportedOnCurrentPlatform(view_)) {
+    return;
+  }
   view_->GetSharedEngine()->getPlatform()->setBlobFunc({}, {});
   if (view_->GetSharedEngine()->getPlatform()->hasBlobFunc()) {
     IMP_LOG(imp::FATAL) << "Unable to unset blob func.";

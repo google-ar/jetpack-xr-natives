@@ -14,8 +14,10 @@
 
 #include "core/editor/widgets/transform.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -31,6 +33,7 @@
 #include "core/editor/editor_style.h"
 #include "core/editor/events.h"
 #include "core/editor/events.proto.imp.h"
+#include "core/editor/layout/helpers.h"
 #include "core/editor/node_value_command.h"
 #include "core/editor/widgets/transform_assets.h"
 #include "core/editor/widgets/transform_widget.h"
@@ -41,6 +44,7 @@
 #include "core/math/math.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/scene_metadata.h"
@@ -120,13 +124,11 @@ void ComputeMixedAxes(const absl::flat_hash_set<NodeHandle>& active_nodes,
 // together. However, in the case of the transform, SceneSystem handles the
 // position and scale specially as a unit so that it is possible to override a
 // transform to the default value (zero).
-template <typename Fn>
-bool EditTransformFloat3WithBase(float3* value,
-                                 std::optional<float3> base_value,
+template <typename VecT, typename Fn>
+bool EditTransformVectorWithBase(VecT* value, std::optional<VecT> base_value,
                                  absl::string_view revert_to_base_label,
                                  Fn editor_control_fn) {
-  float3* base_value_ptr =
-      base_value.has_value() ? &base_value.value() : nullptr;
+  VecT* base_value_ptr = base_value.has_value() ? &base_value.value() : nullptr;
 
   EditorFieldControl::EditingElementMode mode =
       EditorFieldControl::BeginEditingElement(value, base_value_ptr);
@@ -160,95 +162,144 @@ Transform::Transform(BaseView& view)
       .KeptBy(this);
   editor_.GetDispatcher().Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        // We only support single selection for the transform widget.
-        active_node_ = editor_.GetSingleSelectedNode();
+        active_nodes_ = editor_.GetSelectedNodes();
       },
       this);
 }
 
 bool Transform::HasContent() const {
-  return transform_widget_.IsValid() && active_node_.IsValid();
+  if (!transform_widget_.IsValid()) return false;
+
+  for (const NodeHandle& node : active_nodes_) {
+    if (node.IsValid()) return true;
+  }
+  return false;
 }
 
 void Transform::DrawImGui() {
+  PruneInvalidHandles(active_nodes_);
+  if (active_nodes_.empty()) return;
+
   bool enabled = transform_widget_->IsEnabled();
-  if (ImGui::Checkbox("3D widget", &enabled)) {
+  if (ImGui::Checkbox("3D Widget", &enabled)) {
     transform_widget_->SetEnabled(enabled);
   }
 
-  auto scene_metadata = active_node_->GetComponent<SceneMetadata>();
+  const NodeHandle first_node = *active_nodes_.begin();
+  const auto scene_metadata = first_node->GetComponent<SceneMetadata>();
 
   if (view_.IsPreciseTranslationEnabled()) {
-    // TODO: Support precise translation in an ISF file, including
-    // base position.
-    double3 position = active_node_->GetLocalPositionPrecise();
-    double3 old_position = position;
-    // To avoid using ImGUI's equal check, which is not reliable sometimes.
-    if (ImGui::InputScalarN("position_precise", ImGuiDataType_Double,
-                            position.v, 3, nullptr, nullptr, "%lf") &&
-        !AlmostEqual(position, old_position)) {
-      command_manager_.PerformCommand<NodeValueCommand<double3>>(
-          active_node_, old_position, position,
-          [this](NodeHandle target, double3 value) {
-            target->SetLocalPositionPrecise(value);
-
-            // Send an event to notify that the transform has been updated.
-            NodeUpdatedEvent event;
-            event.target = target;
-            event.translation = value;
-            editor_.GetDispatcher().Send(event);
-          });
-    }
+    DrawPositionFieldsPrecise(first_node, scene_metadata);
   } else {
-    float3 position = active_node_->GetLocalPosition();
-    float3 old_position = position;
+    DrawPositionFields(first_node, scene_metadata);
+  }
 
-    std::optional<float3> base_position =
-        scene_metadata ? scene_metadata->GetBaseLocalPosition() : std::nullopt;
-    bool position_updated = EditTransformFloat3WithBase(
-        &position, base_position, "TransformWidgetPosition",
-        [old_position](float3* value) {
-          // Use AlmostEqual to avoid precision issues with ImGui's float
-          // comparison.
-          return ImGui::InputFloat3("position", value->v, kFloatFormat,
-                                    ImGuiInputTextFlags_CharsScientific) &&
-                 !AlmostEqual(*value, old_position);
-        });
+  DrawRotationFields(first_node, scene_metadata);
+  DrawScaleFields(first_node, scene_metadata);
+}
 
-    if (position_updated) {
-      command_manager_.PerformCommand<NodeValueCommand<float3>>(
-          active_node_, old_position, position,
-          [this](NodeHandle target, float3 value) {
-            target->SetLocalPosition(value);
+template <bool IsPrecise>
+void Transform::DrawPositionFieldsImpl(
+    const NodeHandle first_node,
+    const ComponentHandle<SceneMetadata> scene_metadata) {
+  using VecT = std::conditional_t<IsPrecise, double3, float3>;
+  VecT position = IsPrecise ? VecT(first_node->GetLocalPositionPrecise())
+                            : VecT(first_node->GetLocalPosition());
+  const VecT old_position = position;
 
-            // Send an event to notify that the transform has been updated.
-            NodeUpdatedEvent event;
-            event.target = target;
-            event.translation = value;
-            editor_.GetDispatcher().Send(event);
-          });
+  bool all_same_position[3];
+  const auto get_pos = [](const NodeHandle& node) -> VecT {
+    if constexpr (IsPrecise) {
+      return node->GetLocalPositionPrecise();
+    } else {
+      return node->GetLocalPosition();
+    }
+  };
+  ComputeMixedAxes<VecT>(active_nodes_, get_pos, all_same_position);
+
+  const bool use_metadata = active_nodes_.size() == 1 && scene_metadata;
+  std::optional<VecT> base_position;
+  if (use_metadata) {
+    if (auto base_pos_f = scene_metadata->GetBaseLocalPosition()) {
+      base_position = VecT(base_pos_f->x, base_pos_f->y, base_pos_f->z);
     }
   }
 
+  const char* format = IsPrecise ? "%lf" : kFloatFormat;
+  const char* label = IsPrecise ? "position_precise" : "position";
+  const auto draw_position_fields = [label, format, old_position,
+                                     &all_same_position](VecT* value) {
+    return EditorFieldControl::DrawMultiInput3(
+               label, value->v, all_same_position, format,
+               ImGuiInputTextFlags_CharsScientific) &&
+           !AlmostEqual(*value, old_position);
+  };
+
+  const bool position_updated = EditTransformVectorWithBase(
+      &position, base_position, "TransformWidgetPosition",
+      draw_position_fields);
+
+  if (!position_updated) return;
+
+  const auto apply_position_change = [&editor = editor_](NodeHandle target,
+                                                         VecT value) {
+    if constexpr (IsPrecise) {
+      target->SetLocalPositionPrecise(value);
+    } else {
+      target->SetLocalPosition(value);
+    }
+    NodeUpdatedEvent event;
+    event.target = target;
+    event.translation = value;
+    editor.GetDispatcher().Send(event);
+  };
+
+  ApplyTransformChanges(active_nodes_, command_manager_, position, get_pos,
+                        apply_position_change);
+}
+
+void Transform::DrawPositionFieldsPrecise(
+    NodeHandle first_node, ComponentHandle<SceneMetadata> scene_metadata) {
+  DrawPositionFieldsImpl</*IsPrecise=*/true>(first_node, scene_metadata);
+}
+
+void Transform::DrawPositionFields(
+    const NodeHandle first_node,
+    const ComponentHandle<SceneMetadata> scene_metadata) {
+  DrawPositionFieldsImpl</*IsPrecise=*/false>(first_node, scene_metadata);
+}
+
+void Transform::DrawRotationFields(
+    const NodeHandle first_node,
+    const ComponentHandle<SceneMetadata> scene_metadata) {
   // As described in the comment for EditTransformFloat3WithBase, we handle the
   // rotation field of the transform in a special way for similar reasons.
   //
   // Additionally, rotation has special handling to deal with stable conversion
   // between the quatf stored in the nodes actual transform and the euler angles
   // used in the editor & scene files.
-  quatf current_rotation = active_node_->GetLocalRotation();
-  float3 old_eulers = rotation_field_.GetCurrentEulerAngles();
+  quatf current_rotation = first_node->GetLocalRotation();
 
+  // Determine which axes of rotation are identical or mixed.
+  // This uses Euler angles because rotation is displayed and manipulated in
+  // Euler angles in the UI.
+  bool all_same_rotation[3];
+  const auto get_eulers = [](const NodeHandle& node) -> float3 {
+    return EulerFromQuatClamped(node->GetLocalRotation());
+  };
+  ComputeMixedAxes<float3>(active_nodes_, get_eulers, all_same_rotation);
+
+  const bool use_metadata = active_nodes_.size() == 1 && scene_metadata;
   std::optional<quatf> base_rotation =
-      scene_metadata ? scene_metadata->GetBaseLocalRotation() : std::nullopt;
+      use_metadata ? scene_metadata->GetBaseLocalRotation() : std::nullopt;
   quatf* base_rotation_ptr =
       base_rotation.has_value() ? &base_rotation.value() : nullptr;
-  EditorFieldControl::EditingElementMode mode =
+  const EditorFieldControl::EditingElementMode mode =
       EditorFieldControl::BeginEditingElement(&current_rotation,
                                               base_rotation_ptr);
 
-  bool rotation_updated =
-      rotation_field_.DrawFields("rotation", current_rotation);
+  bool rotation_updated = rotation_field_.DrawFields(
+      "rotation", current_rotation, all_same_rotation);
 
   // False is passed so that value is not used in the revert to base popup
   // label, since it isn't pointer stable.
@@ -262,49 +313,62 @@ void Transform::DrawImGui() {
     rotation_updated = true;
   }
 
-  if (rotation_updated) {
-    command_manager_.PerformCommand<NodeValueCommand<float3>>(
-        active_node_, old_eulers, rotation_field_.GetCurrentEulerAngles(),
-        [this](NodeHandle target, float3 value) {
-          float3 eulers = FloatModulo(value, 360.0f, Clamp::kNonNegative);
-          quatf rotation = QuatFromEuler(eulers);
-          target->SetLocalRotation(rotation);
+  if (!rotation_updated) return;
 
-          // Send an event to notify that the transform has been updated.
-          NodeUpdatedEvent event;
-          event.target = target;
-          event.rotation = rotation;
-          editor_.GetDispatcher().Send(event);
-        });
-  }
+  const auto apply_rotation_change =
+      [&editor = editor_](const NodeHandle target, const float3 value) {
+        const float3 eulers = FloatModulo(value, 360.0f, Clamp::kNonNegative);
+        const quatf rotation = QuatFromEuler(eulers);
+        target->SetLocalRotation(rotation);
+        NodeUpdatedEvent event;
+        event.target = target;
+        event.rotation = rotation;
+        editor.GetDispatcher().Send(event);
+      };
 
-  float3 scale = active_node_->GetLocalScale();
-  float3 old_scale = scale;
+  ApplyTransformChanges(active_nodes_, command_manager_,
+                        rotation_field_.GetCurrentEulerAngles(), get_eulers,
+                        apply_rotation_change);
+}
 
-  std::optional<float3> base_scale =
-      scene_metadata ? scene_metadata->GetBaseLocalScale() : std::nullopt;
-  bool scale_updated = EditTransformFloat3WithBase(
-      &scale, base_scale, "TransformWidgetScale", [old_scale](float3* value) {
-        // Use AlmostEqual to avoid precision issues with ImGui's float
-        // comparison.
-        return ImGui::InputFloat3("scale", value->v, kFloatFormat,
-                                  ImGuiInputTextFlags_CharsScientific) &&
-               !AlmostEqual(*value, old_scale);
-      });
+void Transform::DrawScaleFields(NodeHandle first_node,
+                                ComponentHandle<SceneMetadata> scene_metadata) {
+  float3 scale = first_node->GetLocalScale();
+  const float3 old_scale = scale;
 
-  if (scale_updated) {
-    command_manager_.PerformCommand<NodeValueCommand<float3>>(
-        active_node_, old_scale, scale,
-        [this](NodeHandle target, float3 value) {
-          target->SetLocalScale(value);
+  bool all_same_scale[3];
+  const auto get_scale = [](const NodeHandle& node) -> float3 {
+    return node->GetLocalScale();
+  };
+  ComputeMixedAxes<float3>(active_nodes_, get_scale, all_same_scale);
 
-          // Send an event to notify that the transform has been updated.
-          NodeUpdatedEvent event;
-          event.target = target;
-          event.scale = value;
-          editor_.GetDispatcher().Send(event);
-        });
-  }
+  const bool use_metadata = active_nodes_.size() == 1 && scene_metadata;
+  const std::optional<float3> base_scale =
+      use_metadata ? scene_metadata->GetBaseLocalScale() : std::nullopt;
+
+  const auto draw_scale_fields = [old_scale, &all_same_scale](float3* value) {
+    return EditorFieldControl::DrawMultiInput3(
+               "scale", value->v, all_same_scale, kFloatFormat,
+               ImGuiInputTextFlags_CharsScientific) &&
+           !AlmostEqual(*value, old_scale);
+  };
+
+  const bool scale_updated = EditTransformVectorWithBase(
+      &scale, base_scale, "TransformWidgetScale", draw_scale_fields);
+
+  if (!scale_updated) return;
+
+  const auto apply_scale_change = [&editor = editor_](const NodeHandle target,
+                                                      const float3 value) {
+    target->SetLocalScale(value);
+    NodeUpdatedEvent event;
+    event.target = target;
+    event.scale = value;
+    editor.GetDispatcher().Send(event);
+  };
+
+  ApplyTransformChanges(active_nodes_, command_manager_, scale, get_scale,
+                        apply_scale_change);
 }
 
 }  // namespace imp::editor

@@ -18,7 +18,6 @@
 #include <openxr/openxr_platform_defines.h>
 #include <openxr/public/all_extensions.h>
 #include <openxr/public/xr_android_geospatial_anchor.h>
-#include <openxr/public/xr_androidx2_geospatial_streetscape.h>
 
 #include <cstdint>
 #include <cstring>
@@ -1198,8 +1197,6 @@ const std::vector<XrExtensionProperties> kExtensions = {
      XR_ANDROID_GEOSPATIAL_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_ANDROID_GEOSPATIAL_ANCHOR_EXTENSION_NAME},
-    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
-     XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,

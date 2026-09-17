@@ -82,7 +82,7 @@ std::unique_ptr<View> CreateImpressView(JNIEnv* env, jobject context,
                                         jstring identifier,
                                         jobject fragment_host, jobject executor,
                                         jbyteArray view_config_bytes) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   JavaVM* vm;
   jint status = env->GetJavaVM(&vm);
   if (status != JNI_OK) {
@@ -164,7 +164,7 @@ JNI_METHOD(jlong, nCreateViewWithoutHost)
 
 JNI_METHOD(void, nDestroyView)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   auto view_host =
       std::unique_ptr<ViewHost>(FromJava<ViewHost>(view_host_handle));
   THROW_IF_ERROR(env, view_host->Cleanup());
@@ -173,14 +173,14 @@ JNI_METHOD(void, nDestroyView)
 
 JNI_METHOD(jlong, nGetViewHandle)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   return ToJava(view_host->GetView());
 }
 
 JNI_METHOD(jlong, nGetScriptMessageHandlerProviderHandle)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   return ToJava(static_cast<imp::scripting::ScriptMessageHandlerProvider*>(
       view_host->GetView()));
@@ -203,7 +203,7 @@ JNI_METHOD(void, nSetLifeCycleCallback)
 JNI_METHOD(void, nCreateSwapChain)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jobject surface,
  jlong flags) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
 #if IMP_PLATFORM(ANDROID)
   THROW_IF_ERROR(
       env, FromJava<ViewHost>(view_host_handle)
@@ -218,19 +218,19 @@ JNI_METHOD(void, nCreateSwapChain)
 
 JNI_METHOD(void, nDestroySwapChain)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   THROW_IF_ERROR(env, FromJava<ViewHost>(view_host_handle)->DestroySwapChain());
 }
 
 JNI_METHOD(jboolean, nHasSwapChain)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   return FromJava<ViewHost>(view_host_handle)->HasSwapChain();
 }
 
 JNI_METHOD(void, nSetDisplayRotation)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jint orientation) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   THROW_IF_ERROR(env, FromJava<ViewHost>(view_host_handle)
                           ->SetDisplayRotation(
                               imp::window::ToWindowRotation(orientation)));
@@ -239,7 +239,7 @@ JNI_METHOD(void, nSetDisplayRotation)
 JNI_METHOD(void, nResize)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jint width, jint height,
  jfloat subpixel_ratio_x, jfloat subpixel_ratio_y) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   auto pixel_dimensions = uint2{width, height};
   auto subpixel_ratio = float2{subpixel_ratio_x, subpixel_ratio_y};
   FromJava<ViewHost>(view_host_handle)
@@ -249,7 +249,7 @@ JNI_METHOD(void, nResize)
 JNI_METHOD(void, nSetup)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jlong platform_handle,
  jlong egl_context) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   auto* platform = FromJava<filament::backend::Platform>(platform_handle);
 
@@ -278,7 +278,7 @@ JNI_METHOD(void, nSetup)
 JNI_METHOD(void, nSetupShared)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jlong engine_handle,
  jlong renderer_handle, jlong filament_view_handle, jlong scene_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   THROW_IF_ERROR(env,
                  FromJava<ViewHost>(view_host_handle)
                      ->Setup(FromJava<filament::Engine>(engine_handle),
@@ -289,7 +289,7 @@ JNI_METHOD(void, nSetupShared)
 
 JNI_METHOD(void, nFlushAndWait)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   assert(FromJava<ViewHost>(view_host_handle)->GetEngine() ==
          imp::BaseView::GetSharedEngine());
   auto* engine = imp::BaseView::GetSharedEngine();
@@ -301,6 +301,7 @@ JNI_METHOD(void, nFlushAndWait)
 
 JNI_METHOD(void, nSynchronizePendingFrames)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
+  IMP_TRACE_CATEGORY(view_detail);
   assert(FromJava<ViewHost>(view_host_handle)->GetEngine() ==
          imp::BaseView::GetSharedEngine());
   auto* engine = imp::BaseView::GetSharedEngine();
@@ -313,13 +314,13 @@ JNI_METHOD(void, nSynchronizePendingFrames)
 // Called as early as possible once work on a frame has started.
 JNI_METHOD(void, nCaptureVsyncTime)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   FromJava<ViewHost>(view_host_handle)->CaptureVsyncTime();
 }
 
 JNI_METHOD(void, nAdvanceForegroundExecutor)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   auto* view = view_host->GetView();
   view->AdvanceForegroundExecutor();
@@ -328,7 +329,7 @@ JNI_METHOD(void, nAdvanceForegroundExecutor)
 JNI_METHOD(jlong, nRenderNextFrame)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jlong last_vsync_nanos,
  jlong next_vsync_nanos) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   absl::StatusOr<FilamentHost::RenderResult> result =
       FromJava<ViewHost>(view_host_handle)
           ->RenderNextFrame(absl::Nanoseconds(last_vsync_nanos),
@@ -355,7 +356,7 @@ JNI_METHOD(jlong, nRenderNextFrame)
 JNI_METHOD(void, nIsolatedPreRender)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jlong last_vsync_nanos,
  jlong next_vsync_nanos) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   FilamentHost::RenderResult render_result;
   THROW_IF_ERROR(env,
                  FromJava<ViewHost>(view_host_handle)
@@ -367,7 +368,7 @@ JNI_METHOD(void, nIsolatedPreRender)
 
 JNI_METHOD(void, nIsolatedPostRender)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   imp::Flags<FilamentHost::RenderResultFlags> flags;
   THROW_IF_ERROR(
       env, FromJava<ViewHost>(view_host_handle)->IsolatedPostRender(&flags));
@@ -375,26 +376,26 @@ JNI_METHOD(void, nIsolatedPostRender)
 
 JNI_METHOD(void, nOnResume)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   THROW_IF_ERROR(env, FromJava<ViewHost>(view_host_handle)->Resume());
 }
 
 JNI_METHOD(void, nOnPause)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   THROW_IF_ERROR(env, FromJava<ViewHost>(view_host_handle)->Pause());
 }
 
 JNI_METHOD(void, nOnDragBegin)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   THROW_IF_ERROR(env, FromJava<ViewHost>(view_host_handle)
                           ->QueueMouseInput(FilamentHost::DragBegin{}));
 }
 JNI_METHOD(void, nOnDrag)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jfloat position_x,
  jfloat position_y, jfloat travel_x, jfloat travel_y) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   THROW_IF_ERROR(env, FromJava<ViewHost>(view_host_handle)
                           ->QueueMouseInput(FilamentHost::Drag{
                               imp::int2{position_x, position_y},
@@ -402,7 +403,7 @@ JNI_METHOD(void, nOnDrag)
 }
 JNI_METHOD(void, nOnDragEnd)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   THROW_IF_ERROR(env, FromJava<ViewHost>(view_host_handle)
                           ->QueueMouseInput(FilamentHost::DragEnd{}));
 }
@@ -410,7 +411,7 @@ JNI_METHOD(void, nOnDragEnd)
 JNI_METHOD(void, nOnScroll)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jfloat travel_x,
  jfloat travel_y) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   const float kScale = 0.05f;
   THROW_IF_ERROR(env, FromJava<ViewHost>(view_host_handle)
                           ->QueueMouseInput(FilamentHost::Wheel{imp::int2{
@@ -419,14 +420,14 @@ JNI_METHOD(void, nOnScroll)
 
 JNI_METHOD(void, nDrainAllExecutorsForTest)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   view_host->DrainAllExecutorsForTest();
 }
 
 JNI_METHOD(void, nStaticRenderForTest)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   auto status = view_host->StaticRenderForTest();
   if (!status.ok()) {
@@ -459,7 +460,7 @@ JNI_METHOD(jboolean, nShouldUseMsaaSwapChain)
 JNI_METHOD(void, nSetScriptEndpoint)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle,
  jobject script_endpoint) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   view_host->GetView()->SetScriptEndpoint(script_endpoint);
 }
@@ -467,7 +468,7 @@ JNI_METHOD(void, nSetScriptEndpoint)
 JNI_METHOD(jboolean, nSetupSurfaceRenderer)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jobject surface,
  jstring visibility_group, jstring camera_name) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view);
 #if IMP_PLATFORM(ANDROID)
   auto* view_host = FromJava<imp::ViewHost>(view_host_handle);
   void* native_window = ANativeWindow_fromSurface(env, surface);

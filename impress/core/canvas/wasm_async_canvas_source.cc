@@ -121,14 +121,15 @@ class WasmCanvasManagerCallbacks
 }  // namespace
 
 WasmAsyncCanvasSource::WasmAsyncCanvasSource(
-    bool enable_label_prep_profile_logging)
+    bool enable_label_prep_profile_logging, bool enable_labeler_timing_ticks)
     : measuring_canvas_(
           std::make_unique<WasmCanvasManager>(nullptr, float2(0.0f))),
       measuring_scoped_canvas_(*this, measuring_canvas_.get(), float2(0.0f),
                                false),
       enable_label_prep_profile_logging_(enable_label_prep_profile_logging) {
   measuring_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
-                                     /*enable_wasm_canvas_gl_texture=*/false);
+                                     /*enable_wasm_canvas_gl_texture=*/false,
+                                     enable_labeler_timing_ticks);
 }
 
 bool WasmAsyncCanvasSource::IsFeatureSupported(ScopedCanvas::Feature feature) {
@@ -394,10 +395,14 @@ void WasmAsyncCanvasSource::OnRectCleared(Rect rect) {
 
 void WasmAsyncCanvasSource::InitializeCanvasAndTexture(BaseView& view) {
   bool use_gl_texture = false;
+  bool enable_labeler_timing_ticks = false;
   if (view.GetConfig().experimental_feature_flags) {
     use_gl_texture =
         view.GetConfig()
             .experimental_feature_flags->enable_wasm_canvas_gl_texture.Value();
+    enable_labeler_timing_ticks =
+        view.GetConfig()
+            .experimental_feature_flags->enable_labeler_timing_ticks.Value();
   }
 
   if (use_gl_texture) {
@@ -436,10 +441,13 @@ void WasmAsyncCanvasSource::InitializeCanvasAndTexture(BaseView& view) {
                                    : std::nullopt,
       });
 #endif
+  measuring_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
+                                     /*enable_wasm_canvas_gl_texture=*/false,
+                                     enable_labeler_timing_ticks);
   drawing_canvas_ = std::make_unique<WasmCanvasManager>(
       std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
   drawing_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
-                                   use_gl_texture);
+                                   use_gl_texture, enable_labeler_timing_ticks);
 #if IMP_PLATFORM(WASM)
   image::details::SetLabelPrepProfileLogging(
       enable_label_prep_profile_logging_);

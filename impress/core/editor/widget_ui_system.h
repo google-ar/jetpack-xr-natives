@@ -85,6 +85,8 @@ class WidgetUiSystem : public System {
   // The active composer will become null.
   std::unique_ptr<LayoutComposer> ReleaseLayoutComposer();
 
+  bool HasLayoutComposer() const { return layout_composer_ != nullptr; }
+
   bool Is2DLargeScreenLayout() const;
 
  private:

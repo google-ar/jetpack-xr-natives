@@ -20,27 +20,22 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <utility>
 #include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "dear_imgui/imgui.h"
 #include "filament/filament/include/filament/RenderTarget.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/Viewport.h"
 #include "filament/libs/filagui/include/filagui/ImGuiHelper.h"
-#include "core/async/future.h"
 #include "core/common/debug_draw.h"
 #include "core/common/rememberer.h"
 #include "core/common/typed_id.h"
 #include "core/common/typed_vector.h"
-#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/render/blitter.h"
-#include "core/video/video_writer.h"
 #include "core/view/base_view.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filament_host.h"
@@ -77,6 +72,9 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension,
       const FilamentHost::MouseInput& latest_input) override;
   // Applies a texture render target to the internal filament view.
   void ApplyTextureRenderTarget(filament::Texture* texture) override;
+  filament::Texture* GetRenderTargetTexture() const override {
+    return render_target_texture_;
+  }
   // Returns true if the ImGui-specific view has a render target.
   bool HasRenderTarget() override { return render_target_ != nullptr; }
   // If the ImGui-specific view has a render target, the view will be submitted

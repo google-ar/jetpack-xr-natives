@@ -22,9 +22,12 @@
 #include <condition_variable>
 #include <mutex>
 
-#include "filament/filament/backend/include/backend/CallbackHandler.h"
+#include "core/common/log.h"
 #include "filament/filament/include/filament/Engine.h"
+#include "filament/filament/include/filament/Fence.h"
+#include "filament/filament/include/filament/RenderTarget.h"
 #include "filament/filament/include/filament/SwapChain.h"
+#include "filament/filament/include/filament/Texture.h"
 
 namespace imp {
 namespace video {
@@ -32,47 +35,64 @@ namespace video {
 // The start code prefix for H.264 NAL units.
 constexpr uint8_t kStartCode[] = {0x00, 0x00, 0x00, 0x01};
 
-namespace {
-// A CallbackHandler that simply calls the callback on the same thread that
-// calls post. When passing a custom CallbackHandler to
-// setFrameCompletedCallback, this is guaranteed to not be the main Filament
-// thread.
-class FrameCompletedCallbackHandler
-    : public filament::backend::CallbackHandler {
- public:
-  void post(void* user,
-            filament::backend::CallbackHandler::Callback callback) override {
-    callback(user);
-  };
-
-  ~FrameCompletedCallbackHandler() override = default;
-};
-}  // namespace
-
-// A lightweight structure to hold a pixel buffer, swap chain, and
+// A lightweight structure to hold a pixel buffer and
 // synchronization structures for writing a video frame.
 class VideoFrame {
  public:
   VideoFrame(filament::Engine& engine, CVPixelBufferRef pxbuffer,
              double timestamp)
       : engine_(engine), pxbuffer_(pxbuffer), timestamp_(timestamp) {
-    static FrameCompletedCallbackHandler filamentCallbackHandler;
-    swap_chain_ = engine.createSwapChain(
-        (void*)pxbuffer_, filament::SwapChain::CONFIG_APPLE_CVPIXELBUFFER |
-                              filament::SwapChain::CONFIG_READABLE);
-    swap_chain_->setFrameCompletedCallback(
-        &filamentCallbackHandler, [&](filament::SwapChain* swapchain) {
-          // Because we're passing a custom CallbackHandler, this
-          // lambda is guaranteed to be called on a thread that
-          // isn't the main Filament thread.
-          std::unique_lock<std::mutex> lock(mutex_);
-          finished_ = true;
-          cond_.notify_all();
-        });
+    CVPixelBufferRetain(pxbuffer);
+    bool needs_resize = false;
+    if (width_ != CVPixelBufferGetWidth(pxbuffer) ||
+        height_ != CVPixelBufferGetHeight(pxbuffer)) {
+      width_ = CVPixelBufferGetWidth(pxbuffer);
+      height_ = CVPixelBufferGetHeight(pxbuffer);
+      needs_resize = true;
+    }
+    if (needs_resize) {
+      if (texture_) {
+        engine_.destroy(texture_);
+        texture_ = nullptr;
+      }
+      if (render_target_) {
+        engine_.destroy(render_target_);
+        render_target_ = nullptr;
+      }
+      if (swap_chain_) {
+        engine_.destroy(swap_chain_);
+        swap_chain_ = nullptr;
+      }
+    }
+    if (!texture_)
+      texture_ = filament::Texture::Builder()
+                     .width(width_)
+                     .height(height_)
+                     .levels(1)
+                     .format(filament::Texture::InternalFormat::RGBA8)
+                     .usage(filament::Texture::Usage::COLOR_ATTACHMENT)
+                     .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                     .external()
+                     .build(engine);
+    if (texture_) {
+      texture_->setExternalImage(engine, (void*)pxbuffer_);
+    }
+    if (!render_target_)
+      render_target_ =
+          filament::RenderTarget::Builder()
+              .texture(filament::RenderTarget::AttachmentPoint::COLOR, texture_)
+              .build(engine);
   }
 
   ~VideoFrame() {
-    engine_.destroy(swap_chain_);
+    if (fence_) {
+      engine_.destroy(fence_);
+    }
+    if (swap_chain_) {
+      engine_.destroy(swap_chain_);
+    }
+    engine_.destroy(render_target_);
+    engine_.destroy(texture_);
     CFRelease(pxbuffer_);
   }
 
@@ -80,24 +100,41 @@ class VideoFrame {
   VideoFrame(const VideoFrame& src) = delete;
   void operator=(const VideoFrame& src) = delete;
 
-  // Blocks until all GPU commands for this frame have been completed.
-  void WaitOnFence() {
-    std::unique_lock<std::mutex> lock(mutex_);
-    cond_.wait(lock, [&] { return finished_; });
+  void SetFence(filament::Fence* fence) {
+    if (fence_) engine_.destroy(fence_);
+    fence_ = fence;
   }
 
-  filament::SwapChain* GetSwapChain() const { return swap_chain_; }
+  // Blocks until all GPU commands for this frame have been completed.
+  void WaitOnFence() {
+    if (fence_) {
+      fence_->wait();
+    }
+  }
+
+  filament::Texture* GetTexture() const { return texture_; }
+  filament::RenderTarget* GetRenderTarget() const { return render_target_; }
+  filament::SwapChain* GetSwapChain() {
+    if (!swap_chain_) {
+      swap_chain_ = engine_.createSwapChain(
+          (void*)pxbuffer_, filament::SwapChain::CONFIG_APPLE_CVPIXELBUFFER |
+                                filament::SwapChain::CONFIG_READABLE);
+    }
+    return swap_chain_;
+  }
   CVPixelBufferRef GetPixelBuffer() const { return pxbuffer_; }
   double GetTimestamp() const { return timestamp_; }
 
  private:
   filament::Engine& engine_;
+  filament::Texture* texture_ = nullptr;
+  filament::RenderTarget* render_target_ = nullptr;
   filament::SwapChain* swap_chain_ = nullptr;
-  bool finished_ = false;
-  std::mutex mutex_;
-  std::condition_variable cond_;
+  filament::Fence* fence_ = nullptr;
   CVPixelBufferRef pxbuffer_;
   double timestamp_;
+  uint64_t width_ = 0;
+  uint64_t height_ = 0;
 };
 
 }  // namespace video

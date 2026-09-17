@@ -19,6 +19,8 @@
 
 #include <vector>
 
+#include "core/editor/common/notifying_property.h"
+#include "core/editor/editor_settings.h"
 #include "core/editor/widgets/transform_widget_state.proto.imp.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
@@ -47,14 +49,15 @@ class TransformWidget : public imp::Component {
   static constexpr UpdatePhase kUpdatePhase = UpdatePhase::kEnd;
 
  private:
-  enum class Mode { kTranslate, kRotate, kScale };
-  void SetMode(Mode mode);
+  void SetMode(TransformWidgetMode mode);
   void UpdateWidgetTransform();
 
   std::vector<NodeHandle> active_nodes_;
   int scale_level_ = 0;
   float scale_ = 1.0f;
-  Mode mode_ = Mode::kTranslate;
+  TransformWidgetMode mode_ = TransformWidgetMode::kTranslate;
+  PropertyBinding<TransformWidgetMode> mode_binding_;
+  PropertyBinding<bool> local_space_binding_;
   bool use_local_space_ = true;
   TransformWidgetState state_;
 

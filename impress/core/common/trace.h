@@ -37,6 +37,16 @@
 #define IMP_PROFILE_REGISTER_THREAD(name)
 #endif  // IMP_RUNTIME(DEV)
 
+// The generated trace categories file establishes the legal category names and
+// defines the macros that conditionally dispatch if those categories are
+// included in the build.
+#include "core/common/trace_categories.h"
+
+// Establish the default trace category.
+#ifndef IMP_TRACE_DEFAULT_CATEGORY
+#define IMP_TRACE_DEFAULT_CATEGORY default
+#endif
+
 // IMP_TRACE_USE_PERFETTO can be defined by adding:
 //   --//third_party/impress/core:imp_trace_use_perfetto=True
 // to your `blaze build`. Note that Perfetto does not support WASM; see
@@ -54,22 +64,25 @@
 #include "perfetto/tracing/track_event.h"
 #include "perfetto/tracing/track_event_category_registry.h"
 
-#define IMP_TRACE_CATEGORY "Impress"
 
 namespace imp_perfetto_tracing {
 void InitializePerfetto();
 }  // namespace imp_perfetto_tracing
 
 PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE(imp_perfetto_tracing,
-                                        perfetto::Category(IMP_TRACE_CATEGORY));
+                                        IMP_PERFETTO_CATEGORIES);
 
 PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 
-#define IMP_TRACE_IMPL_PERFETTO(name) \
-  TRACE_EVENT(IMP_TRACE_CATEGORY, perfetto::StaticString{name})
+#define IMP_TRACE_STR(x) #x
+#define IMP_TRACE_TO_STR(x) IMP_TRACE_STR(x)
 
-#define IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value) \
-  TRACE_COUNTER(IMP_TRACE_CATEGORY, perfetto::StaticString{name}, value)
+#define IMP_TRACE_IMPL_PERFETTO(name, cat) \
+  TRACE_EVENT("impress." IMP_TRACE_TO_STR(cat), perfetto::StaticString{name})
+
+#define IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value, cat) \
+  TRACE_COUNTER("impress." IMP_TRACE_TO_STR(cat),         \
+                perfetto::StaticString{name}, value)
 
 #define IMP_TRACE_INIT() imp_perfetto_tracing::InitializePerfetto();
 
@@ -93,18 +106,18 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 #endif
 #endif  // IMP_TRACE_ENABLED
 
-#define IMP_TRACE_IMPL_PERFETTO(name)
-#define IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value)
+#define IMP_TRACE_IMPL_PERFETTO(name, cat)
+#define IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value, cat)
 #endif  // IMP_TRACE_USE_PERFETTO
 
-#define IMP_TRACE_PRIVATE_IMPL(name) \
-  IMP_TRACE_IMPL_PERFETTO(name);     \
-  IMP_TRACE_IMPL_SYSTRACE(name);     \
+#define IMP_TRACE_PRIVATE_IMPL(name, cat) \
+  IMP_TRACE_IMPL_PERFETTO(name, cat);     \
+  IMP_TRACE_IMPL_SYSTRACE(name);          \
   IMP_TRACE_IMPL_PROFILER(name);
 
-#define IMP_TRACE_PRIVATE_COUNTER_IMPL(name, value) \
-  IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value);     \
-  IMP_TRACE_COUNTER_IMPL_SYSTRACE(name, value);     \
+#define IMP_TRACE_PRIVATE_COUNTER_IMPL(name, value, cat) \
+  IMP_TRACE_COUNTER_IMPL_PERFETTO(name, value, cat);     \
+  IMP_TRACE_COUNTER_IMPL_SYSTRACE(name, value);          \
   IMP_TRACE_COUNTER_IMPL_PROFILER(name, value);
 
 // Define Perfetto-specific symbols to empty when unused
@@ -120,6 +133,7 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 //
 // Example:
 //    void Foo() { IMP_TRACE(); }
+//    void Bar() { IMP_TRACE_CATEGORY(client); }
 //
 // IMP_TRACE_TEMPLATED() is a macro that will emit a systrace/perfetto event
 // with the name of the calling function and the provided types. This is like
@@ -130,6 +144,8 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 // Example:
 //    template <typename T, typename U>
 //    void Foo() { IMP_TRACE_TEMPLATED(T, U); }
+//    template <typename T, typename U>
+//    void Bar() { IMP_TRACE_TEMPLATED_CATEGORY(client, T, U); }
 //
 // IMP_TRACE_BLOCK() is a macro that will emit a systrace/perfetto event with
 // the name of the calling function and will be active for the duration of the
@@ -149,6 +165,7 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 //
 // Example:
 //    void Foo() { IMP_TRACE_NAME("CustomTraceName"); }
+//    void Bar() { IMP_TRACE_CATEGORY_NAME(client, "CustomTraceName"); }
 //
 // IMP_TRACE_NAME_TEMPLATED() is a macro that will emit a systrace/perfetto
 // event with the name provided and the provided types.
@@ -156,18 +173,44 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 // Example:
 //    template <typename T, typename U>
 //    void Foo() { IMP_TRACE_NAME_TEMPLATED("CustomTraceName", T, U); }
+//
+// IMP_TRACE_COUNTER() is a macro that records a numerical counter update.
+//
+// Example:
+//    void Foo() { IMP_TRACE_COUNTER("MyCounter", 10); }
+//    void Bar() { IMP_TRACE_CATEGORY_COUNTER(client, "MyCounter", 10); }
 
 // IMP_TRACE() et al only emit code if systrace or perfetto is enabled
 #if IMP_TRACE_ENABLED
-#define IMP_TRACE() IMP_TRACE_PRIVATE()
-#define IMP_TRACE_TEMPLATED(types...) IMP_TRACE_PRIVATE_TEMPLATED(types)
-#define IMP_TRACE_BLOCK(name) IMP_TRACE_PRIVATE_BLOCK(name)
-#define IMP_TRACE_NAME(name) IMP_TRACE_PRIVATE_NAME(name)
+#define IMP_TRACE_CATEGORY(cat) IMP_TRACE_PRIVATE(cat)
+#define IMP_TRACE_TEMPLATED_CATEGORY(cat, types...) \
+  IMP_TRACE_PRIVATE_TEMPLATED(cat, types)
+#define IMP_TRACE_CATEGORY_BLOCK(cat, name) IMP_TRACE_PRIVATE_BLOCK(cat, name)
+#define IMP_TRACE_CATEGORY_NAME(cat, name) IMP_TRACE_PRIVATE_NAME(cat, name)
+#define IMP_TRACE_NAME_TEMPLATED_CATEGORY(cat, name, types...) \
+  IMP_TRACE_PRIVATE_NAME_TEMPLATED(cat, name, types)
+#define IMP_TRACE_CATEGORY_COUNTER(cat, name, value) \
+  IMP_TRACE_PRIVATE_COUNTER(cat, name, value)
+
+#define IMP_TRACE() IMP_TRACE_CATEGORY(IMP_TRACE_DEFAULT_CATEGORY)
+#define IMP_TRACE_TEMPLATED(types...) \
+  IMP_TRACE_TEMPLATED_CATEGORY(IMP_TRACE_DEFAULT_CATEGORY, types)
+#define IMP_TRACE_BLOCK(name) \
+  IMP_TRACE_CATEGORY_BLOCK(IMP_TRACE_DEFAULT_CATEGORY, name)
+#define IMP_TRACE_NAME(name) \
+  IMP_TRACE_CATEGORY_NAME(IMP_TRACE_DEFAULT_CATEGORY, name)
 #define IMP_TRACE_NAME_TEMPLATED(name, types...) \
-  IMP_TRACE_PRIVATE_NAME_TEMPLATED(name, types)
+  IMP_TRACE_NAME_TEMPLATED_CATEGORY(IMP_TRACE_DEFAULT_CATEGORY, name, types)
 #define IMP_TRACE_COUNTER(name, value) \
-  IMP_TRACE_PRIVATE_COUNTER_IMPL(name, value)
+  IMP_TRACE_CATEGORY_COUNTER(IMP_TRACE_DEFAULT_CATEGORY, name, value)
 #else  // IMP_TRACE_ENABLED
+#define IMP_TRACE_CATEGORY(cat)
+#define IMP_TRACE_TEMPLATED_CATEGORY(cat, types...)
+#define IMP_TRACE_CATEGORY_BLOCK(cat, name)
+#define IMP_TRACE_CATEGORY_NAME(cat, name)
+#define IMP_TRACE_NAME_TEMPLATED_CATEGORY(cat, name, types...)
+#define IMP_TRACE_CATEGORY_COUNTER(cat, name, value)
+
 #define IMP_TRACE()
 #define IMP_TRACE_TEMPLATED(types...)
 #define IMP_TRACE_BLOCK(name)

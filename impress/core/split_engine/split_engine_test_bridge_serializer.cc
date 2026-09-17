@@ -134,10 +134,7 @@ std::string SplitEngineTestBridgeSerializer::GetDataFilename() {
   const std::string test_name =
       test_name_with_index.substr(0, test_name_with_index.rfind('/'));
   const std::string test_suite_with_index(test_info->test_suite_name());
-  const std::string test_suite =
-      test_suite_with_index.substr(test_suite_with_index.rfind('/') + 1);
-  return absl::StrFormat("%s_%s_%s.bin", test_suite, test_name,
-                         absl::StrCat(snapshot_index_));
+  return absl::StrFormat("%s_%s.bin", test_name, absl::StrCat(snapshot_index_));
 }
 
 std::string SplitEngineTestBridgeSerializer::GetSnapshotDirWrite() {

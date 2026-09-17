@@ -16,19 +16,18 @@
 
 #include "GLSLTools.h"
 
-#include <filamat/Enums.h>
+#include "ASTHelpers.h"
+#include "builtinResource.h"
+
 #include <filament/MaterialEnums.h>
+
+#include <filamat/Enums.h>
 #include <filamat/MaterialBuilder.h>
 
 #include "filament/libs/utils/include/utils/Log.h"
 
-#include "ASTHelpers.h"
-
-// GLSLANG headers
 #include "glslang/Include/InfoSink.h"
 #include "glslang/MachineIndependent/localintermediate.h"
-
-#include "builtinResource.h"
 
 using namespace utils;
 using namespace glslang;

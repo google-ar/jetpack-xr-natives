@@ -74,6 +74,10 @@ class SkinningSystem;
 class TextureFactory;
 class TextureRegistry;
 class MaterialFactory;
+template <typename T, typename... Deps>
+class OwnedPtrStore;
+class Material;
+using MaterialStore = OwnedPtrStore<Material>;
 class ModelFactory;
 class EnvironmentLightFactory;
 class GroupsManager;
@@ -167,6 +171,9 @@ class BaseView : public Rememberer,
 
   // Returns the MaterialFactory used to load materials.
   virtual MaterialFactory& GetMaterialFactory() noexcept = 0;
+
+  // Returns the material store owned by this View.
+  virtual MaterialStore& GetMaterialStore() noexcept = 0;
 
   // Returns the ModelFactory used to load models.
   virtual ModelFactory& GetModelFactory() noexcept = 0;

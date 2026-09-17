@@ -24,8 +24,8 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "absl/base/nullability.h"
@@ -45,8 +45,6 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "flatbuffers/string.h"
-#include "flatbuffers/vector.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
@@ -54,15 +52,14 @@
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
 #include "core/common/type_helpers.h"
+#include "core/common/type_traits.h"
 #include "core/config.h"
 #include "core/geometry/shapes/box.h"
 #include "core/geometry/shapes/capsule.h"
 #include "core/geometry/shapes/sphere.h"
 #include "core/lighting/image_based_lighting_types.h"
-#include "core/loader/provider/details/loaded_model_builder.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/material_library/generic_material_spec.h"
-#include "core/material_library/material_param_value.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/math.h"
@@ -113,15 +110,17 @@ static constexpr absl::string_view kIndent = "  ";
 
 static constexpr Box kDefaultBox;
 
-// This is used to ensure that we skip serializing the placeholder material when
-// we are in local mode.
+// This is used to ensure that we skip serializing the placeholder or other non
+// split engine materials when we are in split engine mode.
 //
 // This is needed for the legacy AddMaterial/RemoveMaterial commands.
 // That being said, it still makes sense not to serialize the placeholder
 // material anyways.
-// TODO: (broken link) - Find a better way to check the placeholder material.
-bool IsPlaceholderSplitEngineMaterial(const filament::Material* material) {
-  return strcmp(material->getName(), "Split Engine Placeholder") == 0;
+bool IsLocalMaterial(const filament::Material* material) {
+  if (material) {
+    return material->getSource().empty();
+  }
+  return true;
 }
 
 template <typename T>
@@ -147,7 +146,7 @@ void LogMaterialParam(absl::string_view name,
 template <typename T>
 void LogMaterialParam(absl::string_view name,
                       android_xr::schemas::MaterialParamValue type,
-                      const std::vector<T>& values) {
+                      absl::Span<const T> values) {
   std::stringstream ss;
   ss << "[";
   for (size_t i = 0; i < values.size(); ++i) {
@@ -249,6 +248,83 @@ static_assert(android_xr::schemas::BuiltInMaterialParameters::MAX ==
                       BuiltInMaterialGsplatParameters,
               "New fields added but assert not updated");
 
+template <typename T>
+constexpr bool IsScalarSupportedAtApiLevel1() {
+  using CleanT = std::remove_cv_t<std::remove_reference_t<T>>;
+  if constexpr (std::is_same_v<CleanT, uint> || std::is_same_v<CleanT, uint2> ||
+                std::is_same_v<CleanT, uint3> ||
+                std::is_same_v<CleanT, uint4>) {
+    return false;
+  }
+  return true;
+}
+
+template <typename T>
+constexpr bool IsSpanSupportedAtApiLevel1() {
+  using CleanT = std::remove_cv_t<std::remove_reference_t<T>>;
+  if constexpr (std::is_same_v<CleanT, mat3f> ||
+                std::is_same_v<CleanT, mat4f>) {
+    return true;
+  }
+  return false;
+}
+
+template <typename T>
+flatbuffers::Offset<android_xr::schemas::MaterialParamInfo>
+AddMaterialScalarParam(flatbuffers::FlatBufferBuilder& fbb,
+                       absl::string_view name,
+                       android_xr::schemas::MaterialParamValue type,
+                       const T& value) {
+  LogMaterialParam(name, type, value);
+  return android_xr::schemas::CreateMaterialParamInfo(
+      fbb, fbb.CreateString(name.data(), name.size()), type,
+      fbb.CreateStruct(Pack(value)).Union());
+}
+
+template <typename SchemaStructT, typename T, typename CreateVecFn>
+flatbuffers::Offset<android_xr::schemas::MaterialParamInfo>
+AddMaterialSpanParam(flatbuffers::FlatBufferBuilder& fbb,
+                     absl::string_view name,
+                     android_xr::schemas::MaterialParamValue type,
+                     absl::Span<const T> value, CreateVecFn create_vec_fn) {
+  LogMaterialParam(name, type, value);
+  return android_xr::schemas::CreateMaterialParamInfo(
+      fbb, fbb.CreateString(name.data(), name.size()), type,
+      create_vec_fn(fbb, fbb.CreateVectorOfNativeStructs<SchemaStructT>(
+                             value.data(), value.size(), Pack))
+          .Union());
+}
+
+flatbuffers::Offset<android_xr::schemas::MaterialParamInfo>
+AddMaterialMat3fSpanParam(flatbuffers::FlatBufferBuilder& fbb,
+                          absl::string_view name,
+                          absl::Span<const mat3f> value) {
+  LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Mat3fVector,
+                   value);
+  return android_xr::schemas::CreateMaterialParamInfo(
+      fbb, fbb.CreateString(name.data(), name.size()),
+      android_xr::schemas::MaterialParamValue::Mat3fVector,
+      android_xr::schemas::CreateMat3fVector(
+          fbb, fbb.CreateVectorOfNativeStructs<android_xr::schemas::Mat3f>(
+                   value.data(), value.size(), Pack))
+          .Union());
+}
+
+flatbuffers::Offset<android_xr::schemas::MaterialParamInfo>
+AddMaterialMat4fSpanParam(flatbuffers::FlatBufferBuilder& fbb,
+                          absl::string_view name,
+                          absl::Span<const mat4f> value) {
+  LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Mat4fVector,
+                   value);
+  return android_xr::schemas::CreateMaterialParamInfo(
+      fbb, fbb.CreateString(name.data(), name.size()),
+      android_xr::schemas::MaterialParamValue::Mat4fVector,
+      android_xr::schemas::CreateMat4fVector(
+          fbb, fbb.CreateVectorOfNativeStructs<android_xr::schemas::Mat4f>(
+                   value.data(), value.size(), Pack))
+          .Union());
+}
+
 }  // namespace
 
 // TODO: (broken link) - Add more using statements (esp. android_xr::schemas) to
@@ -296,8 +372,7 @@ bool SplitEngineSerializerImpl::HasComponent(utils::Entity entity) const {
 
 void SplitEngineSerializerImpl::Destroy(utils::Entity entity) {
   SerializerDataTypes::Batch<CommandTypes::RemoveRenderables>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::RemoveRenderables>(
-          {entity});
+      batch_manager_.GetOrCreateBatch<CommandTypes::RemoveRenderables>(entity);
   batch.data.insert(entity);
 }
 
@@ -411,19 +486,16 @@ void SplitEngineSerializerImpl::SetBonesInternal(
 void SplitEngineSerializerImpl::SetBonesInternal(
     filament::RenderableManager::Instance instance, mat4f const* transforms,
     size_t boneCount, size_t offset) {
-  if (offset != 0) {
-    IMP_LOG(imp::FATAL) << kTag << "Nonzero offset is not supported.";
-  }
-
   utils::Entity entity = GetEntity(instance);
   SerializerDataTypes::Batch<CommandTypes::UpdateRenderables>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::UpdateRenderables>(
           {entity});
-  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
-      BorrowFlatBufferBuilder(batch);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
   batch.data[entity].bones = android_xr::schemas::CreateBones(
-      *fbb, fbb->CreateVectorOfNativeStructs<android_xr::schemas::Mat4f>(
-                transforms, boneCount, Pack));
+      fbb,
+      fbb.CreateVectorOfNativeStructs<android_xr::schemas::Mat4f>(
+          transforms, boneCount, Pack),
+      offset);
 }
 
 void SplitEngineSerializerImpl::SetAxisAlignedBoundingBox(
@@ -528,11 +600,10 @@ void SplitEngineSerializerImpl::SetMorphWeights(
   SerializerDataTypes::Batch<CommandTypes::UpdateRenderables>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::UpdateRenderables>(
           {entity});
-  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
-      BorrowFlatBufferBuilder(batch);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
 
   batch.data[entity].morph_weights = android_xr::schemas::CreateMorphWeights(
-      *fbb, fbb->CreateVector(weights, count), offset);
+      fbb, fbb.CreateVector(weights, count), offset);
 }
 
 bool SplitEngineSerializerImpl::IsCullingEnabled(
@@ -548,13 +619,13 @@ SplitEngineSerializerImpl::NewBuilder(size_t count) {
              SerializerDataTypes::UpdateRenderableInfo update_info) {
         SerializerDataTypes::Batch<CommandTypes::AddRenderables>& add_batch =
             batch_manager_.GetOrCreateBatch<CommandTypes::AddRenderables>(
-                {entity});
+                entity);
         add_batch.data[entity] = std::move(add_info);
 
-        SerializerDataTypes::Batch<
-            CommandTypes::UpdateRenderables>& update_batch =
-            batch_manager_.GetOrCreateBatch<CommandTypes::UpdateRenderables>(
-                {entity});
+        SerializerDataTypes::Batch<CommandTypes::UpdateRenderables>&
+            update_batch =
+                batch_manager_
+                    .GetOrCreateBatch<CommandTypes::UpdateRenderables>(entity);
         update_batch.data[entity] = std::move(update_info);
       },
       count);
@@ -856,7 +927,7 @@ void SplitEngineSerializerImpl::SetPreferredEnvironmentIblAsset(
       batch =
           batch_manager_
               .GetOrCreateBatch<CommandTypes::SetPreferredEnvironmentIblAsset>(
-                  {}, {ibl_id});
+                  ibl_id);
   batch.data = SerializerDataTypes::EnvironmentLightParams{
       .image_based_lighting_asset_id = ibl_id,
       .intensity = intensity,
@@ -911,31 +982,26 @@ void SplitEngineSerializerImpl::RemoveIndexBuffer(
   RemoveId(buffer_id);
 }
 
-imp::BorrowedPtr<flatbuffers::FlatBufferBuilder>
-SplitEngineSerializerImpl::BorrowFlatBufferBuilder(
+flatbuffers::FlatBufferBuilder& SplitEngineSerializerImpl::GetFlatBufferBuilder(
     SerializerDataTypes::CommandBatchBase& batch) {
-  // Return existing or create new FlatBufferBuilder.
-  auto it = fbb_.find(&batch);
-  if (it != fbb_.end()) {
-    return it->second.Borrow();
+  if (batch.index >= fbb_vector_.size()) {
+    fbb_vector_.resize(batch.index + 1);
   }
-
-  return fbb_.emplace(&batch, CreateFlatBufferBuilder()).first->second.Borrow();
+  if (!fbb_vector_[batch.index]) {
+    fbb_vector_[batch.index] = CreateFlatBufferBuilder();
+  }
+  return *fbb_vector_[batch.index];
 }
 
 imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>
 SplitEngineSerializerImpl::ReleaseFlatBufferBuilder(
     SerializerDataTypes::CommandBatchBase& batch) {
-  auto it = fbb_.find(&batch);
-  if (it == fbb_.end()) {
+  if (batch.index >= fbb_vector_.size() || !fbb_vector_[batch.index]) {
     // Some commands does not create flatbuffer builder at the time of batch
     // creation. In this case we just return an empty builder.
     return CreateFlatBufferBuilder();
   }
-  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
-      std::move(it->second);
-  fbb_.erase(it);
-  return fbb;
+  return std::move(fbb_vector_[batch.index]);
 }
 
 int32_t SplitEngineSerializerImpl::GetApiLevel() const { return api_level_; }
@@ -954,7 +1020,7 @@ bool SplitEngineSerializerImpl::ReadyForNextFrame() const {
 void SplitEngineSerializerImpl::AddMaterial(
     const filament::Material* material, const BufferAccess& data,
     const MaterialPreCompileOptions& material_pre_compile_options) {
-  if (IsPlaceholderSplitEngineMaterial(material) ||
+  if (IsLocalMaterial(material) ||
       !view_.AreSplitEngineMaterialsInLocalMode()) {
     return;
   }
@@ -962,10 +1028,8 @@ void SplitEngineSerializerImpl::AddMaterial(
   const ResourceId material_id = GetId(material);
   IMP_LOG(imp::INFO) << kTag << "add material: " << material_id;
   SerializerDataTypes::Batch<CommandTypes::AddMaterials>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::AddMaterials>(
-          {}, {material_id});
-  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
-      BorrowFlatBufferBuilder(batch);
+      batch_manager_.GetOrCreateBatch<CommandTypes::AddMaterials>(material_id);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
 
   std::vector<
       flatbuffers::Offset<android_xr::schemas::MaterialPrecompileConstant>>
@@ -979,9 +1043,9 @@ void SplitEngineSerializerImpl::AddMaterial(
       case MaterialPreCompileConstant::kValue_IntValue:
         constants.push_back(
             android_xr::schemas::CreateMaterialPrecompileConstant(
-                *fbb, fbb->CreateString(constant.name),
+                fbb, fbb.CreateString(constant.name),
                 android_xr::schemas::MaterialPrecompileConstantValue::Int,
-                fbb->CreateStruct(Pack(*constant.int_value())).Union()));
+                fbb.CreateStruct(Pack(*constant.int_value())).Union()));
         IMP_LOG(imp::INFO) << kTag << kIndent
                    << "material precompile constant: " << constant.name
                    << " int value: " << *constant.int_value();
@@ -989,9 +1053,9 @@ void SplitEngineSerializerImpl::AddMaterial(
       case MaterialPreCompileConstant::kValue_FloatValue:
         constants.push_back(
             android_xr::schemas::CreateMaterialPrecompileConstant(
-                *fbb, fbb->CreateString(constant.name),
+                fbb, fbb.CreateString(constant.name),
                 android_xr::schemas::MaterialPrecompileConstantValue::Float,
-                fbb->CreateStruct(Pack(*constant.float_value())).Union()));
+                fbb.CreateStruct(Pack(*constant.float_value())).Union()));
         IMP_LOG(imp::INFO) << kTag << kIndent
                    << "material precompile constant: " << constant.name
                    << " float value: " << *constant.float_value();
@@ -999,9 +1063,9 @@ void SplitEngineSerializerImpl::AddMaterial(
       case MaterialPreCompileConstant::kValue_BoolValue:
         constants.push_back(
             android_xr::schemas::CreateMaterialPrecompileConstant(
-                *fbb, fbb->CreateString(constant.name),
+                fbb, fbb.CreateString(constant.name),
                 android_xr::schemas::MaterialPrecompileConstantValue::Bool,
-                fbb->CreateStruct(Pack(*constant.bool_value())).Union()));
+                fbb.CreateStruct(Pack(*constant.bool_value())).Union()));
         IMP_LOG(imp::INFO) << kTag << kIndent
                    << "material precompile constant: " << constant.name
                    << " boolean value: " << *constant.bool_value();
@@ -1014,10 +1078,10 @@ void SplitEngineSerializerImpl::AddMaterial(
 
   flatbuffers::Offset<android_xr::schemas::MaterialPrecompileOptions> options =
       android_xr::schemas::CreateMaterialPrecompileOptions(
-          *fbb, fbb->CreateVector(constants));
+          fbb, fbb.CreateVector(constants));
 
   batch.data.push_back(android_xr::schemas::CreateMaterial(
-      *fbb, material_id, fbb->CreateVector(data.Data(), data.Size()), options));
+      fbb, material_id, fbb.CreateVector(data.Data(), data.Size()), options));
 }
 
 void SplitEngineSerializerImpl::RemoveMaterial(
@@ -1041,467 +1105,364 @@ void SplitEngineSerializerImpl::AddMaterialInstance(
   batch.data.insert({instance_id, material_id});
 }
 
-flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> AddMaterialParam(
-    flatbuffers::FlatBufferBuilder& fbb, absl::string_view name,
-    const MaterialParamValue& value) {
-  struct Visitor {
-    flatbuffers::FlatBufferBuilder& fbb;
-    absl::string_view name;
-    flatbuffers::Offset<flatbuffers::String> fb_name;
+template <typename T>
+void SplitEngineSerializerImpl::SetMaterialScalarParamImpl(
+    uint64_t material_id, absl::string_view name,
+    android_xr::schemas::MaterialParamValue type, const T& value) {
+  if (api_level_ < 4 && !IsScalarSupportedAtApiLevel1<T>()) {
+    IMP_LOG(imp::FATAL)
+        << "Material parameter type "
+        << imp::type_traits::kTypeName<T> << " is not supported at API level "
+        << api_level_ << " - requires API level 4.";
+  }
 
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const float value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Float,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Float,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const float2& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Float2,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Float2,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const float3& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Float3,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Float3,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const float4& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Float4,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Float4,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const int value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Int,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Int,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const int2& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Int2,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Int2,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const int3& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Int3,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Int3,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const int4& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Int4,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Int4,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const uint value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Uint,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const uint2& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Uint2,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint2,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const uint3& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Uint3,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint3,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const uint4& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Uint4,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint4,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const bool value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Bool,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Bool,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const bool2& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Bool2,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Bool2,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const bool3& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Bool3,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Bool3,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const bool4& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Bool4,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Bool4,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const loader::details::LoadedModelBuilder::MaterialTextureId&
-            raw_value) {
-      IMP_LOG(imp::FATAL) << kTag
-                 << "SetMaterialParam(TextureId) should never be called. It "
-                    "should be converted into a Texture* instead.";
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name,
-          android_xr::schemas::MaterialParamValue::MaterialTextureId,
-          fbb.CreateStruct(
-                 android_xr::schemas::MaterialTextureId(uint16_t{raw_value}))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const mat3f& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Mat3f,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Mat3f,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const mat4f& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::Mat4f,
-                       value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Mat4f,
-          fbb.CreateStruct(Pack(value)).Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<float>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::FloatVector, value);
-      std::vector<android_xr::schemas::Float> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::FloatVector,
-          android_xr::schemas::CreateFloatVector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<float2>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Float2Vector, value);
-      std::vector<android_xr::schemas::Float2> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Float2Vector,
-          android_xr::schemas::CreateFloat2Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<float3>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Float3Vector, value);
-      std::vector<android_xr::schemas::Float3> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Float3Vector,
-          android_xr::schemas::CreateFloat3Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<float4>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Float4Vector, value);
-      std::vector<android_xr::schemas::Float4> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Float4Vector,
-          android_xr::schemas::CreateFloat4Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<int>& value) {
-      LogMaterialParam(name, android_xr::schemas::MaterialParamValue::IntVector,
-                       value);
-      std::vector<android_xr::schemas::Int> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::IntVector,
-          android_xr::schemas::CreateIntVector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<int2>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Int2Vector, value);
-      std::vector<android_xr::schemas::Int2> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Int2Vector,
-          android_xr::schemas::CreateInt2Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<int3>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Int3Vector, value);
-      std::vector<android_xr::schemas::Int3> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Int3Vector,
-          android_xr::schemas::CreateInt3Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<int4>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Int4Vector, value);
-      std::vector<android_xr::schemas::Int4> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Int4Vector,
-          android_xr::schemas::CreateInt4Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<uint>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::UintVector, value);
-      std::vector<android_xr::schemas::Uint> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::UintVector,
-          android_xr::schemas::CreateUintVector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<uint2>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Uint2Vector, value);
-      std::vector<android_xr::schemas::Uint2> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint2Vector,
-          android_xr::schemas::CreateUint2Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<uint3>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Uint3Vector, value);
-      std::vector<android_xr::schemas::Uint3> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint3Vector,
-          android_xr::schemas::CreateUint3Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<uint4>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Uint4Vector, value);
-      std::vector<android_xr::schemas::Uint4> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint4Vector,
-          android_xr::schemas::CreateUint4Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<bool>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::BoolVector, value);
-      std::vector<android_xr::schemas::Bool> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::BoolVector,
-          android_xr::schemas::CreateBoolVector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<bool2>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Bool2Vector, value);
-      std::vector<android_xr::schemas::Bool2> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Bool2Vector,
-          android_xr::schemas::CreateBool2Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<bool3>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Bool3Vector, value);
-      std::vector<android_xr::schemas::Bool3> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Bool3Vector,
-          android_xr::schemas::CreateBool3Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<bool4>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Bool4Vector, value);
-      std::vector<android_xr::schemas::Bool4> packed_values;
-      packed_values.reserve(value.size());
-      for (const auto& v : value) {
-        packed_values.push_back(Pack(v));
-      }
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Bool4Vector,
-          android_xr::schemas::CreateBool4Vector(
-              fbb, fbb.CreateVectorOfStructs(packed_values))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<mat3f>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Mat3fVector, value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Mat3fVector,
-          android_xr::schemas::CreateMat3fVector(
-              fbb, fbb.CreateVectorOfNativeStructs<android_xr::schemas::Mat3f>(
-                       value.data(), value.size(), Pack))
-              .Union());
-    }
-    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
-        const std::vector<mat4f>& value) {
-      LogMaterialParam(
-          name, android_xr::schemas::MaterialParamValue::Mat4fVector, value);
-      return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Mat4fVector,
-          android_xr::schemas::CreateMat4fVector(
-              fbb, fbb.CreateVectorOfNativeStructs<android_xr::schemas::Mat4f>(
-                       value.data(), value.size(), Pack))
-              .Union());
-    }
-  };
-
-  return std::visit(
-      Visitor{fbb, name, fbb.CreateString(name.data(), name.size())}, value);
-}
-
-void SplitEngineSerializerImpl::SetMaterialParameter(
-    const filament::MaterialInstance* material, absl::string_view name,
-    const MaterialParamValue& value) {
-  const ResourceId material_id = GetId(material);
   SerializerDataTypes::Batch<CommandTypes::SetMaterialParameters>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::SetMaterialParameters>(
-          {}, {material_id});
-  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
-      BorrowFlatBufferBuilder(batch);
+          material_id);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
 
-  batch.data[material_id].params.push_back(AddMaterialParam(*fbb, name, value));
+  batch.data[material_id].params.push_back(
+      AddMaterialScalarParam(fbb, name, type, value));
+}
+
+template <typename SchemaStructT, typename T, typename CreateVecFn>
+void SplitEngineSerializerImpl::SetMaterialSpanParamImpl(
+    uint64_t material_id, absl::string_view name,
+    android_xr::schemas::MaterialParamValue type, absl::Span<const T> value,
+    CreateVecFn create_vec_fn) {
+  if (api_level_ < 4 && !IsSpanSupportedAtApiLevel1<T>()) {
+    IMP_LOG(imp::FATAL)
+        << "Material parameter type "
+        << imp::type_traits::kTypeName<T> << " is not supported at API level "
+        << api_level_ << " - requires API level 4.";
+  }
+
+  SerializerDataTypes::Batch<CommandTypes::SetMaterialParameters>& batch =
+      batch_manager_.GetOrCreateBatch<CommandTypes::SetMaterialParameters>(
+          material_id);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
+
+  batch.data[material_id].params.push_back(AddMaterialSpanParam<SchemaStructT>(
+      fbb, name, type, value, create_vec_fn));
+}
+
+void SplitEngineSerializerImpl::SetMaterialMat3fSpanParamImpl(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const mat3f> value) {
+  if (api_level_ < 4 && !IsSpanSupportedAtApiLevel1<mat3f>()) {
+    IMP_LOG(imp::FATAL) << "Material parameter type "
+               << imp::type_traits::kTypeName<
+                      mat3f> << " is not supported at API level "
+               << api_level_ << " - requires API level 4.";
+  }
+
+  SerializerDataTypes::Batch<CommandTypes::SetMaterialParameters>& batch =
+      batch_manager_.GetOrCreateBatch<CommandTypes::SetMaterialParameters>(
+          material_id);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
+
+  batch.data[material_id].params.push_back(
+      AddMaterialMat3fSpanParam(fbb, name, value));
+}
+
+void SplitEngineSerializerImpl::SetMaterialMat4fSpanParamImpl(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const mat4f> value) {
+  if (api_level_ < 4 && !IsSpanSupportedAtApiLevel1<mat4f>()) {
+    IMP_LOG(imp::FATAL) << "Material parameter type "
+               << imp::type_traits::kTypeName<
+                      mat4f> << " is not supported at API level "
+               << api_level_ << " - requires API level 4.";
+  }
+
+  SerializerDataTypes::Batch<CommandTypes::SetMaterialParameters>& batch =
+      batch_manager_.GetOrCreateBatch<CommandTypes::SetMaterialParameters>(
+          material_id);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
+
+  batch.data[material_id].params.push_back(
+      AddMaterialMat4fSpanParam(fbb, name, value));
+}
+
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     bool value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Bool, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     bool2 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Bool2, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     bool3 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Bool3, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     bool4 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Bool4, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     float value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Float, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     float2 value) {
+  SetMaterialScalarParamImpl(material_id, name,
+                             android_xr::schemas::MaterialParamValue::Float2,
+                             value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     float3 value) {
+  SetMaterialScalarParamImpl(material_id, name,
+                             android_xr::schemas::MaterialParamValue::Float3,
+                             value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     float4 value) {
+  SetMaterialScalarParamImpl(material_id, name,
+                             android_xr::schemas::MaterialParamValue::Float4,
+                             value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     int value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Int, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     int2 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Int2, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     int3 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Int3, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     int4 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Int4, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     uint value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Uint, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     uint2 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Uint2, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     uint3 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Uint3, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     uint4 value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Uint4, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     mat3f value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Mat3f, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(uint64_t material_id,
+                                                     absl::string_view name,
+                                                     mat4f value) {
+  SetMaterialScalarParamImpl(
+      material_id, name, android_xr::schemas::MaterialParamValue::Mat4f, value);
 }
 
 void SplitEngineSerializerImpl::SetMaterialParameter(
-    const filament::MaterialInstance* material, absl::string_view name,
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const bool> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Bool>(
+      material_id, name, android_xr::schemas::MaterialParamValue::BoolVector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateBoolVector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const bool2> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Bool2>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Bool2Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateBool2Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const bool3> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Bool3>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Bool3Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateBool3Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const bool4> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Bool4>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Bool4Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateBool4Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const float> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Float>(
+      material_id, name, android_xr::schemas::MaterialParamValue::FloatVector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateFloatVector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const float2> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Float2>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Float2Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateFloat2Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const float3> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Float3>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Float3Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateFloat3Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const float4> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Float4>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Float4Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateFloat4Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name, absl::Span<const int> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Int>(
+      material_id, name, android_xr::schemas::MaterialParamValue::IntVector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateIntVector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const int2> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Int2>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Int2Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateInt2Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const int3> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Int3>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Int3Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateInt3Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const int4> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Int4>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Int4Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateInt4Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const uint> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Uint>(
+      material_id, name, android_xr::schemas::MaterialParamValue::UintVector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateUintVector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const uint2> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Uint2>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Uint2Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateUint2Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const uint3> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Uint3>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Uint3Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateUint3Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const uint4> value) {
+  SetMaterialSpanParamImpl<android_xr::schemas::Uint4>(
+      material_id, name, android_xr::schemas::MaterialParamValue::Uint4Vector,
+      value, [](auto& fbb, auto vec) {
+        return android_xr::schemas::CreateUint4Vector(fbb, vec);
+      });
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const mat3f> value) {
+  SetMaterialMat3fSpanParamImpl(material_id, name, value);
+}
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
+    absl::Span<const mat4f> value) {
+  SetMaterialMat4fSpanParamImpl(material_id, name, value);
+}
+
+void SplitEngineSerializerImpl::SetMaterialParameter(
+    uint64_t material_id, absl::string_view name,
     const filament::Texture* texture, const filament::TextureSampler& sampler) {
-  const ResourceId material_id = GetId(material);
   SerializerDataTypes::Batch<CommandTypes::SetMaterialParameters>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::SetMaterialParameters>(
-          {}, {material_id});
-  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
-      BorrowFlatBufferBuilder(batch);
+          material_id);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
 
   flatbuffers::Offset<android_xr::schemas::TextureSampler> sampler_offset =
-      CreateTextureSampler<SplitEngineTextureSamplerCreator>(*fbb, sampler);
+      CreateTextureSampler<SplitEngineTextureSamplerCreator>(fbb, sampler);
   batch.data[material_id].texture_params.push_back(
       android_xr::schemas::CreateMaterialTextureParameter(
-          *fbb, fbb->CreateString(std::string(name)), GetId(texture),
+          fbb, fbb.CreateString(std::string(name)), GetId(texture),
           sampler_offset));
 }
 
@@ -1543,13 +1504,12 @@ void SplitEngineSerializerImpl::SetBuiltInMaterialParameters(
   SerializerDataTypes::Batch<CommandTypes::SetBuiltInMaterialParameters>&
       batch = batch_manager_
                   .GetOrCreateBatch<CommandTypes::SetBuiltInMaterialParameters>(
-                      {}, {material_id});
-  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
-      BorrowFlatBufferBuilder(batch);
+                      material_id);
+  flatbuffers::FlatBufferBuilder& fbb = GetFlatBufferBuilder(batch);
 
   batch.data.push_back(
       android_xr::schemas::CreateBuiltInMaterialInstanceParameters(
-          *fbb, material_id, schema_type, serialize_func(*fbb)));
+          fbb, material_id, schema_type, serialize_func(fbb)));
 }
 
 void SplitEngineSerializerImpl::DuplicateMaterialInstance(
@@ -1574,7 +1534,7 @@ void SplitEngineSerializerImpl::RemoveMaterialInstance(
 
 void SplitEngineSerializerImpl::CreateNode(utils::Entity entity) {
   SerializerDataTypes::Batch<CommandTypes::AddNodes>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::AddNodes>({entity});
+      batch_manager_.GetOrCreateBatch<CommandTypes::AddNodes>(entity);
   batch.data.insert(entity);
 }
 
@@ -1595,14 +1555,14 @@ void SplitEngineSerializerImpl::DestroyNode(
 
 void SplitEngineSerializerImpl::SetEnabled(utils::Entity entity, bool enabled) {
   SerializerDataTypes::Batch<CommandTypes::UpdateNodes>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>(entity);
   batch.data[entity].enabled = enabled;
 }
 
 void SplitEngineSerializerImpl::SetName(utils::Entity entity,
                                         absl::string_view name) {
   SerializerDataTypes::Batch<CommandTypes::UpdateNodes>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>(entity);
   batch.data[entity].name = std::string(name);
 }
 
@@ -1617,20 +1577,20 @@ void SplitEngineSerializerImpl::SetParent(utils::Entity entity,
 void SplitEngineSerializerImpl::SetLocalTransform(utils::Entity entity,
                                                   const mat4f& transform) {
   SerializerDataTypes::Batch<CommandTypes::UpdateNodes>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>(entity);
   batch.data[entity].transform = transform;
 }
 void SplitEngineSerializerImpl::SetLocalTransform(utils::Entity entity,
                                                   const mat4& transform) {
   SerializerDataTypes::Batch<CommandTypes::UpdateNodes>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>(entity);
   batch.data[entity].transform = transform;
 }
 
 void SplitEngineSerializerImpl::SetGroups(
     utils::Entity entity, absl::Span<const absl::string_view> groups) {
   SerializerDataTypes::Batch<CommandTypes::UpdateNodes>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateNodes>(entity);
   batch.data[entity].groups.emplace().assign(groups.begin(), groups.end());
 }
 
@@ -1638,7 +1598,7 @@ void SplitEngineSerializerImpl::AssignUserId(utils::Entity entity,
                                              uint32_t user_id) {
   SerializerDataTypes::Batch<CommandTypes::AssignUserIdToNodes>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::AssignUserIdToNodes>(
-          {entity});
+          entity);
   batch.data[entity] = user_id;
 }
 
@@ -1667,7 +1627,7 @@ void SplitEngineSerializerImpl::SetBoxCollider(utils::Entity entity,
                                                const Box& box, bool enabled) {
   SerializerDataTypes::Batch<CommandTypes::AddOrUpdateColliders>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::AddOrUpdateColliders>(
-          {entity});
+          entity);
   batch.data[entity] =
       SerializerDataTypes::AddOrUpdateColliderInfo{box, enabled};
 }
@@ -1676,7 +1636,7 @@ void SplitEngineSerializerImpl::SetMeshCollider(utils::Entity entity,
                                                 bool enabled) {
   SerializerDataTypes::Batch<CommandTypes::AddOrUpdateColliders>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::AddOrUpdateColliders>(
-          {entity});
+          entity);
   batch.data[entity] = SerializerDataTypes::AddOrUpdateColliderInfo{
       SerializerDataTypes::MeshCollider(), enabled};
 }
@@ -1686,7 +1646,7 @@ void SplitEngineSerializerImpl::SetSphereCollider(utils::Entity entity,
                                                   bool enabled) {
   SerializerDataTypes::Batch<CommandTypes::AddOrUpdateColliders>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::AddOrUpdateColliders>(
-          {entity});
+          entity);
   batch.data[entity] =
       SerializerDataTypes::AddOrUpdateColliderInfo{sphere, enabled};
 }
@@ -1696,7 +1656,7 @@ void SplitEngineSerializerImpl::SetCapsuleCollider(utils::Entity entity,
                                                    bool enabled) {
   SerializerDataTypes::Batch<CommandTypes::AddOrUpdateColliders>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::AddOrUpdateColliders>(
-          {entity});
+          entity);
   batch.data[entity] =
       SerializerDataTypes::AddOrUpdateColliderInfo{capsule, enabled};
 }
@@ -1705,7 +1665,7 @@ void SplitEngineSerializerImpl::ClearCollider(
     utils::Entity entity,
     split_engine::SplitEngineSerializer::ColliderType collider_type) {
   SerializerDataTypes::Batch<CommandTypes::RemoveColliders>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::RemoveColliders>({entity});
+      batch_manager_.GetOrCreateBatch<CommandTypes::RemoveColliders>(entity);
   batch.data[entity] =
       static_cast<android_xr::schemas::ColliderType>(collider_type);
 }
@@ -1714,8 +1674,7 @@ void SplitEngineSerializerImpl::AddTexturePipelineRenderer(
     utils::Entity entity, const TexturePipelineRendererState& state) {
   SerializerDataTypes::Batch<CommandTypes::AddTexturePipelineRenderers>& batch =
       batch_manager_
-          .GetOrCreateBatch<CommandTypes::AddTexturePipelineRenderers>(
-              {entity});
+          .GetOrCreateBatch<CommandTypes::AddTexturePipelineRenderers>(entity);
   batch.data[entity].state = state;
 }
 
@@ -1725,7 +1684,7 @@ void SplitEngineSerializerImpl::RemoveTexturePipelineRenderer(
       batch =
           batch_manager_
               .GetOrCreateBatch<CommandTypes::RemoveTexturePipelineRenderers>(
-                  {entity});
+                  entity);
   batch.data.push_back(entity);
 }
 
@@ -1735,7 +1694,7 @@ void SplitEngineSerializerImpl::SetTexturePipelineRendererPassesEnabled(
       batch =
           batch_manager_
               .GetOrCreateBatch<CommandTypes::UpdateTexturePipelineRenderers>(
-                  {entity});
+                  entity);
   auto& info = batch.data[entity];
   info.enabled_passes = enabled_passes;
 }
@@ -1747,7 +1706,7 @@ void SplitEngineSerializerImpl::SetTexturePipelineRendererProjectionQuad(
       batch =
           batch_manager_
               .GetOrCreateBatch<CommandTypes::UpdateTexturePipelineRenderers>(
-                  {entity});
+                  entity);
   batch.data[entity].projection_quad = quad;
 }
 
@@ -1759,8 +1718,7 @@ void SplitEngineSerializerImpl::RegisterNamedTexture(
   // Named texture registration doesn't depend on entities, but might depend on
   // texture creation if we tracked it. For now, we just batch it.
   SerializerDataTypes::Batch<CommandTypes::RegisterNamedTextures>& batch =
-      batch_manager_.GetOrCreateBatch<CommandTypes::RegisterNamedTextures>(
-          {}, {id});
+      batch_manager_.GetOrCreateBatch<CommandTypes::RegisterNamedTextures>(id);
   batch.data[id] =
       SerializerDataTypes::RegisterNamedTextureInfo{std::string(name)};
 }
@@ -1770,7 +1728,7 @@ void SplitEngineSerializerImpl::UnregisterNamedTexture(
   uint64_t id = GetId(&texture);
   SerializerDataTypes::Batch<CommandTypes::UnregisterNamedTextures>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::UnregisterNamedTextures>(
-          {}, {id});
+          id);
   batch.data.push_back(id);
 }
 
@@ -1805,7 +1763,7 @@ void SplitEngineSerializerImpl::SendAllBatches() {
   frame_update_group_id_ = std::nullopt;
 
   // Clean up
-  fbb_.clear();
+  fbb_vector_.clear();
 }
 
 void SplitEngineSerializerImpl::Update(const FrameTime& frame_time) {

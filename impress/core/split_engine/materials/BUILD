@@ -42,6 +42,7 @@ imp_assets(
 imp_material(
     name = "placeholder_material",
     src = ":placeholder.mat",
+    include_source_mat = False,
 )
 
 cc_library(
@@ -70,19 +71,19 @@ cc_library(
         "//core/split_engine:flatbuffer_size_calculator",
         "//core/split_engine:material_requester",
         "//core/split_engine:split_engine_serializer",
+        "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_generic_spec_helpers",
         "//core/split_engine/transport:senders",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:string_map",
-        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",

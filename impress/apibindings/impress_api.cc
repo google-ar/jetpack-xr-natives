@@ -1822,6 +1822,81 @@ JNI_METHOD_AOSP(jlong, nCreateMeshBuffer)
   return *result;
 }
 
+JNI_METHOD_AOSP(void, nUpdateMeshBufferVertexData)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong mesh_buffer_handle,
+ jint buffer_index, jint offset_in_bytes, jobject data, jint data_offset,
+ jint data_size) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  void* buffer_ptr = env->GetDirectBufferAddress(data);
+  if (buffer_ptr == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("data must be a direct ByteBuffer."))
+             .ok()) {
+      return;
+    }
+  }
+
+  jlong capacity = env->GetDirectBufferCapacity(data);
+  if (data_offset < 0 || data_size < 0 ||
+      static_cast<jlong>(data_offset) + data_size > capacity) {
+    if (!imp::android::ThrowIfError(
+             env, absl::InvalidArgumentError("Data buffer offset and size are "
+                                             "out of bounds."))
+             .ok()) {
+      return;
+    }
+  }
+
+  uint8_t* byte_ptr = static_cast<uint8_t*>(buffer_ptr) + data_offset;
+  absl::Span<const uint8_t> data_span(byte_ptr, data_size);
+
+  absl::Status status = view->GetMeshManager().UpdateMeshBufferVertexData(
+      mesh_buffer_handle, buffer_index, offset_in_bytes, data_span);
+  if (!imp::android::ThrowIfError(env, status).ok()) {
+    return;
+  }
+}
+
+JNI_METHOD_AOSP(void, nUpdateMeshBufferIndexData)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong mesh_buffer_handle,
+ jint offset_in_bytes, jobject data, jint data_offset, jint data_size) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  void* buffer_ptr = env->GetDirectBufferAddress(data);
+  if (buffer_ptr == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("data must be a direct ByteBuffer."))
+             .ok()) {
+      return;
+    }
+  }
+
+  jlong capacity = env->GetDirectBufferCapacity(data);
+  if (data_offset < 0 || data_size < 0 ||
+      static_cast<jlong>(data_offset) + data_size > capacity) {
+    if (!imp::android::ThrowIfError(
+             env, absl::InvalidArgumentError("Data buffer offset and size are "
+                                             "out of bounds."))
+             .ok()) {
+      return;
+    }
+  }
+
+  uint8_t* byte_ptr = static_cast<uint8_t*>(buffer_ptr) + data_offset;
+  absl::Span<const uint8_t> data_span(byte_ptr, data_size);
+
+  absl::Status status = view->GetMeshManager().UpdateMeshBufferIndexData(
+      mesh_buffer_handle, offset_in_bytes, data_span);
+  if (!imp::android::ThrowIfError(env, status).ok()) {
+    return;
+  }
+}
+
 JNI_METHOD_AOSP(void, nDestroyMeshBuffer)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong mesh_buffer_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);

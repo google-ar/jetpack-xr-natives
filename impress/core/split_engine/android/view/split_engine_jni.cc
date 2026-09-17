@@ -169,11 +169,20 @@ JNI_METHOD_ACTIVITY(void, nSetup)
       std::make_unique<imp::RenderableManagerWrapper>(*view));
 
   int32_t effective_api_level = api_level;
-  if (preview_api_level > 0) {
-    if (preview_api_level == std::numeric_limits<int32_t>::max()) {
-      effective_api_level = android_xr::kSplitEngineExperimentalApiLevel;
-    } else {
-      effective_api_level = android_xr::kSplitEnginePreviewApiLevel;
+
+  // Only consider preview or experimental support on tip production images.
+  // If this is an older image, we have no way of supporting an old preview API
+  // because the flatbuffer annotations have likely already changed.
+  if (api_level == android_xr::kSplitEngineProductionApiLevel) {
+    if (preview_api_level > 0) {
+      if (preview_api_level == std::numeric_limits<int32_t>::max()) {
+        // All known flatbuffer fields will be serialized.
+        effective_api_level = android_xr::kSplitEngineExperimentalApiLevel;
+      } else {
+        // In addition to the production API level, fields annotated with
+        // preview_api will be serialized.
+        effective_api_level = android_xr::kSplitEnginePreviewApiLevel;
+      }
     }
   }
 

@@ -33,7 +33,6 @@ class Grid : public Component {
  public:
   // Sets up the grid. Fails if the grid material cannot be loaded.
   Future<absl::Status> Setup();
-  void ShowGrid(bool enabled);
 
   void Update(const FrameTime& frame_time);
 
@@ -41,6 +40,7 @@ class Grid : public Component {
   ComponentHandle<PrimitiveShapeRenderer> grid_renderer_;
   AssetPtr<imp::MaterialAsset> grid_material_;
   PropertyBinding<bool> grid_enabled_binding_;
+  PropertyBinding<float> grid_spacing_binding_;
 };
 
 }  // namespace imp::editor

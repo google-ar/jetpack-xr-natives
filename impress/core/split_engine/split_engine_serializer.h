@@ -60,6 +60,8 @@
 
 namespace imp {
 class Material;
+class GenericMaterial;
+using GenericMaterialPtr = std::unique_ptr<GenericMaterial>;
 class Texture;
 class TexturePipelineRendererState;
 struct TexturePipelineRendererProjectionQuad;
@@ -159,14 +161,100 @@ class SplitEngineSerializer {
   virtual void RemoveMaterialInstance(
       const filament::MaterialInstance* instance) = 0;
   // Sets a parameter of the given name on the given material.
-  // This method handles all valid types of parameters, which are contained in
-  // the MaterialParamValue variant.
-  virtual void SetMaterialParameter(const filament::MaterialInstance* material,
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, bool value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, bool2 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, bool3 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, bool4 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, float value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, float2 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, float3 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, float4 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, int value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, int2 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, int3 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, int4 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, uint value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, uint2 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, uint3 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, uint4 value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, mat3f value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name, mat4f value) = 0;
+
+  virtual void SetMaterialParameter(uint64_t material_id,
                                     absl::string_view name,
-                                    const MaterialParamValue& value) = 0;
+                                    absl::Span<const bool> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const bool2> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const bool3> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const bool4> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const float> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const float2> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const float3> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const float4> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const int> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const int2> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const int3> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const int4> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const uint> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const uint2> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const uint3> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const uint4> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const mat3f> value) = 0;
+  virtual void SetMaterialParameter(uint64_t material_id,
+                                    absl::string_view name,
+                                    absl::Span<const mat4f> value) = 0;
   // Sets a texture parameter of the given name & sampler on the given material.
   virtual void SetMaterialParameter(
-      const filament::MaterialInstance* material, absl::string_view name,
+      uint64_t material_id, absl::string_view name,
       const filament::Texture* texture,
       const filament::TextureSampler& sampler) = 0;
 

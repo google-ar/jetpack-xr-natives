@@ -38,13 +38,16 @@ class DesktopFontHolder : public FontHolder {
   explicit DesktopFontHolder(
       std::optional<absl::string_view> family_name,
       FontWeight font_weight = FontWeight::FONT_WEIGHT_NORMAL,
-      TextStyle text_style = TextStyle::TEXT_STYLE_NORMAL);
+      TextStyle text_style = TextStyle::TEXT_STYLE_NORMAL,
+      sk_sp<FontCollection> font_collection = nullptr);
 
   void* GetPlatformFont() override;
 
   absl::string_view GetFontName() const override;
   FontWeight GetFontWeight() const override;
   TextStyle GetTextStyle() const override;
+
+  sk_sp<FontCollection> GetFontCollection() const { return font_collection_; }
 
  private:
   sk_sp<SkFontMgr> GetFontMgr();

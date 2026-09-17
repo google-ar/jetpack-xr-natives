@@ -646,4 +646,8 @@ imp::float2 AndroidViewRenderer::GetQuadNodeLocalScale() {
   return renderer_node_->GetLocalScale().xy;
 }
 
+imp::float2 AndroidViewRenderer::GetQuadNodeWorldScale() {
+  return renderer_node_->GetWorldScale().xy;
+}
+
 }  // namespace imp::android

@@ -25,6 +25,7 @@
 #include "filament/filament/include/filament/SwapChain.h"
 #include "filament/filament/include/filament/View.h"
 #include "filament/filament/include/filament/Viewport.h"
+#include "core/editor/remote_editor/remote_editor_info.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/frame_time.h"
@@ -34,12 +35,6 @@
 #include "core/window/imgui_renderer.h"
 
 namespace imp::editor {
-
-namespace {
-
-constexpr int kRenderTargetUpdateDelayMs = 33;
-
-}  // namespace
 
 RemoteEditorRenderer::RemoteEditorRenderer(BaseView& view) : view_(view) {
   window::FilamentHost::DevModeExtension* extension =
@@ -57,10 +52,6 @@ RemoteEditorRenderer::RemoteEditorRenderer(BaseView& view) : view_(view) {
 RemoteEditorRenderer::~RemoteEditorRenderer() { ClearRenderTargetWindow(); }
 
 void RemoteEditorRenderer::ClearRenderTargetWindow() {
-  if (window::FilamentHost::DevModeExtension* extension =
-          view_.GetHost()->TryGetExtension()) {
-    extension->ApplyTextureRenderTarget(nullptr);
-  }
   window_generation_++;
   filament::Engine* engine = view_.GetHost()->GetEngine();
 
@@ -85,7 +76,8 @@ void RemoteEditorRenderer::ClearRenderTargetWindow() {
 void RemoteEditorRenderer::OnSecondaryRender() {
   time_since_last_update_ += view_.GetFrameTime().GetDeltaTime();
   if (time_since_last_update_ <
-      absl::Milliseconds(kRenderTargetUpdateDelayMs)) {
+      absl::Milliseconds(RemoteEditorInfo::RemoteEditorStreamingConfig::
+                             kDefaultUiStreamingUpdateDelayMs)) {
     return;
   }
 
@@ -116,7 +108,9 @@ void RemoteEditorRenderer::OnSecondaryRender() {
     ui_view_filament->setViewport(original_viewport);
   }
 
-  time_since_last_update_ %= absl::Milliseconds(kRenderTargetUpdateDelayMs);
+  time_since_last_update_ %=
+      absl::Milliseconds(RemoteEditorInfo::RemoteEditorStreamingConfig::
+                             kDefaultUiStreamingUpdateDelayMs);
 }
 
 void RemoteEditorRenderer::SetRenderTargetWindow(void* native_window, int width,
@@ -146,6 +140,16 @@ void RemoteEditorRenderer::SetRenderTargetWindow(void* native_window, int width,
     remote_window_ = native_window;
     width_ = width;
     height_ = height;
+    // When the streaming target window coordinates/dimensions are bound by
+    // MediaCodec on Android phone/desktop, explicitly notify the dev mode
+    // extension so it can synchronize project viewports prior to desktop
+    // layout instantiation via SetDisplayMode.
+    if (window::FilamentHost::DevModeExtension* extension =
+            view_.GetHost()->TryGetExtension()) {
+      extension->UpdateCameraAndViewport(
+          {static_cast<uint32_t>(width), static_cast<uint32_t>(height)},
+          {1.0f, 1.0f});
+    }
     return;
   }
 
@@ -162,6 +166,20 @@ void RemoteEditorRenderer::SetRenderTargetWindow(void* native_window, int width,
     imgui_renderer_->SetRenderTargetDisplaySize(width, height, 1.0f, 1.0f,
                                                 false);
   }
+  // When the streaming target window coordinates/dimensions are bound by
+  // MediaCodec on Android phone/desktop, explicitly notify the dev mode
+  // extension so it can synchronize project viewports prior to desktop
+  // layout instantiation via SetDisplayMode.
+  if (window::FilamentHost::DevModeExtension* extension =
+          view_.GetHost()->TryGetExtension()) {
+    extension->UpdateCameraAndViewport(
+        {static_cast<uint32_t>(width), static_cast<uint32_t>(height)},
+        {1.0f, 1.0f});
+  }
+}
+
+bool RemoteEditorRenderer::IsReady() const {
+  return remote_window_ != nullptr && width_ > 0 && height_ > 0;
 }
 
 }  // namespace imp::editor

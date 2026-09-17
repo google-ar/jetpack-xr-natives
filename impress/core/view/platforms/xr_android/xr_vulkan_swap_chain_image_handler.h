@@ -46,7 +46,7 @@ class XrVulkanSwapChainImageHandler {
   // For production, D24_UNORM_S8_UINT is generally more performant on mobile
   // GPUs.
 #if IMP_PLATFORM(ANDROID)
-  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_X8_D24_UNORM_PACK32;
   static constexpr VkFormat kVkDepthStencilFormat = VK_FORMAT_D24_UNORM_S8_UINT;
 #else
   static constexpr VkFormat kVkDepthFormat = VK_FORMAT_D32_SFLOAT;
@@ -104,7 +104,7 @@ class XrVulkanSwapChainImageHandler {
   };
   XrVulkanSwapChainImageHandler(XrPlatformType* platform, XrSessionHost* host,
                                 std::unique_ptr<SwapchainLayers> layers,
-                                ContentSecurityLevel, bool should_end_frame);
+                                ContentSecurityLevel);
   ~XrVulkanSwapChainImageHandler();
   XrVulkanSwapChainImageHandler(const XrVulkanSwapChainImageHandler&) = delete;
   XrVulkanSwapChainImageHandler& operator=(
@@ -123,7 +123,6 @@ class XrVulkanSwapChainImageHandler {
   XrPlatformType* platform_;
   XrSessionHost* host_;
   std::unique_ptr<SwapchainLayers> layers_;
-  bool should_end_frame_ = false;
 
   // Create all the needed depth swapchains.
   void CreateDepthSwapchains();

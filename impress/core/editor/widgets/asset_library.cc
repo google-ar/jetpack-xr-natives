@@ -48,11 +48,13 @@
 #include "core/editor/widgets/asset_type_helpers.h"
 #include "core/editor/widgets/standard_asset_thumbnail_generator.h"
 #include "core/ncsb/node_data.proto.imp.h"
+#include "core/proto/proto_reader.h"
 #include "core/proto/proto_writer.h"
 #include "core/proto/textproto_writer.h"
 #include "core/render/material_registry.h"
 #include "core/render/texture.h"
 #include "core/resources/resource_manager.h"
+#include "core/scene_handles/base_material_handle.h"
 #include "core/scene_handles/material_handle.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/scene/scene_reference.h"
@@ -97,7 +99,8 @@ AssetLibrary::AssetLibrary(BaseView& view)
                        {kGltfExt, DragAndDropType::kNodeAsset},
                        {kCmatExt, DragAndDropType::kMaterial},
                        {kPngExt, DragAndDropType::kTexture},
-                       {kImpMaterialExt, DragAndDropType::kMaterialHandle}}) {
+                       {kImpMaterialExt, DragAndDropType::kMaterialHandle}}),
+      material_registry_(view.GetRegistry().GetOrCreate<MaterialRegistry>()) {
   // Load the thumbnail provider.
   Future<std::unique_ptr<StandardAssetThumbnailGenerator>> generator_future =
       StandardAssetThumbnailGenerator::Create(view_);
@@ -279,6 +282,8 @@ void AssetLibrary::DrawImGui() {
   // This needs to be outside of the child window so the entire asset library
   // is a drag-and-drop target regardless of the current vertical scroll.
   HandleDragAndDropNewResource();
+
+  LoadDraggedMaterial();
 }
 
 void AssetLibrary::DrawIsfPopupMenu(absl::string_view resource_path) {
@@ -319,24 +324,51 @@ void AssetLibrary::SetAsDefaultDragAndDropSource(std::string resource_path) {
 
 void AssetLibrary::PrepareMaterialHandleDragAndDrop(
     const std::string& resource) {
-  auto& registry = view_.GetRegistry().GetOrCreate<MaterialRegistry>();
-  if (registry.HasMaterial(resource)) {
-    std::string payload_type = absl::StrCat(
-        kProtoDragAndDropScheme, GetPayloadTypeForMessage<MaterialHandle>());
-    MaterialHandle handle(resource);
-    std::string payload_bytes;
-    proto::SerializeTo(&handle, &payload_bytes);
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-      ImGui::SetDragDropPayload(payload_type.c_str(), payload_bytes.data(),
-                                payload_bytes.size());
+  std::string payload_type = absl::StrCat(
+      kProtoDragAndDropScheme, GetPayloadTypeForMessage<BaseMaterialHandle>());
+  MaterialHandle handle(resource);
+  std::string payload_bytes;
+  proto::SerializeTo(&handle, &payload_bytes);
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    ImGui::SetDragDropPayload(payload_type.c_str(), payload_bytes.data(),
+                              payload_bytes.size());
+    if (material_registry_.HasMaterial(resource)) {
       ImGui::Text("Apply Material");
-      ImGui::EndDragDropSource();
+    } else {
+      ImGui::Text("Loading Material");
     }
-  } else {
-    // TODO: Support the case that the drag&drop resource is not
-    // already loaded. Use MaterialHandle::AsyncPreload() when that is
-    // available.
-    SetAsDefaultDragAndDropSource(resource);
+    ImGui::EndDragDropSource();
+  }
+}
+
+void AssetLibrary::LoadDraggedMaterial() {
+  // TODO: Handle the case when the material take a long time to
+  // load.
+  const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+  if (payload == nullptr) {
+    preload_dragged_material_future_ = {};
+    dragged_material_url_ = "";
+    return;
+  }
+  std::string payload_type = absl::StrCat(
+      kProtoDragAndDropScheme, GetPayloadTypeForMessage<BaseMaterialHandle>());
+  if (payload->IsDataType(payload_type.c_str())) {
+    std::string resource(static_cast<const char*>(payload->Data),
+                         payload->DataSize);
+    BaseMaterialHandle handle;
+    if (proto::ParseMessage(resource, &handle)) {
+      std::string resource = std::string(handle.GetUrl());
+      if (!material_registry_.HasMaterial(resource)) {
+        if (dragged_material_url_.empty() ||
+            handle.GetUrl() != dragged_material_url_) {
+          dragged_material_url_ = resource;
+          std::unique_ptr<MaterialHandle> handle =
+              std::make_unique<MaterialHandle>(resource);
+          preload_dragged_material_future_ = handle->AsyncPreload(view_);
+          preload_dragged_material_future_.DependsOn(std::move(handle));
+        }
+      }
+    }
   }
 }
 
@@ -462,8 +494,8 @@ void AssetLibrary::SetSelectedAsset(std::optional<std::string> asset) {
 void AssetLibrary::DrawTypeFilter() {
   ImGui::SetNextItemWidth(kTypesWidth);
 
-  // Helper lambda to toggle if an extension is filtered or not using an imgui
-  // selectable.
+  // Helper lambda to toggle if an extension is filtered or not using an
+  // imgui selectable.
   auto toggle_type_selectable_fn = [this](const std::string& extension) {
     bool was_selected = !filtered_extensions_.contains(extension);
     bool selected = was_selected;

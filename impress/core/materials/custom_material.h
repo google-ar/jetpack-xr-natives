@@ -144,6 +144,8 @@ class CustomMaterial : public Material {
   imp::StringMap<const filament::Texture*> GetUnownedFilamentTextures()
       const override;
 
+  bool HoldsOwnedTextures() const override;
+
   void ForEachTexture(absl::FunctionRef<void(BorrowedTexturePtr)> fn,
                       SmallSourceLocation loc) override;
 

@@ -15,6 +15,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_RENDERER_CONTEXT_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_RENDERER_CONTEXT_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -100,11 +101,13 @@ class AppPermissionController {
 struct VertexBufferData {
   OwnedVertexBufferPtr vertex_buffer;
   MeshVertexDataPtr vertex_data;
+  std::vector<size_t> buffer_sizes;
 };
 
 struct IndexBufferData {
   OwnedIndexBufferPtr index_buffer;
   MeshIndexDataPtr index_data;
+  size_t buffer_size = 0;
 };
 
 // Holds all Nodes, materials, textures, meshes, etc. for a single app.

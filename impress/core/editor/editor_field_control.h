@@ -22,6 +22,7 @@
 #include <string>
 #include <type_traits>
 
+#include "absl/container/btree_map.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -35,6 +36,7 @@
 #include "core/common/file_helpers.h"
 #include "core/common/registry.h"
 #include "core/editor/editor_style.h"
+#include "core/editor/events.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
 #include "core/editor/selection_controller.h"
@@ -42,6 +44,7 @@
 #include "core/editor/ui/drag_and_drop_material.h"
 #include "core/editor/ui/drag_and_drop_node.h"
 #include "core/geometry/shapes/box.h"
+#include "core/materials/material.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node.h"
@@ -50,7 +53,7 @@
 #include "core/proto/proto_common.h"
 #include "core/proto/proto_differ.h"
 #include "core/render/material_registry.h"
-#include "core/scene_handles/material_handle.h"
+#include "core/scene_handles/base_material_handle.h"
 #include "core/scene_handles/scene_handle_interface.h"
 #include "core/view/base_view.h"
 
@@ -69,7 +72,7 @@ class MaterialHandle;
 // (broken link)
 class EditorFieldControl {
  public:
-  static constexpr absl::string_view kMixedValueString = "-";
+  static constexpr char kMixedValueString[] = "-";
 
   // Returns true if the current ImGui item has the mixed value flag set.
   static bool IsMixedValue() {
@@ -103,6 +106,8 @@ class EditorFieldControl {
   struct is_handled_type<bool> : std::true_type {};
 
   template <>
+  struct is_handled_type<BaseMaterialHandle> : std::true_type {};
+  template <>
   struct is_handled_type<MaterialHandle> : std::true_type {};
   template <>
   struct is_handled_type<NodeSceneHandle> : std::true_type {};
@@ -135,8 +140,7 @@ class EditorFieldControl {
         ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
       }
 
-      const char* field_format =
-          all_same[i] ? format : kMixedValueString.data();
+      const char* field_format = all_same[i] ? format : kMixedValueString;
 
       if (!all_same[i]) {
         ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
@@ -347,9 +351,11 @@ class EditorFieldControl {
     std::string label =
         editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags);
 
+    const char* display_format = IsMixedValue() ? kMixedValueString : nullptr;
+
     bool result =
         ImGui::InputScalar(label.c_str(), data_type, val, nullptr, nullptr,
-                           nullptr, ImGuiInputTextFlags_CharsScientific);
+                           display_format, ImGuiInputTextFlags_CharsScientific);
 
     result |= EndEditingElement(mode, val, base, "", true, view);
 
@@ -398,7 +404,9 @@ class EditorFieldControl {
       EditingElementMode mode =
           BeginEditingElement(val_element, base_element, editor_control_flags);
 
-      result |= ImGui::InputFloat("", val_element);
+      const char* display_format = IsMixedValue() ? kMixedValueString : "%.3f";
+
+      result |= ImGui::InputFloat("", val_element, 0.0f, 0.0f, display_format);
       ImGui::PopItemWidth();
 
       result |=
@@ -455,11 +463,14 @@ class EditorFieldControl {
     EditingElementMode mode =
         BeginEditingElement(val, base, editor_control_flags);
 
+    const std::string format = absl::StrCat("%.", control.precision, "f");
+    const char* display_format =
+        IsMixedValue() ? kMixedValueString : format.c_str();
+
     bool result = ImGui::SliderFloat(
         editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags)
             .c_str(),
-        val, control.min, control.max,
-        absl::StrCat("%.", control.precision, "f").c_str(),
+        val, control.min, control.max, display_format,
         control.logarithmic ? ImGuiSliderFlags_Logarithmic
                             : ImGuiSliderFlags_None);
 
@@ -489,10 +500,12 @@ class EditorFieldControl {
     EditingElementMode mode =
         BeginEditingElement(val, base, editor_control_flags);
 
+    const char* display_format = IsMixedValue() ? kMixedValueString : "%d";
+
     bool result = ImGui::SliderInt(
         editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags)
             .c_str(),
-        val, control.min, control.max);
+        val, control.min, control.max, display_format);
 
     result |= EndEditingElement(mode, val, base, "", true, view);
 
@@ -689,6 +702,19 @@ class EditorFieldControl {
       absl::string_view name, std::string* val, std::string* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr, bool is_url = false) {
+    if (is_url) {
+      return ShowDefaultControlForUrl(name, val, base, editor_control_flags,
+                                      view);
+    }
+    return ShowDefaultControlForString(name, val, base, editor_control_flags,
+                                       view);
+  }
+
+  static bool ShowDefaultControlForString(
+      absl::string_view name, std::string* val, std::string* base,
+      editor::EditorControlFlags editor_control_flags =
+          editor::EditorControlFlags::kDefault,
       BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
@@ -704,9 +730,33 @@ class EditorFieldControl {
     EditingElementMode mode =
         BeginEditingElement(val, base, editor_control_flags);
 
-    std::string label =
+    const std::string label =
         editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags);
-    bool result = ImGui::InputText(label.c_str(), val);
+    const ImGuiID id = ImGui::GetID(label.c_str());
+    static thread_local absl::btree_map<ImGuiID, std::string> mixed_values;
+
+    bool result = false;
+    if (IsMixedValue()) {
+      auto [it, inserted] = mixed_values.try_emplace(id, kMixedValueString);
+      std::string& display_val = it->second;
+
+      result = ImGui::InputText(label.c_str(), &display_val,
+                                ImGuiInputTextFlags_AutoSelectAll);
+
+      if (result) {
+        *val = display_val;
+      }
+
+      if (!ImGui::IsItemActive() && !ImGui::IsItemFocused()) {
+        mixed_values.erase(id);
+      }
+    } else {
+      if (!mixed_values.empty()) {
+        mixed_values.erase(id);
+      }
+      result = ImGui::InputText(label.c_str(), val,
+                                ImGuiInputTextFlags_AutoSelectAll);
+    }
 
     if (ImGui::BeginDragDropTarget()) {
       std::optional<std::string> payload =
@@ -726,6 +776,115 @@ class EditorFieldControl {
     }
 
     result |= EndEditingElement(mode, val, base, "", true, view);
+
+    return result;
+  }
+
+  static bool ShowDefaultControlForUrl(
+      absl::string_view name, std::string* val, std::string* base,
+      editor::EditorControlFlags editor_control_flags =
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
+    bool is_editable =
+        CheckBit(editor_control_flags, editor::EditorControlFlags::kIsEditable);
+
+    EditingElementMode mode = EditingElementMode::kNormal;
+    // Default to non-editable style.
+    ImVec4 fill_color = editor::kGrey700;
+    ImVec4 border_color = editor::kGrey700;
+    if (is_editable) {
+      mode = BeginEditingElement(val, base, editor_control_flags);
+      if (mode == EditingElementMode::kMatchesBase) {
+        // Empty value style.
+        fill_color = editor::kGrey900;
+        border_color = editor::kGrey700;
+      } else {
+        // Editable style.
+        fill_color = editor::kBlue900;
+        border_color = editor::kBlue700;
+      }
+    }
+
+    ImVec2 padding = ImGui::GetStyle().FramePadding;
+
+    std::string label;
+    if (val->empty()) {
+      label = absl::StrFormat("<Unassigned>");
+    } else {
+      label = std::string(GetLocalFilenameFromFilename(*val));
+      if (label.empty()) {
+        label = "<Unnamed>";
+      }
+    }
+
+    const char* display_text =
+        IsMixedValue() ? kMixedValueString : label.c_str();
+    ImVec2 text_size = ImGui::CalcTextSize(display_text);
+    text_size.x += padding.x * 2.0f;
+    text_size.y += padding.y * 2.0f;
+
+    // Draw the name of the field.
+    ImGui::Text("%s", std::string(name).c_str());
+    ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x + padding.x);
+
+    // Draw the rect for the field.
+    ImVec2 cursor = ImGui::GetCursorPos();
+    std::string button_label = editor::GenerateUniqueImGuiLabel(
+        "##jump_to_asset_button", val, editor_control_flags);
+    ImGui::InvisibleButton(button_label.c_str(), text_size);
+    ImVec2 final_cursor = ImGui::GetCursorPos();
+
+    ImVec2 min = ImGui::GetItemRectMin();
+    ImVec2 max = ImGui::GetItemRectMax();
+
+    if (!val->empty()) {
+      ImGui::GetWindowDrawList()->AddRectFilled(
+          min, max, ImGui::GetColorU32(editor::WithAlpha(fill_color, 0.6f)),
+          3.0f);
+    }
+
+    ImGui::GetWindowDrawList()->AddRect(
+        min, max, ImGui::GetColorU32(editor::WithAlpha(border_color, 0.8f)),
+        3.0f);
+
+    cursor.x += padding.x;
+    cursor.y += padding.y;
+    ImGui::SetCursorPos(cursor);
+    // Draw the field value on top of the rect.
+    ImGui::Text("%s", display_text);
+    ImGui::SetCursorPos(final_cursor);
+
+    bool result = false;
+
+    // Set as a drag and drop target if editable.
+    if (is_editable && ImGui::BeginDragDropTarget()) {
+      std::optional<std::string> payload =
+          AcceptDragAndDropPayload(editor::DragAndDropType::kMaterial);
+      if (!payload.has_value()) {
+        payload = AcceptDragAndDropPayload(editor::DragAndDropType::kTexture);
+      }
+      if (!payload.has_value()) {
+        payload = AcceptDragAndDropPayload(editor::DragAndDropType::kNodeAsset);
+      }
+
+      if (payload.has_value()) {
+        *val = *payload;
+        result = true;
+      }
+      ImGui::EndDragDropTarget();
+    }
+
+    if (!val->empty() && !IsMixedValue()) {
+      // Draw the tooltip to display the full url.
+      ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x + padding.x);
+      ShowTooltip(*val);
+    }
+
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padding.y);
+
+    if (is_editable) {
+      result |= EndEditingElement(mode, val, base, "", true, view);
+    }
 
     return result;
   }
@@ -789,10 +948,14 @@ class EditorFieldControl {
 
     bool updated = false;
 
+    const std::string preview_text =
+        IsMixedValue() ? kMixedValueString
+                       : std::string(proto::EnumMetaData<E>::GetName(*val));
+
     if (ImGui::BeginCombo(
             editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags)
                 .c_str(),
-            std::string(proto::EnumMetaData<E>::GetName(*val)).c_str())) {
+            preview_text.c_str())) {
       for (E e : proto::EnumMetaData<E>::kValues) {
         const bool is_selected = (*val == e);
         if (ImGui::Selectable(
@@ -814,6 +977,7 @@ class EditorFieldControl {
     return updated;
   }
 
+  // Default control for scene handle fields.
   static bool ShowDefaultControl(
       absl::string_view name, SceneHandleInterface* val,
       SceneHandleInterface* base,
@@ -923,11 +1087,25 @@ class EditorFieldControl {
     return updated;
   }
 
+  // Default control for material handle fields.
   static bool ShowDefaultControl(
-      absl::string_view name, MaterialHandle* val, MaterialHandle* base,
+      absl::string_view name, BaseMaterialHandle* val, BaseMaterialHandle* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault,
-      BaseView* view = nullptr) {
+      BaseView* view = nullptr, bool show_edit_button = true) {
+    const ImGuiID id = ImGui::GetID(val);
+    static thread_local absl::btree_map<ImGuiID, std::string> mixed_values;
+    if (IsMixedValue()) {
+      mixed_values.try_emplace(id, kMixedValueString);
+      if (!ImGui::IsItemActive() && !ImGui::IsItemFocused()) {
+        mixed_values.erase(id);
+      }
+    } else {
+      if (!mixed_values.empty()) {
+        mixed_values.erase(id);
+      }
+    }
+
     bool updated = false;
 
     EditingElementMode mode = EditingElementMode::kNormal;
@@ -949,10 +1127,17 @@ class EditorFieldControl {
       }
     }
 
-    ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
+    const char* display_text =
+        IsMixedValue() ? kMixedValueString : label.c_str();
+    ImVec2 text_size = ImGui::CalcTextSize(display_text);
     text_size.x += padding.x * 2.0f;
     text_size.y += padding.y * 2.0f;
 
+    // Draw the name of the field.
+    ImGui::Text("%s", std::string(name).c_str());
+    ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x + padding.x);
+
+    // Draw the rect for the field.
     ImVec2 cursor = ImGui::GetCursorPos();
     ImGui::InvisibleButton("##jump_to_asset_button", text_size);
     ImVec2 final_cursor = ImGui::GetCursorPos();
@@ -979,31 +1164,42 @@ class EditorFieldControl {
     cursor.x += padding.x;
     cursor.y += padding.y;
     ImGui::SetCursorPos(cursor);
-    ImGui::Text("%s", label.c_str());
+    ImGui::Text("%s", display_text);
     ImGui::SetCursorPos(final_cursor);
 
     if (ImGui::BeginDragDropTarget()) {
       std::optional<editor::DragAndDropMaterialResult> result =
           editor::AcceptDragAndDropPayloadMaterial(view);
 
-      if (result.has_value()) {
-        // Since this field is a drag and drop target, we assume that the
-        // material is already loaded. Otherwise, that material cannot be a drag
-        // and drop source.
-        if (view && !result->url.empty()) {
-          val->AssignMaterial(
-              result->url,
-              view->GetRegistry().GetOrCreate<MaterialRegistry>().GetMaterial(
-                  result->url));
+      if (result.has_value() && view && !result->url.empty()) {
+        BorrowedMaterialPtr material =
+            view->GetRegistry().GetOrCreate<MaterialRegistry>().GetMaterial(
+                result->url);
+        if (material) {
+          val->AssignMaterial(result->url, material);
+          updated = true;
+        } else {
+          // TODO: Determine the best solution to handle this case.
+          IMP_LOG(imp::WARNING) << "Material is not loaded.\n"
+                       << "The material begins loading when dragged out, and "
+                          "must be finished loading by the time it is dropped "
+                          "to be applied.";
         }
-        updated = true;
       }
       ImGui::EndDragDropTarget();
     }
 
-    ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x + padding.x);
+    if (!val->GetUrl().empty() && !IsMixedValue()) {
+      // Draw the tooltip to display the full url.
+      ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x + padding.x);
+      ShowTooltip(val->GetUrl());
+    }
 
-    ImGui::Text("%s", std::string(name).c_str());
+    if (show_edit_button && view != nullptr && !IsMixedValue()) {
+      if (ImGui::Button("Edit Material")) {
+        view->GetDispatcher().Send(editor::EditMaterialEvent(*val));
+      }
+    }
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padding.y);
 
@@ -1012,6 +1208,14 @@ class EditorFieldControl {
     }
 
     return updated;
+  }
+
+  static void ShowTooltip(absl::string_view full_text) {
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%.*s", static_cast<int>(full_text.size()),
+                        full_text.data());
+    }
   }
 };
 

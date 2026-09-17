@@ -17,8 +17,12 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_EVENTS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_EVENTS_H_
 
+#include <string>
+
+#include "core/materials/material.h"
 #include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/node_handle.h"
+#include "core/scene_handles/base_material_handle.h"
 
 namespace imp::editor {
 
@@ -80,6 +84,14 @@ struct TransformWidgetSpaceModeChangedEvent : public Event {
   explicit TransformWidgetSpaceModeChangedEvent(bool local_space_enabled)
       : local_space(local_space_enabled) {}
   bool local_space;
+};
+
+// Event sent to open and focus the material editor for a target material.
+struct EditMaterialEvent : public Event {
+  explicit EditMaterialEvent(const BaseMaterialHandle& target)
+      : material_url(target.GetUrl()), material(target.GetMaterial()) {}
+  std::string material_url;
+  BorrowedMaterialPtr material;
 };
 
 }  // namespace imp::editor

@@ -21,6 +21,12 @@
 
 namespace imp::editor {
 
+enum class TransformWidgetMode {
+  kTranslate = 0,
+  kRotate = 1,
+  kScale = 2,
+};
+
 // User-configurable settings for the editor.
 // Provides a single source of truth for the editor's user settings.
 struct EditorSettings {
@@ -36,7 +42,13 @@ struct EditorSettings {
   NotifyingProperty<bool> bvh_mesh_collision_acceleration_enabled{false};
   NotifyingProperty<bool> invert_camera_y_enabled{false};
   NotifyingProperty<bool> invert_mouse_scroll_enabled{false};
+  NotifyingProperty<bool> auto_switch_to_app_camera_on_play{false};
   NotifyingProperty<float> transform_widget_scale{1.0f};
+  NotifyingProperty<TransformWidgetMode> transform_widget_mode{
+      TransformWidgetMode::kTranslate};
+  NotifyingProperty<bool> transform_widget_local_space{true};
+  NotifyingProperty<bool> snap_enabled{true};
+  NotifyingProperty<float> grid_spacing{1.0f};
 };
 
 }  // namespace imp::editor

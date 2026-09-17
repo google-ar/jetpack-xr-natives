@@ -61,17 +61,9 @@ namespace imp::split_engine {
 //       instead.
 //
 // 2) Magic Window rendering (when material_mode in spec is MAGIC_WINDOW)
-//    In this mode, a special shader is used to do a similar Gsplat rendering
-//    like (1), but with additional fragment discard logic in the shader to cull
-//    the splats that are outside of the given window, to create a "magic
-//    window" look.
-//    TODO: (broken link) - Due to an issue with TexturePipelineRenderer, this
-//    mode does not use precomputed data texture but instead renders the splats
-//    directly from the raw data.
-//    TODO: (broken link) - This Magic Window rendering mode is too inefficient,
-//    and will be replaced by a new method that renders an offscreen texture
-//    that contains the rendered splat scene to create the same magic window
-//    look.
+//    In this mode, a GroupToProjectionQuadTextureRenderer is used to render
+//    the splat scene into an offscreen stereo texture. This texture is then
+//    projected on the magic window to create the "magic window" look.
 //
 class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
                                    public Rememberer {

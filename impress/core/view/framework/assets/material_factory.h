@@ -17,10 +17,16 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_ASSETS_MATERIAL_FACTORY_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_ASSETS_MATERIAL_FACTORY_H_
 
+#include <optional>
 #include <vector>
 
 #include "absl/base/attributes.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/optional.h"
+#include "core/assets/gltf/gltf_asset.h"
+#include "core/async/future.h"
+#include "core/material_library/generic_material.h"
+#include "core/material_library/generic_material_spec.h"
 #include "core/render/texture_factory.h"
 #include "core/render/texture_registry.h"
 #include "core/view/base_view.h"
@@ -55,6 +61,15 @@ class MaterialFactory {
   ABSL_DEPRECATED("Use the const reference version instead.")
   MaterialPtr CreateMaterial(const filament::Material* material);
   MaterialPtr CreateMaterial(const filament::Material& material);
+
+  // Loads a GenericMaterial from a GenericMaterialSpec which conforms to the
+  // glTF 2.0 Specification.
+  //
+  // The LoadOptions can be used to specify a custom material package to use. If
+  // not specified, the default package will be used.
+  Future<OwnedGenericMaterialPtr> LoadGltfMaterial(
+      const GenericMaterialSpec& spec,
+      absl::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
   // Wraps a Filament MaterialInstance with an imp Material, thus giving
   // it an official owner.

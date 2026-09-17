@@ -17,7 +17,10 @@
 package com.google.ar.imp.view.xr;
 
 import android.content.Context;
+import android.util.Log;
 import androidx.annotation.Nullable;
+import com.google.ar.imp.core.FilamentFeatureFlag;
+import com.google.ar.imp.core.ViewConfig;
 import com.google.ar.imp.view.SetupParams;
 import com.google.ar.imp.view.View;
 import com.google.common.base.Strings;
@@ -38,9 +41,21 @@ final class ImpXrApi {
   private static final String DEFAULT_LIBRARY_NAME = "imp_view_xr_jni";
 
   // LINT.ThenChange(//depot/google3/third_party/impress/build_tools/imp.bzl)
+  private static final String TAG = "ImpXrApi";
+
+  // This feature flag is specifically for an XR only optimization.
+  private static final String VULKAN_ASYNC_PIPELINE_CACHE_PREWARMING =
+      "vulkanEnableAsyncPipelineCachePrewarming";
+
+  // This feature flag is specifically for an XR only optimization. Staging buffers bypass on
+  // Android is not yet working as expected.
+  private static final String VULKAN_STAGING_BUFFER_BYPASS = "vulkanEnableStagingBufferBypass";
 
   private final Context context;
   private final View view;
+
+  // Whether or not we should catch errors that happen during "advanceFrame"
+  private boolean isOpenXrFailurePermissive = false;
 
   /** Initialize Impress for OpenXR. */
   static ImpXrApi create(Context context, SetupParams setupParams) {
@@ -50,9 +65,38 @@ final class ImpXrApi {
       nativeLibrary = DEFAULT_LIBRARY_NAME;
     }
 
+    ViewConfig.Builder viewConfigBuilder =
+        setupParams.hasViewConfig()
+            ? setupParams.getViewConfig().toBuilder()
+            : ViewConfig.newBuilder();
+
+    boolean hasPrewarming = false;
+    boolean hasBypass = false;
+    for (FilamentFeatureFlag flag : viewConfigBuilder.getFilamentFeatureFlagsList()) {
+      if (flag.getName().equals(VULKAN_ASYNC_PIPELINE_CACHE_PREWARMING)) {
+        hasPrewarming = true;
+      }
+      if (flag.getName().equals(VULKAN_STAGING_BUFFER_BYPASS)) {
+        hasBypass = true;
+      }
+    }
+
+    if (!hasPrewarming) {
+      viewConfigBuilder.addFilamentFeatureFlags(
+          FilamentFeatureFlag.newBuilder()
+              .setName(VULKAN_ASYNC_PIPELINE_CACHE_PREWARMING)
+              .setEnabled(true));
+    }
+    if (!hasBypass) {
+      viewConfigBuilder.addFilamentFeatureFlags(
+          FilamentFeatureFlag.newBuilder().setName(VULKAN_STAGING_BUFFER_BYPASS).setEnabled(true));
+    }
+
+    SetupParams finalSetupParams = setupParams.toBuilder().setViewConfig(viewConfigBuilder).build();
+
     @Nullable byte[] viewConfigBytes = null;
-    if (setupParams.hasViewConfig()) {
-      viewConfigBytes = setupParams.getViewConfig().toByteArray();
+    if (finalSetupParams.hasViewConfig()) {
+      viewConfigBytes = finalSetupParams.getViewConfig().toByteArray();
     }
 
     // For OpenXR, we use a special subclass of ViewHost called XrSessionHost that adds OpenXR
@@ -63,17 +107,19 @@ final class ImpXrApi {
     View view =
         View.createViewWithCustomHost(
             nativeLibrary,
-            setupParams.getViewIdentifier(),
+            finalSetupParams.getViewIdentifier(),
             context,
             viewConfigBytes,
             (long viewHandle) ->
-                nCreateSessionHost(context, viewHandle, setupParams.toByteArray()));
+                nCreateSessionHost(context, viewHandle, finalSetupParams.toByteArray()));
 
     // Calls XrSessionHost::Setup, which sets up Impress with the custom XrPlatform.
     // This doesn't actually initialize OpenXR yet. That happens in onWindowAttached.
     nSetup(context, view.getViewHostHandle());
 
-    return new ImpXrApi(context, view);
+    ImpXrApi api = new ImpXrApi(context, view);
+    api.isOpenXrFailurePermissive = setupParams.getXrSetupParams().getIsOpenxrFailurePermissive();
+    return api;
   }
 
   private ImpXrApi(Context context, View view) {
@@ -92,7 +138,20 @@ final class ImpXrApi {
 
   public void advanceFrame() {
     if (view.hasSwapChain()) {
+      try {
       nAdvanceFrame(view.getViewHostHandle());
+      } catch (RuntimeException e) {
+        if (!isOpenXrFailurePermissive) {
+          Log.e(
+              TAG,
+              "Failed to advance xr frame.  If this is expected behavior, set"
+                  + " isOpenXrFailurePermissive.",
+              e);
+
+          throw e;
+        }
+        Log.e(TAG, "Failed to advance frame", e);
+      }
     }
   }
 

@@ -16,8 +16,12 @@
 
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_HELPERS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_HELPERS_H_
+#include <algorithm>
+#include <functional>
 #include <string>
+#include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
@@ -81,6 +85,22 @@ inline void DrawActiveLabelUi(bool all_active, bool all_inactive) {
   ImGui::PushStyleColor(ImGuiCol_Text, color);
   ImGui::LabelText(label, "");
   ImGui::PopStyleColor();
+}
+
+// Prunes invalid handles (such as NodeHandle or ComponentHandle) from a set.
+template <typename T>
+inline void PruneInvalidHandles(absl::flat_hash_set<T>& container) {
+  absl::erase_if(container, std::logical_not<>());
+}
+
+// Prunes invalid handles (such as NodeHandle or ComponentHandle) from a vector.
+template <typename T>
+inline void PruneInvalidHandles(std::vector<T>& container) {
+  // std::erase_if is C++20 only, this code has to be compatible with C++17.
+  // Hence, usage of erase-remove idiom.
+  container.erase(
+      std::remove_if(container.begin(), container.end(), std::logical_not<>()),
+      container.end());
 }
 
 }  // namespace imp::editor

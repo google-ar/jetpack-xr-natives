@@ -40,6 +40,24 @@ void AbslStringify(Sink& sink, const Sphere& sphere) {
                sphere.radius);
 }
 
+// Represents a sphere by its center with double precision.
+struct SphereDouble {
+  SphereDouble() : center(0.0, 0.0, 0.0), radius(1.0) {}
+  SphereDouble(const double3& center, double radius)
+      : center(center), radius(radius) {}
+  double3 center;
+  double radius;
+
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink, const SphereDouble& sphere);
+};
+
+template <typename Sink>
+void AbslStringify(Sink& sink, const SphereDouble& sphere) {
+  absl::Format(&sink, "SphereDouble(center: %s, radius: %f)",
+               ToString(sphere.center), sphere.radius);
+}
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_GEOMETRY_SHAPES_SPHERE_H_

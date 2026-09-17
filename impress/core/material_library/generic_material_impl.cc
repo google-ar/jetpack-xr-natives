@@ -20,9 +20,9 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
-#include "absl/base/attributes.h"
 #include "absl/functional/function_ref.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
@@ -32,8 +32,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
-#include "absl/types/span.h"
-#include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "filament/filament/include/filament/TextureSampler.h"
@@ -91,13 +89,6 @@ absl::StatusOr<filament::MaterialInstance*> CreateMaterialInstance(
   return material_instance;
 }
 
-void LogUnsupportedParameter(absl::string_view name) {
-  IMP_LOG(imp::ERROR) << "SetParameter: Unsupported parameter: " << name;
-}
-
-void LogParameterNotDirectlyAssignable(absl::string_view name) {
-  IMP_LOG(imp::ERROR) << "SetParameter: Parameter is not directly assignable: " << name;
-}
 }  // namespace
 
 Future<GenericMaterialPtr> GenericMaterialImpl::Create(
@@ -128,40 +119,15 @@ GenericMaterialImpl::GenericMaterialImpl(
     filament::MaterialInstance& material_instance,
     const ParameterInfo& parameter_info)
     : view_(view),
+      material_(new CustomMaterial(
+          &material_instance, {},
+          view.GetConfig()
+              .experimental_feature_flags
+              ->enable_filament_material_instance_destruction_check.Value())),
       parameter_info_(parameter_info),
       placeholder_texture_(view.GetTextureFactory().BorrowPlaceholderTexture()),
       placeholder_sampler_() {
-  material_ = OwnedMaterialPtr(new CustomMaterial(
-      &material_instance, {},
-      view.GetConfig()
-          .experimental_feature_flags
-          ->enable_filament_material_instance_destruction_check.Value()));
   material_->SetName(name);
-}
-
-GenericMaterialImpl::~GenericMaterialImpl() {}
-
-GenericMaterialPtr GenericMaterialImpl::Duplicate() const {
-  // TODO: (broken link) - Make it possible to duplicate imp::Material to avoid
-  // losing owned/borrowed texture tracking.
-  filament::MaterialInstance* duplicate_instance =
-      filament::MaterialInstance::duplicate(
-          material_->GetFilamentMaterialInstance());
-  if (auto* serializer = view_.GetSplitEngineSerializer()) {
-    serializer->DuplicateMaterialInstance(
-        material_->GetFilamentMaterialInstance(), duplicate_instance);
-  }
-  auto result = absl::WrapUnique(new GenericMaterialImpl(
-      view_, material_->GetName(), *duplicate_instance, parameter_info_));
-  result->parameters_ = parameters_;
-  result->material_textures_ = material_textures_;
-  result->sampler_index_lookup_ = sampler_index_lookup_;
-  result->texture_lookup_ = texture_lookup_;
-  result->next_available_assignable_sampler_index_ =
-      next_available_assignable_sampler_index_;
-  result->samplers_uv_bitflags_ = samplers_uv_bitflags_;
-  result->samplers_uv_matrices_ = samplers_uv_matrices_;
-  return result;
 }
 
 const std::string& GenericMaterialImpl::GetName() const {
@@ -179,24 +145,6 @@ GenericMaterialImpl::GetFilamentMaterialInstance() const {
 
 filament::MaterialInstance* GenericMaterialImpl::GetFilamentMaterialInstance() {
   return material_->GetFilamentMaterialInstance();
-}
-
-std::vector<model::MaterialParameter> GenericMaterialImpl::GetParameters()
-    const {
-  return parameters_;
-}
-
-TypedVector<model::MaterialTexture> GenericMaterialImpl::GetTextures() const {
-  return material_textures_;
-}
-
-StringMap<int> GenericMaterialImpl::GetSamplerIndexLookup() const {
-  return sampler_index_lookup_;
-}
-
-BorrowedMaterialPtr GenericMaterialImpl::GetMaterialInternal(
-    SmallSourceLocation loc) const {
-  return material_.Borrow(loc);
 }
 
 TextureAndSampler GenericMaterialImpl::GetBaseColorTexture() const {
@@ -218,7 +166,7 @@ void GenericMaterialImpl::SetBaseColorFactor(const float4& factor) {
 
 float4 GenericMaterialImpl::GetBaseColorFactor() const {
   return material_->GetFilamentMaterialInstance()->getParameter<float4>(
-      kBaseColorFactor.data());
+      kBaseColorFactor.data(), kBaseColorFactor.size());
 }
 
 TextureAndSampler GenericMaterialImpl::GetMetallicRoughnessTexture() const {
@@ -240,7 +188,7 @@ void GenericMaterialImpl::SetMetallicFactor(float factor) {
 
 float GenericMaterialImpl::GetMetallicFactor() const {
   return material_->GetFilamentMaterialInstance()->getParameter<float>(
-      kMetallicFactor.data());
+      kMetallicFactor.data(), kMetallicFactor.size());
 }
 
 void GenericMaterialImpl::SetRoughnessFactor(float factor) {
@@ -249,7 +197,7 @@ void GenericMaterialImpl::SetRoughnessFactor(float factor) {
 
 float GenericMaterialImpl::GetRoughnessFactor() const {
   return material_->GetFilamentMaterialInstance()->getParameter<float>(
-      kRoughnessFactor.data());
+      kRoughnessFactor.data(), kRoughnessFactor.size());
 }
 
 TextureAndSampler GenericMaterialImpl::GetNormalTexture() const {
@@ -271,7 +219,7 @@ void GenericMaterialImpl::SetNormalScale(float scale) {
 
 float GenericMaterialImpl::GetNormalScale() const {
   return material_->GetFilamentMaterialInstance()->getParameter<float>(
-      kNormalScale.data());
+      kNormalScale.data(), kNormalScale.size());
 }
 
 TextureAndSampler GenericMaterialImpl::GetAmbientOcclusionTexture() const {
@@ -292,7 +240,7 @@ void GenericMaterialImpl::SetAmbientOcclusionStrength(float strength) {
 
 float GenericMaterialImpl::GetAmbientOcclusionStrength() const {
   return material_->GetFilamentMaterialInstance()->getParameter<float>(
-      kAoStrength.data());
+      kAoStrength.data(), kAoStrength.size());
 }
 
 TextureAndSampler GenericMaterialImpl::GetEmissiveTexture() const {
@@ -314,7 +262,7 @@ void GenericMaterialImpl::SetEmissiveFactor(const float3& factor) {
 
 float3 GenericMaterialImpl::GetEmissiveFactor() const {
   return material_->GetFilamentMaterialInstance()->getParameter<float3>(
-      kEmissiveFactor.data());
+      kEmissiveFactor.data(), kEmissiveFactor.size());
 }
 
 TextureAndSampler GenericMaterialImpl::GetClearcoatTexture() const {
@@ -322,62 +270,56 @@ TextureAndSampler GenericMaterialImpl::GetClearcoatTexture() const {
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
-TextureAndSampler GenericMaterialImpl::GetClearcoatNormalTexture() const {
-  if (auto it = texture_lookup_.find(kClearcoatNormalIndex);
-      it != texture_lookup_.end()) {
-    return it->second;
-  }
-  // TODO: Use placeholder_texture_.Borrow().
-  return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
-}
+
 TextureAndSampler GenericMaterialImpl::GetClearcoatRoughnessTexture() const {
   if (auto it = texture_lookup_.find(kClearcoatRoughnessIndex);
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
+
+TextureAndSampler GenericMaterialImpl::GetClearcoatNormalTexture() const {
+  if (auto it = texture_lookup_.find(kClearcoatNormalIndex);
+      it != texture_lookup_.end()) {
+    return it->second;
+  }
+  return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
+}
+
 void GenericMaterialImpl::SetClearcoatFactors(const float3& factor) {
   ApplyMaterialParameter(kClearcoatRoughnessNormalFactors, factor);
 }
+
 TextureAndSampler GenericMaterialImpl::GetSheenColorTexture() const {
   if (auto it = texture_lookup_.find(kSheenColorIndex);
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
+
 void GenericMaterialImpl::SetSheenColorFactor(const float3& factor) {
   ApplyMaterialParameter(kSheenColorFactor, factor);
 }
+
 TextureAndSampler GenericMaterialImpl::GetSheenRoughnessTexture() const {
   if (auto it = texture_lookup_.find(kSheenRoughnessIndex);
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: Use placeholder_texture_.Borrow().
-  return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
-}
-void GenericMaterialImpl::SetSheenRoughnessFactor(float factor) {
-  ApplyMaterialParameter(kSheenRoughnessFactor, factor);
-}
-TextureAndSampler GenericMaterialImpl::GetTransmissionTexture() const {
-  if (auto it = texture_lookup_.find(kTransmissionIndex);
-      it != texture_lookup_.end()) {
-    return it->second;
-  }
-  // TODO: Use placeholder_texture_.Borrow().
+
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
 
-absl::Status GenericMaterialImpl::SetTransmissionUvTransform(
-    const mat3f& uv_transform) {
-  return AssignSamplerUvTransform(kTransmissionIndex, uv_transform);
+void GenericMaterialImpl::SetSheenRoughnessFactor(float factor) {
+  ApplyMaterialParameter(kSheenRoughnessFactor, factor);
+}
+
+void GenericMaterialImpl::SetIndexOfRefraction(float index_of_refraction) {
+  ApplyMaterialParameter(kIndexOfRefraction, index_of_refraction);
 }
 
 TextureAndSampler GenericMaterialImpl::GetThicknessTexture() const {
@@ -385,7 +327,6 @@ TextureAndSampler GenericMaterialImpl::GetThicknessTexture() const {
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
 
@@ -400,13 +341,32 @@ void GenericMaterialImpl::SetAttenuationDistance(float distance) {
 void GenericMaterialImpl::SetAttenuationColor(const float3& color) {
   ApplyMaterialParameter(kAttenuationColor, color);
 }
+TextureAndSampler GenericMaterialImpl::GetTransmissionTexture() const {
+  if (auto it = texture_lookup_.find(kTransmissionIndex);
+      it != texture_lookup_.end()) {
+    return it->second;
+  }
+  return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
+}
 
+absl::Status GenericMaterialImpl::SetTransmissionUvTransform(
+    const mat3f& uv_transform) {
+  return AssignSamplerUvTransform(kTransmissionIndex, uv_transform);
+}
 void GenericMaterialImpl::SetTransmissionFactor(float factor) {
   ApplyMaterialParameter(kTransmissionFactor, factor);
 }
 
-void GenericMaterialImpl::SetIndexOfRefraction(float index_of_refraction) {
-  ApplyMaterialParameter(kIndexOfRefraction, index_of_refraction);
+void GenericMaterialImpl::SetAlphaCutoff(float alpha_cutoff) {
+  if (material_->GetFilamentMaterialInstance()
+          ->getMaterial()
+          ->getBlendingMode() == filament::Material::BlendingMode::MASKED) {
+    material_->GetFilamentMaterialInstance()->setMaskThreshold(alpha_cutoff);
+  }
+}
+
+float GenericMaterialImpl::GetAlphaCutoff() const {
+  return material_->GetFilamentMaterialInstance()->getMaskThreshold();
 }
 
 std::optional<TextureAndSampler> GenericMaterialImpl::GetFeatureIdTexture(
@@ -424,22 +384,11 @@ std::optional<TextureAndSampler> GenericMaterialImpl::GetFeatureIdTexture(
   return std::nullopt;
 }
 
-void GenericMaterialImpl::SetAlphaCutoff(float alpha_cutoff) {
-  if (material_->GetFilamentMaterialInstance()
-          ->getMaterial()
-          ->getBlendingMode() == filament::Material::BlendingMode::MASKED) {
-    material_->GetFilamentMaterialInstance()->setMaskThreshold(alpha_cutoff);
-  }
-}
-
-float GenericMaterialImpl::GetAlphaCutoff() const {
-  return material_->GetFilamentMaterialInstance()->getMaskThreshold();
-}
-
 template <typename T>
 void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
                                                  const T& value) {
-  material_->GetFilamentMaterialInstance()->setParameter(name.data(), value);
+  material_->GetFilamentMaterialInstance()->setParameter(name.data(),
+                                                         name.size(), value);
   parameters_.emplace_back(model::MaterialParameter(name, value));
 }
 
@@ -459,483 +408,31 @@ void GenericMaterialImpl::ApplyMaterialParameter<std::vector<mat3f>>(
       name, std::vector<mat3f>(value.begin(), value.end())));
 }
 
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       bool value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       bool2 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       bool3 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       bool4 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       float value) {
-  if (parameter_name == kMetallicFactor) {
-    SetMetallicFactor(value);
-  } else if (parameter_name == kRoughnessFactor) {
-    SetRoughnessFactor(value);
-  } else if (parameter_name == kNormalScale) {
-    SetNormalScale(value);
-  } else if (parameter_name == kSheenRoughnessFactor) {
-    SetSheenRoughnessFactor(value);
-  } else if (parameter_name == kIndexOfRefraction) {
-    SetIndexOfRefraction(value);
-  } else if (parameter_name == kThicknessFactor) {
-    SetThicknessFactor(value);
-  } else if (parameter_name == kAttenuationDistance) {
-    SetAttenuationDistance(value);
-  } else if (parameter_name == kTransmissionFactor) {
-    SetTransmissionFactor(value);
-  } else {
-    LogUnsupportedParameter(parameter_name);
-  }
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       float2 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       float3 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       float4 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       int value) {
-  if (parameter_name == kSamplersUvBitflags ||       //
-      parameter_name == kBaseColorIndex ||           //
-      parameter_name == kMetallicRoughnessIndex ||   //
-      parameter_name == kNormalIndex ||              //
-      parameter_name == kAoIndex ||                  //
-      parameter_name == kEmissiveIndex ||            //
-      parameter_name == kClearcoatIndex ||           //
-      parameter_name == kClearcoatRoughnessIndex ||  //
-      parameter_name == kClearcoatNormalIndex ||     //
-      parameter_name == kSheenColorIndex ||          //
-      parameter_name == kSheenRoughnessIndex ||      //
-      parameter_name == kThicknessIndex ||           //
-      parameter_name == kTransmissionIndex) {
-    LogParameterNotDirectlyAssignable(parameter_name);
-  } else {
-    LogUnsupportedParameter(parameter_name);
-  }
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       int2 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       int3 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       int4 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       uint value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       uint2 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       uint3 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       uint4 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       mat3f value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       mat4f value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const bool> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const bool2> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const bool3> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const bool4> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const float> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const float2> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const float3> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const float4> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const int> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const int2> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const int3> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const int4> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const uint> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const uint2> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const uint3> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const uint4> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const mat3f> value) {
-  if (parameter_name == kSamplersUvMatrices) {
-    LogParameterNotDirectlyAssignable(parameter_name);
-  } else {
-    LogUnsupportedParameter(parameter_name);
-  }
-}
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       absl::Span<const mat4f> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       filament::RgbaType type,
-                                       filament::math::float4 color) {
-  LogUnsupportedParameter(parameter_name);
-}
-
-void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
-                                       filament::RgbType type,
-                                       filament::math::float3 color) {
-  LogUnsupportedParameter(parameter_name);
-}
-
-ABSL_DEPRECATED(
-    "Use imp::BorrowedTexturePtr overload instead. See "
-    "(broken link).")
-void GenericMaterialImpl::SetParameter(
-    absl::string_view parameter_name, const imp::Texture* texture,
-    std::optional<filament::TextureSampler> sampler_override) {
-  IMP_LOG(imp::ERROR) << "SetParameter with const imp::Texture* is not supported. Use "
-                "AssignTexture instead.";
-}
-
-void GenericMaterialImpl::SetParameter(
-    absl::string_view parameter_name, TexturePtr texture,
-    std::optional<filament::TextureSampler> sampler_override) {
-  IMP_LOG(imp::ERROR) << "SetParameter with TexturePtr is not supported. Use "
-                "AssignTexture instead.";
-}
-
-void GenericMaterialImpl::SetParameter(
-    absl::string_view parameter_name, OwnedTexturePtr texture,
-    std::optional<filament::TextureSampler> sampler_override) {
-  IMP_LOG(imp::ERROR) << "SetParameter with OwnedTexturePtr is not supported. Use "
-                "AssignTexture instead.";
-}
-
-void GenericMaterialImpl::SetParameter(
-    absl::string_view parameter_name, BorrowedTexturePtr texture,
-    std::optional<filament::TextureSampler> sampler_override) {
-  IMP_LOG(imp::ERROR) << "SetParameter with BorrowedTexturePtr is not supported. Use "
-                "AssignTexture instead.";
-}
-
-bool GenericMaterialImpl::HasParameter(absl::string_view name) {
-  return material_->HasParameter(name);
-}
-
-absl::string_view GenericMaterialImpl::GetParameterTransformName(
-    absl::string_view sampler_name) const {
-  return material_->GetParameterTransformName(sampler_name);
-}
-
-Material::HeldTextureType GenericMaterialImpl::GetAssignedTextureType(
-    absl::string_view parameter_name) {
-  return material_->GetAssignedTextureType(parameter_name);
-}
-
-imp::StringMap<const filament::Texture*>
-GenericMaterialImpl::GetUnownedFilamentTextures() const {
-  return material_->GetUnownedFilamentTextures();
-}
-
-void GenericMaterialImpl::ForEachTexture(
-    absl::FunctionRef<void(BorrowedTexturePtr)> fn, SmallSourceLocation loc) {
-  material_->ForEachTexture(fn, loc);
-}
-
-absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
-    const TextureBorrower& texture_borrower, uint16_t sampler_index,
-    absl::string_view texture_channel_name,
-    const GenericMaterialTextureParameter& texture_parameter,
-    FallbackSampler fallback_sample) {
-  if (sampler_index >= kAssignableSamplers.size()) {
-    return absl::InvalidArgumentError(
-        absl::StrFormat("Sampler index %d is out of range [0, %d)",
-                        sampler_index, kAssignableSamplers.size() - 1));
-  }
-  absl::string_view sampler_name = kAssignableSamplers[sampler_index];
-
-  // Verify sampler is valid.
-  if (IsValidSampler(sampler_name)) {
-    const BorrowedTexturePtr texture = texture_borrower(
-        texture_parameter.texture_id, SmallSourceLocation::Current());
-    if (!texture) {
-      return absl::NotFoundError(absl::StrFormat("Texture not found: %d",
-                                                 texture_parameter.texture_id));
-    }
-    // Pass the borrowed texture directly to the material so the location is
-    // within the given TextureBorrower. This ensures that stack traces don't
-    // always point to this function.
-    material_->SetParameter(sampler_name, texture, texture_parameter.sampler);
-
-    texture_lookup_.insert_or_assign<TextureAndSampler>(
-        texture_channel_name, {texture->GetTexture(), texture_parameter.sampler,
-                               texture_parameter.uv_transform});
-
-    if (!texture_channel_name.empty()) {
-      material_->SetParameter(texture_channel_name,
-                              static_cast<int32_t>(sampler_index));
-
-      // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-      parameters_.emplace_back(
-          model::MaterialParameter(texture_channel_name, sampler_index));
-      sampler_index_lookup_[texture_channel_name.data()] = sampler_index;
-    }
-    // Capture texture configuration.
-    // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-    parameters_.emplace_back(model::MaterialParameter(
-        sampler_name,
-        TextureAndSampler(texture->GetTexture(), texture_parameter.sampler)));
-  } else {
-    // Use a fallback sampler (if specified) if the sampler is invalid.
-    // This can happen if too many samplers are requested.
-    if (!texture_channel_name.empty()) {
-      const auto sampler_fallback_index =
-          GetFallbackSampleIndex(fallback_sample);
-      material_->SetParameter(texture_channel_name, sampler_fallback_index);
-
-      // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-      parameters_.emplace_back(model::MaterialParameter{
-          texture_channel_name, sampler_fallback_index});
-      sampler_index_lookup_[texture_channel_name.data()] =
-          sampler_fallback_index;
-    }
-  }
-  return absl::OkStatus();
-}
-
-absl::Status GenericMaterialImpl::AssignTexture(
-    const TextureBorrower& texture_borrower,
-    absl::string_view texture_channel_name,
-    const absl::optional<GenericMaterialTextureParameter>& texture_parameter,
-    FallbackSampler fallback_sample) {
-  if (!texture_parameter) {
-    // Some parameters are optional.
-    AssignFallbackSampler(texture_channel_name, fallback_sample);
-    return absl::OkStatus();
+GenericMaterialPtr GenericMaterialImpl::Duplicate() const {
+  // TODO: (broken link) - Make it possible to duplicate imp::Material to avoid
+  // losing owned/borrowed texture tracking.
+  if (HoldsOwnedTextures()) {
+    IMP_LOG(imp::FATAL) << "Cannot duplicate material with owned textures.";
   }
 
-  int sampler_index;
-  auto it = sampler_index_lookup_.find(texture_channel_name);
-  if (it != sampler_index_lookup_.end()) {
-    // This texture has already been assigned to a sampler.
-    sampler_index = it->second;
-    samplers_uv_matrices_[sampler_index] = texture_parameter->uv_transform;
-  } else {
-    // Assign the texture to the next available sampler.
-    sampler_index = next_available_assignable_sampler_index_;
-    next_available_assignable_sampler_index_++;
-    samplers_uv_matrices_.push_back(texture_parameter->uv_transform);
+  filament::MaterialInstance* duplicate_instance =
+      filament::MaterialInstance::duplicate(
+          material_->GetFilamentMaterialInstance());
+  if (auto* serializer = view_.GetSplitEngineSerializer()) {
+    serializer->DuplicateMaterialInstance(
+        material_->GetFilamentMaterialInstance(), duplicate_instance);
   }
-
-  MP_RETURN_IF_ERROR(ApplyMaterialTextureParameter(
-      texture_borrower, sampler_index, texture_channel_name, *texture_parameter,
-      fallback_sample));
-
-  // If this texture uses UV1, set the bitflag.
-  if (texture_parameter->uses_uv1) {
-    samplers_uv_bitflags_ |= 1 << sampler_index;
-  }
-
-  return absl::OkStatus();
-}
-
-absl::Status GenericMaterialImpl::AssignSamplerUvTransform(
-    absl::string_view sampler_name, const mat3f& uv_transform) {
-  auto it = sampler_index_lookup_.find(sampler_name);
-  if (it == sampler_index_lookup_.end()) {
-    return absl::NotFoundError(
-        absl::StrFormat("Sampler not found: %s", sampler_name));
-  }
-  samplers_uv_matrices_[it->second] = uv_transform;
-  // It is safe to update the texture_lookup since we know the key exists.
-  texture_lookup_.at(sampler_name).uv_transform = uv_transform;
-  ApplyMaterialParameter(kSamplersUvMatrices, samplers_uv_matrices_);
-  return absl::OkStatus();
-}
-
-// Converts the FallbackSampler enum to the index of the fallback sampler in
-// the generic glTF material.
-int GenericMaterialImpl::GetFallbackSampleIndex(
-    FallbackSampler fallback_sample) {
-  switch (fallback_sample) {
-    case FallbackSampler::kWhite:
-      return kFallbackSamplerIndexColor;
-    case FallbackSampler::kNormal:
-      return kFallbackSamplerIndexNormal;
-    default:
-      IMP_LOG(imp::WARNING) << "Invalid fallback sample specified, defaulting to "
-                      "white fallback sampler.";
-      return kFallbackSamplerIndexColor;
-  }
-}
-
-// Assigns a fallback sampler to use for usages that don't have any texture
-// assigned to them in the glTf file.
-void GenericMaterialImpl::AssignFallbackSampler(
-    absl::string_view index_parameter_name, FallbackSampler fallback_sample) {
-  ApplyMaterialParameter(index_parameter_name,
-                         GetFallbackSampleIndex(fallback_sample));
-  parameters_.push_back(model::MaterialParameter(
-      index_parameter_name, GetFallbackSampleIndex(fallback_sample)));
-}
-
-void GenericMaterialImpl::AssignPlaceholderTexture(
-    absl::string_view sampler_name) {
-  if (!IsValidSampler(sampler_name)) return;
-
-  material_->GetFilamentMaterialInstance()->setParameter(
-      sampler_name.data(), sampler_name.size(),
-      placeholder_texture_->GetTexture(), placeholder_sampler_);
-  // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-  parameters_.push_back(model::MaterialParameter(
-      sampler_name, TextureAndSampler(placeholder_texture_->GetTexture(),
-                                      placeholder_sampler_)));
-}
-
-void GenericMaterialImpl::AssignPlaceholderTexturesToUnusedSamplers() {
-  if (next_available_assignable_sampler_index_ <
-      parameter_info_.max_available_samplers) {
-    while (next_available_assignable_sampler_index_ <
-           parameter_info_.max_available_samplers) {
-      AssignPlaceholderTexture(
-          kAssignableSamplers[next_available_assignable_sampler_index_]);
-      next_available_assignable_sampler_index_++;
-    }
-
-    // These texture samplers don't exist for lite materials.
-    if (parameter_info_.has_estimated_depth_texture) {
-      AssignPlaceholderTexture(kEstimatedDepthTexture);
-    }
-
-    // On Android, this is an external texture so we don't need to bind
-    // a placeholder texture to it.
-#if !IMP_PLATFORM(ANDROID)
-    if (parameter_info_.has_camera_texture) {
-      AssignPlaceholderTexture(kCameraTexture);
-    }
-#endif
-  }
-}
-
-bool GenericMaterialImpl::IsValidSampler(absl::string_view sampler_name) {
-  return material_->GetFilamentMaterialInstance()->getMaterial()->hasParameter(
-             std::string(sampler_name).c_str()) &&
-         (parameter_info_.sampler_parameters.find(sampler_name) !=
-          parameter_info_.sampler_parameters.end());
-}
-
-absl::StatusOr<GenericMaterialImpl::ParameterInfo>
-GenericMaterialImpl::GetMaterialParameterInfo(
-    const filament::Material& material) {
-  GenericMaterialImpl::ParameterInfo parameter_info;
-  const size_t parameter_count = material.getParameterCount();
-  // Early exit if there are no parameters to avoid calling
-  // material `filament::Material::getParameters` with a null parameters
-  // pointer.
-  if (parameter_count == 0) {
-    return parameter_info;
-  }
-
-  parameter_info.material_parameters.resize(parameter_count);
-  const size_t actual_parameter_count =
-      material.getParameters(parameter_info.material_parameters.data(),
-                             parameter_info.material_parameters.size());
-  parameter_info.material_parameters.resize(actual_parameter_count);
-  if (parameter_info.material_parameters.empty()) {
-    return parameter_info;
-  }
-
-  for (const auto& parameter : parameter_info.material_parameters) {
-    if (parameter.isSampler) {
-      parameter_info.sampler_parameters.insert(parameter.name);
-    }
-
-    std::string parameter_name(parameter.name);
-    if (parameter_name == kSamplersUvMatrices) {
-      parameter_info.max_available_samplers = parameter.count;
-    } else if (parameter_name == kEstimatedDepthTexture) {
-      parameter_info.has_estimated_depth_texture = true;
-    } else if (parameter_name == kCameraTexture) {
-      parameter_info.has_camera_texture = true;
-    }
-  }
-
-  // If there are samplers, there should be a uv matrix parameter.
-  if (!parameter_info.sampler_parameters.empty() &&
-      parameter_info.max_available_samplers == 0) {
-    return absl::NotFoundError(
-        absl::StrFormat("%s parameter not found in the material - this is "
-                        "required to get the size of the assignable samplers.",
-                        kSamplersUvMatrices));
-  }
-  return parameter_info;
+  auto result = absl::WrapUnique(new GenericMaterialImpl(
+      view_, material_->GetName(), *duplicate_instance, parameter_info_));
+  result->parameters_ = parameters_;
+  result->material_textures_ = material_textures_;
+  result->sampler_index_lookup_ = sampler_index_lookup_;
+  result->texture_lookup_ = texture_lookup_;
+  result->next_available_assignable_sampler_index_ =
+      next_available_assignable_sampler_index_;
+  result->samplers_uv_bitflags_ = samplers_uv_bitflags_;
+  result->samplers_uv_matrices_ = samplers_uv_matrices_;
+  return result;
 }
 
 absl::Status GenericMaterialImpl::AssignTexturesAndParams(
@@ -971,9 +468,9 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       SetRoughnessFactor(kDefaultRoughnessFactor);
     }
     if (generic_material_parameters.normal) {
-      MP_RETURN_IF_ERROR(AssignTexture(texture_borrower, kNormalIndex,
-                                    generic_material_parameters.normal->texture,
-                                    FallbackSampler::kNormal));
+      MP_RETURN_IF_ERROR(
+          AssignTexture(texture_borrower, kNormalIndex,
+                        generic_material_parameters.normal->texture));
       SetNormalScale(generic_material_parameters.normal->factor);
     } else {
       AssignFallbackSampler(kNormalIndex, FallbackSampler::kNormal);
@@ -1010,8 +507,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
           generic_material_parameters.clearcoat->roughness_texture));
       MP_RETURN_IF_ERROR(
           AssignTexture(texture_borrower, kClearcoatNormalIndex,
-                        generic_material_parameters.clearcoat->normal_texture,
-                        FallbackSampler::kNormal));
+                        generic_material_parameters.clearcoat->normal_texture));
       SetClearcoatFactors(generic_material_parameters.clearcoat->factor);
     } else {
       AssignFallbackSampler(kClearcoatIndex);
@@ -1040,7 +536,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
     if (generic_material_parameters.volume) {
       MP_RETURN_IF_ERROR(
           AssignTexture(texture_borrower, kThicknessIndex,
-                        generic_material_parameters.volume->texture));
+                        generic_material_parameters.volume->thickness_texture));
       SetThicknessFactor(generic_material_parameters.volume->thickness_factor);
       SetAttenuationDistance(
           generic_material_parameters.volume->attenuation_distance);
@@ -1107,6 +603,312 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
   AssignPlaceholderTexturesToUnusedSamplers();
 
   return absl::OkStatus();
+}
+
+std::vector<model::MaterialParameter> GenericMaterialImpl::GetParameters()
+    const {
+  return parameters_;
+}
+
+TypedVector<model::MaterialTexture> GenericMaterialImpl::GetTextures() const {
+  return material_textures_;
+}
+
+StringMap<int> GenericMaterialImpl::GetSamplerIndexLookup() const {
+  return sampler_index_lookup_;
+}
+
+absl::string_view GenericMaterialImpl::GetParameterTransformName(
+    absl::string_view sampler_name) const {
+  return material_->GetParameterTransformName(sampler_name);
+}
+
+Material::HeldTextureType GenericMaterialImpl::GetAssignedTextureType(
+    absl::string_view parameter_name) {
+  return material_->GetAssignedTextureType(parameter_name);
+}
+
+imp::StringMap<const filament::Texture*>
+GenericMaterialImpl::GetUnownedFilamentTextures() const {
+  return material_->GetUnownedFilamentTextures();
+}
+
+bool GenericMaterialImpl::HoldsOwnedTextures() const {
+  return material_->HoldsOwnedTextures();
+}
+
+void GenericMaterialImpl::ForEachTexture(
+    absl::FunctionRef<void(BorrowedTexturePtr)> fn, SmallSourceLocation loc) {
+  material_->ForEachTexture(fn, loc);
+}
+
+BorrowedMaterialPtr GenericMaterialImpl::GetMaterialInternal(
+    SmallSourceLocation loc) const {
+  return material_.Borrow(loc);
+}
+
+absl::Status GenericMaterialImpl::SetTextureForChannel(
+    absl::string_view channel_name, OwnedOrBorrowedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  return SetTextureForChannelInternal(channel_name, std::move(texture),
+                                      sampler_override, kIdentityMat3f,
+                                      /*uses_uv1=*/false);
+}
+
+absl::Status GenericMaterialImpl::AssignTexture(
+    const TextureBorrower& texture_borrower,
+    absl::string_view texture_channel_name,
+    const absl::optional<GenericMaterialTextureParameter>& texture_parameter) {
+  if (!texture_parameter) {
+    // Some parameters are optional.
+    AssignFallbackSampler(texture_channel_name,
+                          GetFallbackForChannel(texture_channel_name));
+    return absl::OkStatus();
+  }
+
+  const BorrowedTexturePtr texture = texture_borrower(
+      texture_parameter->texture_id, SmallSourceLocation::Current());
+  if (!texture) {
+    return absl::NotFoundError(absl::StrFormat("Texture not found: %d",
+                                               texture_parameter->texture_id));
+  }
+
+  return SetTextureForChannelInternal(
+      texture_channel_name, texture, texture_parameter->sampler,
+      texture_parameter->uv_transform, texture_parameter->uses_uv1);
+}
+
+absl::Status GenericMaterialImpl::SetTextureForChannelInternal(
+    absl::string_view channel_name, OwnedOrBorrowedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override,
+    const mat3f& uv_transform, bool uses_uv1) {
+  if (!texture) {
+    auto it = sampler_index_lookup_.find(channel_name);
+    if (it != sampler_index_lookup_.end()) {
+      int sampler_index = it->second;
+      if (sampler_index < kAssignableSamplers.size()) {
+        absl::string_view sampler_name = kAssignableSamplers[sampler_index];
+        AssignPlaceholderTexture(sampler_name);
+        samplers_uv_matrices_[sampler_index] = kIdentityMat3f;
+        samplers_uv_bitflags_ &= ~(1 << sampler_index);
+        ApplyMaterialParameter(kSamplersUvBitflags,
+                               static_cast<int32_t>(samplers_uv_bitflags_));
+        ApplyMaterialParameter(kSamplersUvMatrices, samplers_uv_matrices_);
+        AssignFallbackSampler(channel_name,
+                              GetFallbackForChannel(channel_name));
+        texture_lookup_.erase(channel_name);
+      }
+    }
+
+    return absl::OkStatus();
+  }
+
+  int sampler_index;
+  auto it = sampler_index_lookup_.find(channel_name);
+
+  if (it != sampler_index_lookup_.end()) {
+    sampler_index = it->second;
+    samplers_uv_matrices_[sampler_index] = uv_transform;
+  } else {
+    sampler_index = next_available_assignable_sampler_index_;
+    next_available_assignable_sampler_index_++;
+    samplers_uv_matrices_.push_back(uv_transform);
+  }
+
+  if (sampler_index >= kAssignableSamplers.size()) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Sampler index %d is out of range [0, %d)",
+                        sampler_index, kAssignableSamplers.size() - 1));
+  }
+  absl::string_view sampler_name = kAssignableSamplers[sampler_index];
+
+  if (IsValidSampler(sampler_name)) {
+    filament::Texture* filament_texture = texture->GetTexture();
+    filament::TextureSampler sampler =
+        sampler_override ? *sampler_override : texture->GetSampler();
+
+    std::variant<BorrowedTexturePtr, OwnedTexturePtr> texture_variant =
+        texture.Extract();
+    if (std::holds_alternative<OwnedTexturePtr>(texture_variant)) {
+      material_->SetParameter(
+          sampler_name, std::move(std::get<OwnedTexturePtr>(texture_variant)),
+          sampler_override);
+    } else {
+      material_->SetParameter(sampler_name,
+                              std::get<BorrowedTexturePtr>(texture_variant),
+                              sampler_override);
+    }
+
+    texture_lookup_.insert_or_assign<TextureAndSampler>(
+        channel_name, {filament_texture, sampler, uv_transform});
+
+    material_->SetParameter(channel_name, static_cast<int32_t>(sampler_index));
+    sampler_index_lookup_[channel_name.data()] = sampler_index;
+
+    if (uses_uv1) {
+      samplers_uv_bitflags_ |= 1 << sampler_index;
+    } else {
+      samplers_uv_bitflags_ &= ~(1 << sampler_index);
+    }
+
+    ApplyMaterialParameter(kSamplersUvBitflags,
+                           static_cast<int32_t>(samplers_uv_bitflags_));
+    ApplyMaterialParameter(kSamplersUvMatrices, samplers_uv_matrices_);
+
+    // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
+    parameters_.emplace_back(
+        model::MaterialParameter(channel_name, sampler_index));
+    parameters_.emplace_back(model::MaterialParameter(
+        sampler_name, TextureAndSampler(filament_texture, sampler)));
+  } else {
+    // Use a fallback sampler (if specified) if the sampler is invalid.
+    // This can happen if too many samplers are requested.
+    const auto sampler_fallback_index =
+        GetFallbackSampleIndex(GetFallbackForChannel(channel_name));
+    material_->SetParameter(channel_name, sampler_fallback_index);
+
+    // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
+    parameters_.emplace_back(
+        model::MaterialParameter{channel_name, sampler_fallback_index});
+    sampler_index_lookup_.emplace(channel_name, sampler_fallback_index);
+  }
+  return absl::OkStatus();
+}
+
+absl::Status GenericMaterialImpl::AssignSamplerUvTransform(
+    absl::string_view sampler_name, const mat3f& uv_transform) {
+  auto it = sampler_index_lookup_.find(sampler_name);
+  if (it == sampler_index_lookup_.end()) {
+    return absl::NotFoundError(
+        absl::StrFormat("Sampler not found: %s", sampler_name));
+  }
+  samplers_uv_matrices_[it->second] = uv_transform;
+  // It is safe to update the texture_lookup since we know the key exists.
+  texture_lookup_.at(sampler_name).uv_transform = uv_transform;
+  ApplyMaterialParameter(kSamplersUvMatrices, samplers_uv_matrices_);
+  return absl::OkStatus();
+}
+
+GenericMaterialImpl::FallbackSampler GenericMaterialImpl::GetFallbackForChannel(
+    absl::string_view channel_name) {
+  if (channel_name == kNormalIndex || channel_name == kClearcoatNormalIndex) {
+    return FallbackSampler::kNormal;
+  }
+  return FallbackSampler::kWhite;
+}
+
+// Converts the FallbackSampler enum to the index of the fallback sampler in
+// the generic glTF material.
+int GenericMaterialImpl::GetFallbackSampleIndex(
+    FallbackSampler fallback_sample) {
+  switch (fallback_sample) {
+    case FallbackSampler::kWhite:
+      return kFallbackSamplerIndexColor;
+    case FallbackSampler::kNormal:
+      return kFallbackSamplerIndexNormal;
+    default:
+      IMP_LOG(imp::WARNING) << "Invalid fallback sample specified, defaulting to "
+                      "white fallback sampler.";
+      return kFallbackSamplerIndexColor;
+  }
+}
+
+// Assigns a fallback sampler to use for usages that don't have any texture
+// assigned to them in the glTf file.
+void GenericMaterialImpl::AssignFallbackSampler(
+    absl::string_view index_parameter_name, FallbackSampler fallback_sample) {
+  ApplyMaterialParameter(index_parameter_name,
+                         GetFallbackSampleIndex(fallback_sample));
+  parameters_.push_back(model::MaterialParameter(
+      index_parameter_name, GetFallbackSampleIndex(fallback_sample)));
+}
+
+void GenericMaterialImpl::AssignPlaceholderTexture(
+    absl::string_view sampler_name) {
+  if (!IsValidSampler(sampler_name)) return;
+
+  material_->GetFilamentMaterialInstance()->setParameter(
+      sampler_name.data(), sampler_name.size(),
+      placeholder_texture_->GetTexture(), placeholder_sampler_);
+  // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
+  parameters_.push_back(model::MaterialParameter(
+      sampler_name, TextureAndSampler(placeholder_texture_->GetTexture(),
+                                      placeholder_sampler_)));
+}
+
+void GenericMaterialImpl::AssignPlaceholderTexturesToUnusedSamplers() {
+  int index = next_available_assignable_sampler_index_;
+  while (index < parameter_info_.max_available_samplers) {
+    AssignPlaceholderTexture(kAssignableSamplers[index]);
+    index++;
+  }
+
+  // These texture samplers don't exist for lite materials.
+  if (parameter_info_.has_estimated_depth_texture) {
+    AssignPlaceholderTexture(kEstimatedDepthTexture);
+  }
+
+  // On Android, this is an external texture so we don't need to bind
+  // a placeholder texture to it.
+#if !IMP_PLATFORM(ANDROID)
+  if (parameter_info_.has_camera_texture) {
+    AssignPlaceholderTexture(kCameraTexture);
+  }
+#endif
+}
+
+bool GenericMaterialImpl::IsValidSampler(absl::string_view sampler_name) {
+  return material_->GetFilamentMaterialInstance()->getMaterial()->hasParameter(
+             std::string(sampler_name).c_str()) &&
+         (parameter_info_.sampler_parameters.find(sampler_name) !=
+          parameter_info_.sampler_parameters.end());
+}
+
+absl::StatusOr<GenericMaterialImpl::ParameterInfo>
+GenericMaterialImpl::GetMaterialParameterInfo(
+    const filament::Material& material) {
+  GenericMaterialImpl::ParameterInfo parameter_info;
+  const size_t parameter_count = material.getParameterCount();
+  // Early exit if there are no parameters to avoid calling
+  // material `filament::Material::getParameters` with a null parameters
+  // pointer.
+  if (parameter_count == 0) {
+    return parameter_info;
+  }
+
+  parameter_info.material_parameters.resize(parameter_count);
+  const size_t actual_parameter_count =
+      material.getParameters(parameter_info.material_parameters.data(),
+                             parameter_info.material_parameters.size());
+  parameter_info.material_parameters.resize(actual_parameter_count);
+  if (parameter_info.material_parameters.empty()) {
+    return parameter_info;
+  }
+
+  for (const auto& parameter : parameter_info.material_parameters) {
+    if (parameter.isSampler) {
+      parameter_info.sampler_parameters.insert(parameter.name);
+    }
+
+    std::string parameter_name(parameter.name);
+    if (parameter_name == kSamplersUvMatrices) {
+      parameter_info.max_available_samplers = parameter.count;
+    } else if (parameter_name == kEstimatedDepthTexture) {
+      parameter_info.has_estimated_depth_texture = true;
+    } else if (parameter_name == kCameraTexture) {
+      parameter_info.has_camera_texture = true;
+    }
+  }
+
+  // If there are samplers, there should be a uv matrix parameter.
+  if (!parameter_info.sampler_parameters.empty() &&
+      parameter_info.max_available_samplers == 0) {
+    return absl::NotFoundError(
+        absl::StrFormat("%s parameter not found in the material - this is "
+                        "required to get the size of the assignable samplers.",
+                        kSamplersUvMatrices));
+  }
+  return parameter_info;
 }
 
 }  // namespace imp

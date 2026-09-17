@@ -33,6 +33,7 @@
 #include "absl/types/variant.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Camera.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 #if defined(__ANDROID__)
 #include "filament/filament/include/filament/Fence.h"
 #endif  // defined(__ANDROID__)
@@ -201,8 +202,12 @@ Future<absl::Status> TexturePipelineRenderer::Setup() {
         "TexturePipelineRenderer must have at least one pass."));
   }
 
-  if (split_engine::SplitEngineSerializer* serializer =
-          GetView().GetSplitEngineSerializer()) {
+  split_engine::SplitEngineSerializer* serializer =
+      GetView().GetSplitEngineSerializer();
+  SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+      /*production_api_level=*/4);
+  if (serializer && serializer->GetApiLevel() ==
+                        android_xr::kSplitEngineExperimentalApiLevel) {
     // Serialize the TexturePipelineRenderer state.
     serializer->AddTexturePipelineRenderer(GetNode().GetEntity(), state_);
 
@@ -366,8 +371,13 @@ void TexturePipelineRenderer::SetPassEnabled(size_t pass_index, bool enabled) {
     return;
   }
   runtime_passes_[pass_index].enabled = enabled;
-  if (split_engine::SplitEngineSerializer* serializer =
-          GetView().GetSplitEngineSerializer()) {
+
+  split_engine::SplitEngineSerializer* serializer =
+      GetView().GetSplitEngineSerializer();
+  SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+      /*production_api_level=*/4);
+  if (serializer && serializer->GetApiLevel() ==
+                        split_engine::kSplitEngineExperimentalApiLevel) {
     std::vector<bool> enabled_passes(runtime_passes_.size());
     for (size_t i = 0; i < runtime_passes_.size(); ++i) {
       enabled_passes[i] = runtime_passes_[i].enabled;
@@ -392,8 +402,12 @@ absl::Status TexturePipelineRenderer::ResizePassTexture(size_t pass_index,
   }
   TexturePipelineRendererState::Pass& pass = state_.passes[pass_index];
 
-  if (split_engine::SplitEngineSerializer* serializer =
-          GetView().GetSplitEngineSerializer()) {
+  split_engine::SplitEngineSerializer* serializer =
+      GetView().GetSplitEngineSerializer();
+  SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+      /*production_api_level=*/4);
+  if (serializer && serializer->GetApiLevel() ==
+                        split_engine::kSplitEngineExperimentalApiLevel) {
     // TODO: (broken link) - Implement texture resize in Split Engine.
     IMP_LOG(imp::FATAL) << "ResizePassTexture is not supported in Split Engine.";
   }
@@ -416,8 +430,12 @@ absl::Status TexturePipelineRenderer::SetPassCamera(
   if (pass_index >= runtime_passes_.size()) {
     return absl::InvalidArgumentError("Pass index out of bounds");
   }
-  if (split_engine::SplitEngineSerializer* serializer =
-          GetView().GetSplitEngineSerializer()) {
+  split_engine::SplitEngineSerializer* serializer =
+      GetView().GetSplitEngineSerializer();
+  SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+      /*production_api_level=*/4);
+  if (serializer && serializer->GetApiLevel() ==
+                        split_engine::kSplitEngineExperimentalApiLevel) {
     IMP_LOG(imp::FATAL) << "SetPassCamera is not supported in Split Engine.";
   }
 
@@ -441,8 +459,12 @@ filament::View* TexturePipelineRenderer::GetFilamentView(
 }
 
 void TexturePipelineRenderer::Cleanup() {
-  if (split_engine::SplitEngineSerializer* serializer =
-          GetView().GetSplitEngineSerializer()) {
+  split_engine::SplitEngineSerializer* serializer =
+      GetView().GetSplitEngineSerializer();
+  SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+      /*production_api_level=*/4);
+  if (serializer && serializer->GetApiLevel() ==
+                        split_engine::kSplitEngineExperimentalApiLevel) {
     serializer->RemoveTexturePipelineRenderer(GetNode().GetEntity());
   }
 
@@ -974,8 +996,12 @@ std::optional<BorrowedMaterialPtr> TexturePipelineRenderer::GetOverrideMaterial(
 
 void TexturePipelineRenderer::SetProjectionQuad(
     const std::optional<TexturePipelineRendererProjectionQuad>& quad) {
-  if (split_engine::SplitEngineSerializer* serializer =
-          GetView().GetSplitEngineSerializer()) {
+  split_engine::SplitEngineSerializer* serializer =
+      GetView().GetSplitEngineSerializer();
+  SPLIT_ENGINE_MAYBE_PROMOTE_FEATURE_AFTER_PRODUCTION_API_LEVEL_BUMP(
+      /*production_api_level=*/4);
+  if (serializer && serializer->GetApiLevel() ==
+                        split_engine::kSplitEngineExperimentalApiLevel) {
     serializer->SetTexturePipelineRendererProjectionQuad(GetNode().GetEntity(),
                                                          quad);
   }

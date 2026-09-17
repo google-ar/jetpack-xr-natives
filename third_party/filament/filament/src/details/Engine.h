@@ -40,6 +40,7 @@
 #include "details/ColorGrading.h"
 #include "details/DebugRegistry.h"
 #include "details/Fence.h"
+#include "details/FramePacer.h"
 #include "details/InstanceBuffer.h"
 #include "details/MorphTargetBuffer.h"
 #include "details/RenderTarget.h"
@@ -58,6 +59,7 @@
 
 #include <filament/ColorGrading.h>
 #include <filament/Engine.h>
+#include <filament/FramePacer.h>
 #include <filament/IndirectLight.h>
 #include <filament/Material.h>
 #include <filament/Skybox.h>
@@ -71,18 +73,19 @@
 
 #include "filament/libs/utils/include/utils/Allocator.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/Condition.h"
 #include "filament/libs/utils/include/utils/CountDownLatch.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "filament/libs/utils/include/utils/memalign.h"
+#include "filament/libs/utils/include/utils/Mutex.h"
 #include "filament/libs/utils/include/utils/Slice.h"
 #include "filament/libs/utils/include/utils/tribool.h"
 
 #include <cstddef>
 #include <chrono>
-#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <new>
@@ -90,7 +93,6 @@
 #include <string_view>
 #include <random>
 #include <thread>
-#include <mutex>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
@@ -361,6 +363,7 @@ public:
             MaterialDefinition const& definition) noexcept;
     FTexture* createTexture(const Texture::Builder& builder) noexcept;
     FSkybox* createSkybox(const Skybox::Builder& builder) noexcept;
+    FFramePacer* createFramePacer(const FramePacer::Builder& builder) noexcept;
     FColorGrading* createColorGrading(const ColorGrading::Builder& builder) noexcept;
     FStream* createStream(const Stream::Builder& builder) noexcept;
     FRenderTarget* createRenderTarget(const RenderTarget::Builder& builder) noexcept;
@@ -398,6 +401,7 @@ public:
     bool destroy(const FMaterial* p);
     bool destroy(const FMaterialInstance* p);
     bool destroy(const FRenderer* p);
+    bool destroy(const FFramePacer* p);
     bool destroy(const FScene* p);
     bool destroy(const FSkybox* p);
     bool destroy(const FColorGrading* p);
@@ -615,6 +619,9 @@ public:
         utils::tribool shadowReceiver,
         utils::tribool skinning) noexcept;
 
+    static utils::FixedCapacityVector<DynamicSpecConstKey> getMaterialCompileDynamicSpecConstKey(
+        FView const* view, FMaterial const* material) noexcept;
+
 private:
     explicit FEngine(Builder const& builder);
     void init();
@@ -665,6 +672,7 @@ private:
 
     ResourceList<FBufferObject> mBufferObjects{ "BufferObject" };
     ResourceList<FRenderer> mRenderers{ "Renderer" };
+    ResourceList<FFramePacer> mFramePacers{ "FramePacer" };
     ResourceList<FView> mViews{ "View" };
     ResourceList<FScene> mScenes{ "Scene" };
     ResourceList<FSwapChain> mSwapChains{ "SwapChain" };
@@ -685,8 +693,8 @@ private:
     mutable utils::Mutex mFenceListLock;
     ResourceList<FFence> mFences UTILS_GUARDED_BY(mFenceListLock){"Fence"};
 
-    mutable std::mutex mFenceLock;
-    mutable std::condition_variable mFenceCondition;
+    mutable utils::Mutex mFenceLock;
+    mutable utils::Condition mFenceCondition;
     bool mFenceHasUnrecoverableError = false;
 
     // the sync list is accessed from multiple threads, because they are

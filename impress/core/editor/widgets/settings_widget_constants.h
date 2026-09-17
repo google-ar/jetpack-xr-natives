@@ -23,7 +23,6 @@ namespace imp::editor {
 constexpr absl::string_view kFileHeaderText = "File";
 constexpr absl::string_view kSettingsText = "Settings";
 constexpr absl::string_view kInputText = "Input";
-constexpr absl::string_view kGridText = "Show Grid";
 constexpr absl::string_view kSkyboxText = "Show Skybox";
 constexpr absl::string_view kShowBoundsText = "Show All Bounds";
 constexpr absl::string_view kShowAllCollidersText = "Show All Colliders";
@@ -38,13 +37,23 @@ constexpr absl::string_view kEnableLoadMeshDataOnCpu =
     "Enable Load Mesh Data On CPU";
 constexpr absl::string_view kEnableBvhMeshCollisionAcceleration =
     "Enable BVH Mesh Collision Acceleration";
+constexpr absl::string_view kAutoSwitchToAppCameraOnPlayText =
+    "Auto-switch to App Camera on Play";
 
 inline constexpr absl::string_view kSkyboxEnabledKey = "editor_skybox_enabled";
 inline constexpr bool kSkyboxEnabledDefault = true;
 
+inline constexpr absl::string_view kAutoSwitchToAppCameraOnPlayEnabledKey =
+    "editor_auto_switch_to_app_camera_on_play_enabled";
+inline constexpr bool kAutoSwitchToAppCameraOnPlayEnabledDefault = true;
+
 inline constexpr absl::string_view kVertexSelectionEnabledKey =
     "editor_vertex_selection_enabled";
 inline constexpr bool kVertexSelectionEnabledDefault = false;
+
+inline constexpr absl::string_view kTransformWidgetLocalSpaceKey =
+    "editor_transform_widget_local_space";
+inline constexpr bool kTransformWidgetLocalSpaceDefault = true;
 
 inline constexpr absl::string_view kLoadMeshDataOnCpuEnabledKey =
     "editor_load_mesh_data_on_cpu_enabled";
@@ -61,6 +70,12 @@ inline constexpr bool kPostProcessingEnabledDefault = true;
 inline constexpr absl::string_view kShowPhysicsVisualizerEnabledKey =
     "editor_show_physics_visualizer_enabled";
 inline constexpr bool kShowPhysicsVisualizerEnabledDefault = false;
+
+inline constexpr absl::string_view kSnapEnabledKey = "editor_snap_enabled";
+inline constexpr bool kSnapEnabledDefault = false;
+
+inline constexpr absl::string_view kGridSpacingKey = "editor_grid_spacing";
+inline constexpr float kGridSpacingDefault = 1.0f;
 
 }  // namespace imp::editor
 

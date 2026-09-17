@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_ADD_COMPONENT_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_ADD_COMPONENT_H_
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
 #include "core/common/robin_map.h"
@@ -40,14 +41,15 @@ class ComponentUi : public editor::Widget, public imp::Rememberer {
   bool IsCloseable() const override { return false; }
 
  private:
-  // Loops through all components on the active model and updates the UI.
-  void UpdateComponentWidgets(NodeHandle selected_node);
+  // Loops through all components on the active models and updates the UI.
+  void UpdateComponentWidgets(
+      const absl::flat_hash_set<NodeHandle>& selected_nodes);
   // Destroys all component widgets that may exist.
   void DestroyComponentWidgets();
 
   BaseView& view_;
   Editor& editor_;
-  NodeHandle selected_node_;
+  absl::flat_hash_set<NodeHandle> selected_nodes_;
   imp::RobinMap<BaseComponentPool*, Widget*> component_widgets_;
   WidgetLayoutInfo component_widgets_layout_info_;
 };

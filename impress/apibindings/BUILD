@@ -531,6 +531,7 @@ cc_library(
         "//:api",
         "//core/assets",
         "//core/assets/gltf:gltf_asset",
+        "//core/gsplat:gsplat_asset",
         "//core/lighting:image_based_lighting_asset",
         "//core/view:base_view",
         "//core/view/framework",

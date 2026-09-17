@@ -20,6 +20,7 @@
 #include <optional>
 #include <utility>
 
+#include "absl/algorithm/container.h"
 #include "core/common/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -32,6 +33,8 @@
 #include "core/split_engine/materials/builtin/builtin_material_wrapper.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_external_texture_color_space_store.h"
+#include "core/split_engine/split_engine_renderer.h"
+#include "core/split_engine/split_engine_renderer_context.h"
 #include "core/view/base_view.h"
 namespace imp::split_engine {
 namespace {
@@ -50,11 +53,39 @@ BridgeId BuiltInCustomMaterial::GetBridgeId() const { return bridge_id_; }
 
 void BuiltInCustomMaterial::UpdateColorSpaceParameters(
     BaseView& view, std::optional<TextureId> texture_id) {
+  // Get the required display color space of this material, and check if it is
+  // supported by the hardware. If not, we fall back to sRGB.
+  // If there's no way to check the supported display color spaces, we just
+  // respect the material's required display color space.
+  DisplayColorSpace display_color_space = GetRequiredDisplayColorSpace();
+  if (const auto renderer = view.GetRegistry().Get<SplitEngineRenderer>();
+      renderer.ok()) {
+    if (const AppContext* app_context =
+            (*renderer).get().GetAppContext(bridge_id_);
+        app_context != nullptr &&
+        app_context->renderer_policy_handler != nullptr) {
+      absl::Span<const DisplayColorSpace> supported_color_spaces =
+          app_context->renderer_policy_handler
+              ->GetSupportedDisplayColorSpaces();
+      if (!absl::c_linear_search(supported_color_spaces, display_color_space)) {
+        display_color_space = DisplayColorSpace::kBT709;
+      }
+    }
+  }
+
   MediaColorSpace current_color_space = default_color_space_;
   // Start with the default color space parameters.
-  imp::mat3f color_transform_matrix =
-      default_color_space_.GetColorTransformMatrixDisplayP3().value_or(
-          imp::kIdentityMat3f);
+  mat3f color_transform_matrix;
+  if (display_color_space == DisplayColorSpace::kP3) {
+    color_transform_matrix =
+        default_color_space_.GetColorTransformMatrixDisplayP3().value_or(
+            kIdentityMat3f);
+  } else {
+    color_transform_matrix =
+        default_color_space_.GetColorTransformMatrixSRGB().value_or(
+            kIdentityMat3f);
+  }
+
   int transfer_function = static_cast<int>(default_color_space_.GetTransfer());
   int max_content_light_level = default_color_space_.GetMaxContentLightLevel();
 
@@ -70,7 +101,7 @@ void BuiltInCustomMaterial::UpdateColorSpaceParameters(
     // renderer (e.g., in local mode).
     color_transform_matrix =
         default_color_space_.GetColorTransformMatrixSRGB().value_or(
-            imp::kIdentityMat3f);
+            kIdentityMat3f);
   }
 
   if (color_space_manager.ok() && texture_id.has_value()) {
@@ -81,9 +112,26 @@ void BuiltInCustomMaterial::UpdateColorSpaceParameters(
         source_texture_color_space->GetStandard() !=
             MediaColorSpace::Standard::kUnknown) {
       current_color_space = *source_texture_color_space;
-      color_transform_matrix = (*source_texture_color_space)
-                                   .GetColorTransformMatrixDisplayP3()
-                                   .value_or(imp::kIdentityMat3f);
+      switch (display_color_space) {
+        case DisplayColorSpace::kP3:
+          color_transform_matrix = (*source_texture_color_space)
+                                       .GetColorTransformMatrixDisplayP3()
+                                       .value_or(kIdentityMat3f);
+          break;
+        case DisplayColorSpace::kBT709:
+          color_transform_matrix = (*source_texture_color_space)
+                                       .GetColorTransformMatrixSRGB()
+                                       .value_or(kIdentityMat3f);
+          break;
+        default:
+          IMP_LOG(imp::ERROR)
+              << "Unsupported display color space. Falling back to SRGB.";
+          color_transform_matrix = (*source_texture_color_space)
+                                       .GetColorTransformMatrixSRGB()
+                                       .value_or(kIdentityMat3f);
+          break;
+      }
+
       transfer_function =
           static_cast<int>((*source_texture_color_space).GetTransfer());
 

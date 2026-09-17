@@ -20,15 +20,13 @@
 #include <utility>
 #include <vector>
 
-#include "absl/base/attributes.h"
 #include "absl/functional/function_ref.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/span.h"
-#include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "flatbuffers/buffer.h"
@@ -52,6 +50,7 @@
 #include "core/split_engine/materials/builtin/builtin_generic_spec_helpers.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/split_engine/transport/request_sender.h"
 #include "core/view/base_view.h"
@@ -196,17 +195,83 @@ class SplitEngineGenericMaterialParametersCreator {
   using TextureSamplerCreator = SplitEngineTextureSamplerCreator;
 };
 
-void LogUnsupportedParameter(absl::string_view name) {
-  IMP_LOG(imp::ERROR) << "SetParameter: Unsupported parameter: " << name;
-}
-
-void LogParameterNotDirectlyAssignable(absl::string_view name) {
-  IMP_LOG(imp::ERROR) << "SetParameter: Parameter is not directly assignable: " << name;
-}
-
-void LogTextureParameterNotDirectlyAssignable(absl::string_view name) {
-  IMP_LOG(imp::ERROR) << "SetParameter: Texture parameters are not directly assignable: "
-             << name << " Use AssignTexture instead.";
+std::optional<GenericMaterialTextureParameter>* GetTextureField(
+    GenericMaterialParameters& params, absl::string_view channel_name,
+    bool create_if_null) {
+  if (channel_name == kBaseColorIndex) {
+    if (!params.base_color) {
+      if (!create_if_null) return nullptr;
+      params.base_color.emplace();
+    }
+    return &params.base_color->texture;
+  } else if (channel_name == kMetallicRoughnessIndex) {
+    if (!params.metallic_roughness) {
+      if (!create_if_null) return nullptr;
+      params.metallic_roughness.emplace();
+    }
+    return &params.metallic_roughness->texture;
+  } else if (channel_name == kNormalIndex) {
+    if (!params.normal) {
+      if (!create_if_null) return nullptr;
+      params.normal.emplace();
+    }
+    return &params.normal->texture;
+  } else if (channel_name == kAoIndex) {
+    if (!params.ambient_occlusion) {
+      if (!create_if_null) return nullptr;
+      params.ambient_occlusion.emplace();
+    }
+    return &params.ambient_occlusion->texture;
+  } else if (channel_name == kEmissiveIndex) {
+    if (!params.emissive) {
+      if (!create_if_null) return nullptr;
+      params.emissive.emplace();
+    }
+    return &params.emissive->texture;
+  } else if (channel_name == kClearcoatIndex) {
+    if (!params.clearcoat) {
+      if (!create_if_null) return nullptr;
+      params.clearcoat.emplace();
+    }
+    return &params.clearcoat->intensity_texture;
+  } else if (channel_name == kClearcoatNormalIndex) {
+    if (!params.clearcoat) {
+      if (!create_if_null) return nullptr;
+      params.clearcoat.emplace();
+    }
+    return &params.clearcoat->normal_texture;
+  } else if (channel_name == kClearcoatRoughnessIndex) {
+    if (!params.clearcoat) {
+      if (!create_if_null) return nullptr;
+      params.clearcoat.emplace();
+    }
+    return &params.clearcoat->roughness_texture;
+  } else if (channel_name == kSheenColorIndex) {
+    if (!params.sheen) {
+      if (!create_if_null) return nullptr;
+      params.sheen.emplace();
+    }
+    return &params.sheen->color_texture;
+  } else if (channel_name == kSheenRoughnessIndex) {
+    if (!params.sheen) {
+      if (!create_if_null) return nullptr;
+      params.sheen.emplace();
+    }
+    return &params.sheen->roughness_texture;
+  } else if (channel_name == kTransmissionIndex) {
+    if (!params.transmission) {
+      if (!create_if_null) return nullptr;
+      params.transmission.emplace();
+    }
+    return &params.transmission->texture;
+  } else if (channel_name == kThicknessIndex) {
+    if (!params.volume) {
+      if (!create_if_null) return nullptr;
+      params.volume.emplace();
+    }
+    return &params.volume->thickness_texture;
+  }
+  return nullptr;
 }
 
 }  // namespace
@@ -280,56 +345,10 @@ SplitEngineGenericMaterial::SplitEngineGenericMaterial(
 
 SplitEngineGenericMaterial::~SplitEngineGenericMaterial() { Cleanup(); }
 
-GenericMaterialPtr SplitEngineGenericMaterial::Duplicate() const {
-  if (AreParametersDirty()) {
-    // Update the parameters before duplicating the material, otherwise the
-    // ordering of the parameter update and duplication commands on the renderer
-    // side will be incorrect and the duplicate will not contain the update.
-    UpdateParameters();
-    MarkParametersDirty(false);
-  }
-
-  const filament::MaterialInstance* material_instance =
-      GetFilamentMaterialInstance();
-  filament::MaterialInstance* duplicate_instance =
-      filament::MaterialInstance::duplicate(material_instance);
-  view_.GetSplitEngineSerializer()->DuplicateMaterialInstance(
-      material_instance, duplicate_instance);
-  auto duplicate = absl::WrapUnique(new SplitEngineGenericMaterial(
-      view_, view_.GetMaterialFactory().WrapMaterial(duplicate_instance)));
-  duplicate->generic_material_parameters_ = generic_material_parameters_;
-  return duplicate;
-}
-
 const std::string& SplitEngineGenericMaterial::GetName() const { return name_; }
 
 void SplitEngineGenericMaterial::SetName(absl::string_view name) {
   name_ = name;
-}
-
-absl::Status SplitEngineGenericMaterial::AssignTexturesAndParams(
-    const GenericMaterialParameters& generic_material_parameters,
-    const TextureBorrower& texture_borrower) {
-  // Rewrite the texture references to be split engine IDs.
-  generic_material_parameters_ =
-      RewriteTextureIds(generic_material_parameters, texture_borrower);
-
-  MarkParametersDirty();
-
-  return absl::OkStatus();
-}
-
-flatbuffers::Offset<void> SplitEngineGenericMaterial::SerializeParameters(
-    flatbuffers::FlatBufferBuilder& fbb,
-    BuiltInTextureParameterCreator& texture_parameter_creator) const {
-  return generic_material_parameters_
-      .ToFlatbufferT<SplitEngineGenericMaterialParametersCreator>(fbb)
-      .Union();
-}
-
-BorrowedMaterialPtr SplitEngineGenericMaterial::GetMaterialInternal(
-    SmallSourceLocation loc) const {
-  return SplitEngineBuiltinMaterial::GetMaterial(loc);
 }
 
 const filament::MaterialInstance*
@@ -342,121 +361,6 @@ filament::MaterialInstance*
 SplitEngineGenericMaterial::GetFilamentMaterialInstance() {
   return GetMaterialInternal(SmallSourceLocation::Current())
       ->GetFilamentMaterialInstance();
-}
-
-// TODO: (broken link) - Remove these methods once MaterialConfig is removed.
-std::vector<model::MaterialParameter>
-SplitEngineGenericMaterial::GetParameters() const {
-  return {};
-}
-TypedVector<model::MaterialTexture> SplitEngineGenericMaterial::GetTextures()
-    const {
-  return {};
-}
-StringMap<int> SplitEngineGenericMaterial::GetSamplerIndexLookup() const {
-  return {};
-}
-
-TextureAndSampler SplitEngineGenericMaterial::GetTextureAndSampler(
-    const GenericMaterialTextureParameter& texture) const {
-  // Note: it is safe to cast this to a filament::Texture* because the ids
-  // were processed by RewriteTextureIds.
-  return {reinterpret_cast<const filament::Texture*>(texture.texture_id),
-          texture.sampler, texture.uv_transform};
-}
-
-TextureAndSampler SplitEngineGenericMaterial::GetPlaceholderTextureAndSampler()
-    const {
-  // TODO: (broken link) - Use placeholder_texture_.Borrow().
-  return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
-}
-
-void SplitEngineGenericMaterial::RewriteTextureId(
-    absl::string_view parameter_name,
-    std::optional<GenericMaterialTextureParameter>& texture_parameter,
-    const TextureBorrower& texture_borrower) {
-  if (!texture_parameter) return;
-
-  BorrowedTexturePtr borrowed = texture_borrower(
-      texture_parameter->texture_id, SmallSourceLocation::Current());
-  texture_parameter->texture_id =
-      SplitEngineSerializer::GetId(borrowed->GetTexture());
-  borrowed_textures_[parameter_name] = std::move(borrowed);
-}
-
-// Rewrites the texture IDs from indexes into the loaded model texture listing
-// to IDs that can be used to look up textures on the remote renderer.
-//
-// This is necessary because the glTF doesn't exist on the renderer side.
-// Instead, the textures are serialized separately and the IDs are rewritten
-// here to reference the texture pointers. A new TextureBorrower is created by
-// SplitEngineRenderer that maps these IDs back to concrete textures on the
-// backend renderer side.
-GenericMaterialParameters SplitEngineGenericMaterial::RewriteTextureIds(
-    const GenericMaterialParameters& parameters,
-    const TextureBorrower& texture_borrower) {
-  GenericMaterialParameters remapped = parameters;
-  if (parameters.base_color) {
-    RewriteTextureId(kBaseColorIndex, remapped.base_color->texture,
-                     texture_borrower);
-  }
-  if (parameters.metallic_roughness) {
-    RewriteTextureId(kMetallicRoughnessIndex,
-                     remapped.metallic_roughness->texture, texture_borrower);
-  }
-  if (parameters.normal) {
-    RewriteTextureId(kNormalIndex, remapped.normal->texture, texture_borrower);
-  }
-  if (parameters.ambient_occlusion) {
-    RewriteTextureId(kAoIndex, remapped.ambient_occlusion->texture,
-                     texture_borrower);
-  }
-  if (parameters.emissive) {
-    RewriteTextureId(kEmissiveIndex, remapped.emissive->texture,
-                     texture_borrower);
-  }
-  if (parameters.clearcoat) {
-    RewriteTextureId(kClearcoatIndex, remapped.clearcoat->intensity_texture,
-                     texture_borrower);
-    RewriteTextureId(kClearcoatNormalIndex, remapped.clearcoat->normal_texture,
-                     texture_borrower);
-    RewriteTextureId(kClearcoatRoughnessIndex,
-                     remapped.clearcoat->roughness_texture, texture_borrower);
-  }
-  if (parameters.sheen) {
-    RewriteTextureId(kSheenColorIndex, remapped.sheen->color_texture,
-                     texture_borrower);
-  }
-  if (parameters.transmission) {
-    RewriteTextureId(kTransmissionIndex, remapped.transmission->texture,
-                     texture_borrower);
-  }
-
-  if (parameters.feature_id_textures) {
-    if (view_.GetSplitEngineSerializer()->GetApiLevel() ==
-        android_xr::kSplitEngineExperimentalApiLevel) {
-      if (!remapped.feature_id_textures) {
-        remapped.feature_id_textures.emplace();
-      }
-      if (remapped.feature_id_textures->size() !=
-          parameters.feature_id_textures->size()) {
-        remapped.feature_id_textures->reserve(kFeatureIdTextureNames.size());
-      }
-      for (int i = 0; i < parameters.feature_id_textures->size(); ++i) {
-        if (i > kFeatureIdTextureNames.size()) break;
-        std::optional<GenericMaterialTextureParameter> temp_remapped_texture =
-            (*remapped.feature_id_textures)[i];
-        absl::string_view feature_id_index = kFeatureIdTextureNames[i];
-        RewriteTextureId(feature_id_index, temp_remapped_texture,
-                         texture_borrower);
-        (*remapped.feature_id_textures)[i] = *temp_remapped_texture;
-      }
-    } else {
-      IMP_LOG(imp::ERROR) << "EXT_mesh_features is not supported in this build.";
-      remapped.feature_id_textures.reset();
-    }
-  }
-  return remapped;
 }
 
 TextureAndSampler SplitEngineGenericMaterial::GetBaseColorTexture() const {
@@ -662,16 +566,6 @@ TextureAndSampler SplitEngineGenericMaterial::GetClearcoatTexture() const {
       *generic_material_parameters_.clearcoat->intensity_texture);
 }
 
-TextureAndSampler SplitEngineGenericMaterial::GetClearcoatNormalTexture()
-    const {
-  if (!generic_material_parameters_.clearcoat.has_value() ||
-      !generic_material_parameters_.clearcoat->normal_texture) {
-    return GetPlaceholderTextureAndSampler();
-  }
-  return GetTextureAndSampler(
-      *generic_material_parameters_.clearcoat->normal_texture);
-}
-
 TextureAndSampler SplitEngineGenericMaterial::GetClearcoatRoughnessTexture()
     const {
   if (!generic_material_parameters_.clearcoat.has_value() ||
@@ -680,6 +574,16 @@ TextureAndSampler SplitEngineGenericMaterial::GetClearcoatRoughnessTexture()
   }
   return GetTextureAndSampler(
       *generic_material_parameters_.clearcoat->roughness_texture);
+}
+
+TextureAndSampler SplitEngineGenericMaterial::GetClearcoatNormalTexture()
+    const {
+  if (!generic_material_parameters_.clearcoat.has_value() ||
+      !generic_material_parameters_.clearcoat->normal_texture) {
+    return GetPlaceholderTextureAndSampler();
+  }
+  return GetTextureAndSampler(
+      *generic_material_parameters_.clearcoat->normal_texture);
 }
 
 void SplitEngineGenericMaterial::SetClearcoatFactors(const float3& factor) {
@@ -724,11 +628,22 @@ void SplitEngineGenericMaterial::SetSheenRoughnessFactor(float factor) {
   MarkParametersDirty();
 }
 
+void SplitEngineGenericMaterial::SetIndexOfRefraction(
+    float index_of_refraction) {
+  if (!generic_material_parameters_.refraction.has_value()) {
+    generic_material_parameters_.refraction.emplace();
+  }
+  generic_material_parameters_.refraction->index_of_refraction =
+      index_of_refraction;
+  MarkParametersDirty();
+}
+
 TextureAndSampler SplitEngineGenericMaterial::GetThicknessTexture() const {
   if (!generic_material_parameters_.volume.has_value()) {
     return GetPlaceholderTextureAndSampler();
   }
-  return GetTextureAndSampler(*generic_material_parameters_.volume->texture);
+  return GetTextureAndSampler(
+      *generic_material_parameters_.volume->thickness_texture);
 }
 
 void SplitEngineGenericMaterial::SetThicknessFactor(float factor) {
@@ -784,27 +699,6 @@ void SplitEngineGenericMaterial::SetTransmissionFactor(float factor) {
   MarkParametersDirty();
 }
 
-void SplitEngineGenericMaterial::SetIndexOfRefraction(
-    float index_of_refraction) {
-  if (!generic_material_parameters_.refraction.has_value()) {
-    generic_material_parameters_.refraction.emplace();
-  }
-  generic_material_parameters_.refraction->index_of_refraction =
-      index_of_refraction;
-  MarkParametersDirty();
-}
-
-std::optional<TextureAndSampler>
-SplitEngineGenericMaterial::GetFeatureIdTexture(int index) const {
-  if (!generic_material_parameters_.feature_id_textures.has_value() ||
-      index >= generic_material_parameters_.feature_id_textures->size() ||
-      index < 0) {
-    return std::nullopt;
-  }
-  return GetTextureAndSampler(
-      generic_material_parameters_.feature_id_textures.value()[index]);
-}
-
 void SplitEngineGenericMaterial::SetAlphaCutoff(float alpha_cutoff) {
   if (!generic_material_parameters_.masking.has_value()) {
     generic_material_parameters_.masking.emplace();
@@ -821,234 +715,67 @@ float SplitEngineGenericMaterial::GetAlphaCutoff() const {
   return generic_material_parameters_.masking->alpha_cutoff;
 }
 
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              bool value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              bool2 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              bool3 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              bool4 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              float value) {
-  if (parameter_name == kMetallicFactor) {
-    SetMetallicFactor(value);
-  } else if (parameter_name == kRoughnessFactor) {
-    SetRoughnessFactor(value);
-  } else if (parameter_name == kNormalScale) {
-    SetNormalScale(value);
-  } else if (parameter_name == kSheenRoughnessFactor) {
-    SetSheenRoughnessFactor(value);
-  } else if (parameter_name == kIndexOfRefraction) {
-    SetIndexOfRefraction(value);
-  } else if (parameter_name == kThicknessFactor) {
-    SetThicknessFactor(value);
-  } else if (parameter_name == kAttenuationDistance) {
-    SetAttenuationDistance(value);
-  } else if (parameter_name == kTransmissionFactor) {
-    SetTransmissionFactor(value);
-  } else {
-    LogUnsupportedParameter(parameter_name);
+std::optional<TextureAndSampler>
+SplitEngineGenericMaterial::GetFeatureIdTexture(int index) const {
+  if (!generic_material_parameters_.feature_id_textures.has_value() ||
+      index >= generic_material_parameters_.feature_id_textures->size() ||
+      index < 0) {
+    return std::nullopt;
   }
+  return GetTextureAndSampler(
+      generic_material_parameters_.feature_id_textures.value()[index]);
 }
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              float2 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              float3 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              float4 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              int value) {
-  if (parameter_name == kSamplersUvBitflags ||       //
-      parameter_name == kBaseColorIndex ||           //
-      parameter_name == kMetallicRoughnessIndex ||   //
-      parameter_name == kNormalIndex ||              //
-      parameter_name == kAoIndex ||                  //
-      parameter_name == kEmissiveIndex ||            //
-      parameter_name == kClearcoatIndex ||           //
-      parameter_name == kClearcoatRoughnessIndex ||  //
-      parameter_name == kClearcoatNormalIndex ||     //
-      parameter_name == kSheenColorIndex ||          //
-      parameter_name == kSheenRoughnessIndex ||      //
-      parameter_name == kThicknessIndex ||           //
-      parameter_name == kTransmissionIndex) {
-    LogParameterNotDirectlyAssignable(parameter_name);
-  } else {
-    LogUnsupportedParameter(parameter_name);
+
+GenericMaterialPtr SplitEngineGenericMaterial::Duplicate() const {
+  // TODO: (broken link) - Make it possible to duplicate imp::Material to avoid
+  // losing owned/borrowed texture tracking.
+  if (HoldsOwnedTextures()) {
+    IMP_LOG(imp::FATAL) << "Cannot duplicate material with owned textures.";
   }
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              int2 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              int3 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              int4 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              uint value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              uint2 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              uint3 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              uint4 value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              mat3f value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              mat4f value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const bool> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const bool2> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const bool3> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const bool4> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const float> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const float2> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const float3> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const float4> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const int> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const int2> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const int3> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const int4> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const uint> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const uint2> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const uint3> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const uint4> value) {
-  LogUnsupportedParameter(parameter_name);
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const mat3f> value) {
-  if (parameter_name == kSamplersUvMatrices) {
-    LogParameterNotDirectlyAssignable(parameter_name);
-  } else {
-    LogUnsupportedParameter(parameter_name);
+
+  if (AreParametersDirty()) {
+    // Update the parameters before duplicating the material, otherwise the
+    // ordering of the parameter update and duplication commands on the renderer
+    // side will be incorrect and the duplicate will not contain the update.
+    UpdateParameters();
+    MarkParametersDirty(false);
   }
-}
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              absl::Span<const mat4f> value) {
-  LogUnsupportedParameter(parameter_name);
+
+  const filament::MaterialInstance* material_instance =
+      GetFilamentMaterialInstance();
+  filament::MaterialInstance* duplicate_instance =
+      filament::MaterialInstance::duplicate(material_instance);
+  view_.GetSplitEngineSerializer()->DuplicateMaterialInstance(
+      material_instance, duplicate_instance);
+  auto duplicate = absl::WrapUnique(new SplitEngineGenericMaterial(
+      view_, view_.GetMaterialFactory().WrapMaterial(duplicate_instance)));
+  duplicate->generic_material_parameters_ = generic_material_parameters_;
+  return duplicate;
 }
 
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              filament::RgbaType type,
-                                              filament::math::float4 color) {
-  LogUnsupportedParameter(parameter_name);
+absl::Status SplitEngineGenericMaterial::AssignTexturesAndParams(
+    const GenericMaterialParameters& generic_material_parameters,
+    const TextureBorrower& texture_borrower) {
+  // Rewrite the texture references to be split engine IDs.
+  generic_material_parameters_ =
+      RewriteTextureIds(generic_material_parameters, texture_borrower);
+
+  MarkParametersDirty();
+
+  return absl::OkStatus();
 }
 
-void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
-                                              filament::RgbType type,
-                                              filament::math::float3 color) {
-  LogUnsupportedParameter(parameter_name);
+// TODO: (broken link) - Remove these methods once MaterialConfig is removed.
+std::vector<model::MaterialParameter>
+SplitEngineGenericMaterial::GetParameters() const {
+  return {};
 }
-
-ABSL_DEPRECATED(
-    "Use imp::BorrowedTexturePtr overload instead. See "
-    "(broken link).")
-void SplitEngineGenericMaterial::SetParameter(
-    absl::string_view parameter_name, const imp::Texture* texture,
-    std::optional<filament::TextureSampler> sampler_override) {
-  LogTextureParameterNotDirectlyAssignable(parameter_name);
+TypedVector<model::MaterialTexture> SplitEngineGenericMaterial::GetTextures()
+    const {
+  return {};
 }
-
-void SplitEngineGenericMaterial::SetParameter(
-    absl::string_view parameter_name, TexturePtr texture,
-    std::optional<filament::TextureSampler> sampler_override) {
-  LogTextureParameterNotDirectlyAssignable(parameter_name);
-}
-
-void SplitEngineGenericMaterial::SetParameter(
-    absl::string_view parameter_name, OwnedTexturePtr texture,
-    std::optional<filament::TextureSampler> sampler_override) {
-  LogTextureParameterNotDirectlyAssignable(parameter_name);
-}
-
-void SplitEngineGenericMaterial::SetParameter(
-    absl::string_view parameter_name, BorrowedTexturePtr texture,
-    std::optional<filament::TextureSampler> sampler_override) {
-  LogTextureParameterNotDirectlyAssignable(parameter_name);
-}
-
-bool SplitEngineGenericMaterial::HasParameter(absl::string_view name) {
-  // We don't know if the parameter exists because the material is held on the
-  // SplitEngine renderer side.
-  // NOTE: This means that TrySetParameter will behave the same as SetParameter
-  // and crash the app if the parameter does not exist.
-  return true;
+StringMap<int> SplitEngineGenericMaterial::GetSamplerIndexLookup() const {
+  return {};
 }
 
 absl::string_view SplitEngineGenericMaterial::GetParameterTransformName(
@@ -1068,13 +795,183 @@ SplitEngineGenericMaterial::GetUnownedFilamentTextures() const {
   return {};
 }
 
-void SplitEngineGenericMaterial::ForEachTexture(
-    absl::FunctionRef<void(BorrowedTexturePtr)> fn, SmallSourceLocation loc) {
-  for (auto& [_, texture] : borrowed_textures_) {
-    if (texture) {
-      fn(texture);
+bool SplitEngineGenericMaterial::HoldsOwnedTextures() const {
+  for (auto& [_, texture] : textures_) {
+    if (texture.IsOwned()) {
+      return true;
     }
   }
+  return false;
+}
+
+void SplitEngineGenericMaterial::ForEachTexture(
+    absl::FunctionRef<void(BorrowedTexturePtr)> fn, SmallSourceLocation loc) {
+  for (auto& [_, texture] : textures_) {
+    if (texture) {
+      fn(texture.Borrow());
+    }
+  }
+}
+
+absl::Status SplitEngineGenericMaterial::SetTextureForChannel(
+    absl::string_view channel_name, OwnedOrBorrowedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  BorrowedTexturePtr borrowed_texture = texture.Borrow();
+  if (!borrowed_texture) {
+    std::optional<GenericMaterialTextureParameter>* field =
+        GetTextureField(generic_material_parameters_, channel_name,
+                        /*create_if_null=*/false);
+    if (field) {
+      *field = std::nullopt;
+    }
+    textures_.erase(channel_name);
+    MarkParametersDirty();
+    return absl::OkStatus();
+  }
+
+  std::optional<GenericMaterialTextureParameter>* field =
+      GetTextureField(generic_material_parameters_, channel_name,
+                      /*create_if_null=*/true);
+  if (!field) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Unsupported texture channel: %s", channel_name));
+  }
+
+  TextureId texture_id =
+      SplitEngineSerializer::GetId(borrowed_texture->GetTexture());
+
+  GenericMaterialTextureParameter tex_param;
+  tex_param.texture_id = texture_id;
+  tex_param.sampler =
+      sampler_override ? *sampler_override : borrowed_texture->GetSampler();
+  // Assign default values.
+  tex_param.uv_transform = kIdentityMat3f;
+  tex_param.uses_uv1 = false;
+
+  if (*field) {
+    tex_param.uv_transform = (*field)->uv_transform;
+    tex_param.uses_uv1 = (*field)->uses_uv1;
+  }
+
+  *field = tex_param;
+  textures_[channel_name.data()] = std::move(texture);
+  MarkParametersDirty();
+  return absl::OkStatus();
+}
+
+BorrowedMaterialPtr SplitEngineGenericMaterial::GetMaterialInternal(
+    SmallSourceLocation loc) const {
+  return SplitEngineBuiltinMaterial::GetMaterial(loc);
+}
+
+flatbuffers::Offset<void> SplitEngineGenericMaterial::SerializeParameters(
+    flatbuffers::FlatBufferBuilder& fbb,
+    BuiltInTextureParameterCreator& texture_parameter_creator) const {
+  return generic_material_parameters_
+      .ToFlatbufferT<SplitEngineGenericMaterialParametersCreator>(fbb)
+      .Union();
+}
+
+TextureAndSampler SplitEngineGenericMaterial::GetTextureAndSampler(
+    const GenericMaterialTextureParameter& texture) const {
+  // Note: it is safe to cast this to a filament::Texture* because the ids
+  // were processed by RewriteTextureIds.
+  return {reinterpret_cast<const filament::Texture*>(texture.texture_id),
+          texture.sampler, texture.uv_transform};
+}
+
+TextureAndSampler SplitEngineGenericMaterial::GetPlaceholderTextureAndSampler()
+    const {
+  // TODO: (broken link) - Use placeholder_texture_.Borrow().
+  return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
+}
+
+void SplitEngineGenericMaterial::RewriteTextureId(
+    absl::string_view parameter_name,
+    std::optional<GenericMaterialTextureParameter>& texture_parameter,
+    const TextureBorrower& texture_borrower) {
+  if (!texture_parameter) return;
+
+  BorrowedTexturePtr borrowed = texture_borrower(
+      texture_parameter->texture_id, SmallSourceLocation::Current());
+  texture_parameter->texture_id =
+      SplitEngineSerializer::GetId(borrowed->GetTexture());
+  textures_[parameter_name] = std::move(borrowed);
+}
+
+GenericMaterialParameters SplitEngineGenericMaterial::RewriteTextureIds(
+    const GenericMaterialParameters& parameters,
+    const TextureBorrower& texture_borrower) {
+  GenericMaterialParameters remapped = parameters;
+  if (parameters.base_color) {
+    RewriteTextureId(kBaseColorIndex, remapped.base_color->texture,
+                     texture_borrower);
+  }
+  if (parameters.metallic_roughness) {
+    RewriteTextureId(kMetallicRoughnessIndex,
+                     remapped.metallic_roughness->texture, texture_borrower);
+  }
+  if (parameters.normal) {
+    RewriteTextureId(kNormalIndex, remapped.normal->texture, texture_borrower);
+  }
+  if (parameters.ambient_occlusion) {
+    RewriteTextureId(kAoIndex, remapped.ambient_occlusion->texture,
+                     texture_borrower);
+  }
+  if (parameters.emissive) {
+    RewriteTextureId(kEmissiveIndex, remapped.emissive->texture,
+                     texture_borrower);
+  }
+  if (parameters.clearcoat) {
+    RewriteTextureId(kClearcoatIndex, remapped.clearcoat->intensity_texture,
+                     texture_borrower);
+    RewriteTextureId(kClearcoatNormalIndex, remapped.clearcoat->normal_texture,
+                     texture_borrower);
+    RewriteTextureId(kClearcoatRoughnessIndex,
+                     remapped.clearcoat->roughness_texture, texture_borrower);
+  }
+  if (parameters.sheen) {
+    RewriteTextureId(kSheenColorIndex, remapped.sheen->color_texture,
+                     texture_borrower);
+    RewriteTextureId(kSheenRoughnessIndex, remapped.sheen->roughness_texture,
+                     texture_borrower);
+  }
+  if (parameters.transmission) {
+    RewriteTextureId(kTransmissionIndex, remapped.transmission->texture,
+                     texture_borrower);
+  }
+  if (parameters.volume) {
+    RewriteTextureId(kThicknessIndex, remapped.volume->thickness_texture,
+                     texture_borrower);
+  }
+
+  if (parameters.feature_id_textures) {
+    int api_level = view_.GetSplitEngineSerializer()->GetApiLevel();
+    if (api_level >= 4) {
+      if (!remapped.feature_id_textures) {
+        remapped.feature_id_textures.emplace();
+      }
+      if (remapped.feature_id_textures->size() !=
+          parameters.feature_id_textures->size()) {
+        remapped.feature_id_textures->reserve(kFeatureIdTextureNames.size());
+      }
+      for (int i = 0; i < parameters.feature_id_textures->size(); ++i) {
+        if (i > kFeatureIdTextureNames.size()) break;
+        std::optional<GenericMaterialTextureParameter> temp_remapped_texture =
+            (*remapped.feature_id_textures)[i];
+        absl::string_view feature_id_index = kFeatureIdTextureNames[i];
+        RewriteTextureId(feature_id_index, temp_remapped_texture,
+                         texture_borrower);
+        (*remapped.feature_id_textures)[i] = *temp_remapped_texture;
+      }
+    } else {
+      IMP_LOG(imp::ERROR) << "EXT_mesh_features is not supported over Split Engine - "
+                    "requires api level 4+, current api level: "
+                 << api_level;
+      remapped.feature_id_textures.reset();
+    }
+  }
+  return remapped;
 }
 
 }  // namespace imp::split_engine

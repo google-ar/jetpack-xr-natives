@@ -142,7 +142,7 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(BaseView& view, Config config)
           [&view, &config]() -> std::unique_ptr<AsyncCanvasSource> {
             return AsyncCanvasSourceFactory::Create(
                 view.GetContext(), config.use_hardware_rendering,
-                /*force_auto_method_rendering=*/false,
+                config.force_auto_method_rendering,
                 config.force_individual_glyph_source_instances,
                 view.GetConfig()
                     .experimental_feature_flags

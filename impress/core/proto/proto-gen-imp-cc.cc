@@ -1561,8 +1561,8 @@ class ImpCodeGenerator {
       bool is_google3_include =
           imported_standard_proto_file_names.contains(include);
       if (is_google3_include) {
-        printer->Print("#include \"$include$.h\"\n", "include",
-                       std::string(include));
+        printer->Print("#include \"$include$.pb.h\"\n", "include",
+                       std::string(absl::StripSuffix(include, ".proto")));
       } else {
         printer->Print("#include \"$include$.imp.h\"\n", "include",
                        std::string(include));

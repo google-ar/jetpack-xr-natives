@@ -280,7 +280,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 
   // Shutdown everything in order.
   scripting_system.reset();
-  EXPECT_OK(view_host->Cleanup());
+  MP_EXPECT_OK(view_host->Cleanup());
   view_host.reset();
   executor_test_helper.reset();
 

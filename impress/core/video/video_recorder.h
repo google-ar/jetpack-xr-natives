@@ -40,7 +40,7 @@ class VideoRecorder {
   Future<absl::Status> Close();
 
  private:
-  VideoRecorder(bool record_microphone_audio);
+  VideoRecorder(filament::Engine& engine, bool record_microphone_audio);
 
   Dispatcher::ScopedConnection connection_capture_frame_;
   Dispatcher::ScopedConnection connection_write_frame_;

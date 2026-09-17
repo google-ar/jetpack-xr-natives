@@ -20,10 +20,14 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include <array>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "core/lighting/environment_light.h"
 #include "core/ncsb/node_handle.h"
+#include "core/render/display_color_space.h"
 
 namespace imp::split_engine {
 
@@ -68,6 +72,16 @@ class RendererPolicyHandler {
   // `false`. These materials are not allowed in production.
   virtual absl::Status AreBinaryPrecompiledMaterialsAllowed() {
     return absl::OkStatus();
+  };
+
+  static constexpr std::array<DisplayColorSpace, 2>
+      kDefaultSupportedColorSpaces = {DisplayColorSpace::kBT709,
+                                      DisplayColorSpace::kP3};
+  // Returns supported display color spaces.
+  // Note: using Span here as the list of supported display color spaces is very
+  // small.
+  virtual absl::Span<const DisplayColorSpace> GetSupportedDisplayColorSpaces() {
+    return kDefaultSupportedColorSpaces;
   };
 };
 

@@ -18,6 +18,7 @@
 
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/editor/editor_field_control.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
 #include "core/math/almost_equal.h"
@@ -27,24 +28,31 @@
 
 namespace imp::editor {
 
-bool EulerAngleField::DrawFields(absl::string_view label, quatf rotation) {
+bool EulerAngleField::DrawFields(const absl::string_view label,
+                                 const quatf rotation,
+                                 const bool all_same_rotation[3]) {
   UpdateCurrentRotation(rotation);
 
-  float3 old_euler_angles = cached_euler_angles_;
-  bool fields_modified =
-      ImGui::InputFloat3(
+  const bool default_all_same[3] = {true, true, true};
+  const bool* all_same =
+      all_same_rotation ? all_same_rotation : default_all_same;
+
+  const float3 old_euler_angles = cached_euler_angles_;
+  const bool fields_modified =
+      EditorFieldControl::DrawMultiInput3(
           editor::GenerateUniqueImGuiLabel(label, &cached_euler_angles_,
                                            EditorControlFlags::kDefault)
               .c_str(),
-          cached_euler_angles_.v, "%.3f",
+          cached_euler_angles_.v, all_same, "%.3f",
           ImGuiInputTextFlags_CharsScientific) &&
       !AlmostEqual(cached_euler_angles_, old_euler_angles);
-  if (fields_modified) {
-    cached_euler_angles_ =
-        FloatModulo(cached_euler_angles_, 360.0f, Clamp::kNonNegative);
-  }
 
-  return fields_modified;
+  if (!fields_modified) return false;
+
+  cached_euler_angles_ =
+      FloatModulo(cached_euler_angles_, 360.0f, Clamp::kNonNegative);
+
+  return true;
 }
 
 void EulerAngleField::UpdateCurrentRotation(quatf rotation) {

@@ -33,22 +33,21 @@ namespace imp {
 XrVulkanSwapChainImageHandler::XrVulkanSwapChainImageHandler(
     XrPlatformType* platform, XrSessionHost* host,
     std::unique_ptr<SwapchainLayers> layers,
-    ContentSecurityLevel /*content_security_level*/, bool should_end_frame)
-    : platform_(platform),
-      host_(host),
-      layers_(std::move(layers)),
-      should_end_frame_(should_end_frame) {
-  if (layers_->depth.images.empty()) {
-    CreateDepthSwapchains();
-  }
+    ContentSecurityLevel /*content_security_level*/)
+    : platform_(platform), host_(host), layers_(std::move(layers)) {
+  CreateDepthSwapchains();
 
-  if (host->ShouldRenderVarjoFoveationThisFrame()) {
+  layers_->active_color = &layers_->default_color;
+  layers_->active_depth = &layers_->depth;
+
+  // If the stereo swapchain is being created and foveation is enabled on this
+  // frame, we need to immediately set the foveation swapchain layers and
+  // display size. Non-stereo swapchains such as quad layers don't support
+  // foveation.
+  if (IsStereo() && host->ShouldRenderVarjoFoveationThisFrame()) {
     layers_->active_color = &layers_->varjo_foveation_color;
     layers_->active_depth = &layers_->varjo_foveation_depth;
     layers_->display_size = host->GetVarjoFoveationDisplaySize();
-  } else {
-    layers_->active_color = &layers_->default_color;
-    layers_->active_depth = &layers_->depth;
   }
 }
 
@@ -99,7 +98,7 @@ VkResult XrVulkanSwapChainImageHandler::acquire(
       .next = nullptr,
   };
 
-  uint32_t color_idx;
+  uint32_t color_idx = 0;
   xrAcquireSwapchainImage(layers_->active_color->handle, &acquire_info,
                           &color_idx);
 
@@ -131,11 +130,8 @@ VkResult XrVulkanSwapChainImageHandler::present(uint32_t index,
     xrReleaseSwapchainImage(layers_->depth.handle, &releaseInfo);
   }
 
-  absl::Status status = absl::OkStatus();
-  if (should_end_frame_) {
-    status =
-        host_->EndFrame(layers_->active_color->handle, layers_->depth.handle);
-  }
+  absl::Status status =
+      host_->EndFrame(layers_->active_color->handle, layers_->depth.handle);
 
   if (!status.ok()) {
     // In the case of an error in `xrEndFrame`, just print the error and
@@ -170,9 +166,12 @@ inline uint32_t selectMemoryType(
 
 void XrVulkanSwapChainImageHandler::CreateDepthSwapchains() {
   uint32_t layers = IsStereo() ? host_->GetLogicalEyeCount() : 1;
-  layers_->depth = CreateDepthSwapchain(host_->GetDisplaySize(), layers);
 
-  if (host_->IsXrVarjoFoveatedRenderingEnabled()) {
+  if (layers_->depth.images.empty()) {
+    layers_->depth = CreateDepthSwapchain(layers_->display_size, layers);
+  }
+
+  if (IsStereo() && host_->IsXrVarjoFoveatedRenderingEnabled()) {
     layers_->varjo_foveation_depth =
         CreateDepthSwapchain(host_->GetVarjoFoveationDisplaySize(), layers);
   }

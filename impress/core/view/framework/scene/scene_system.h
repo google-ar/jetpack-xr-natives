@@ -227,11 +227,11 @@ class SceneSystem : public System {
 
 #if IMP_RUNTIME(DEV)
   std::unique_ptr<editor::Widget> CreateComponentWidget(
-      HashValue component_state_type_url_hash, NodeHandle node,
-      Dispatcher& editor_dispatcher);
+      HashValue component_state_type_url_hash,
+      absl::flat_hash_set<NodeHandle> nodes, Dispatcher& editor_dispatcher);
 
   // Displays an ImGui UI for editing component state and adding that component.
-  void ShowAddComponentUi(NodeHandle node);
+  void ShowAddComponentUi(const absl::flat_hash_set<NodeHandle>& nodes);
 #endif
 
  private:

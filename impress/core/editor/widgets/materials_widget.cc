@@ -73,6 +73,7 @@ bool MaterialsWidget::HasContent() const {
 }
 
 void MaterialsWidget::DrawImGui() {
+  if (!active_node_) return;
   ComponentHandle<GltfRenderer> gltf_renderer =
       active_node_->GetComponent<GltfRenderer>();
   if (gltf_renderer) {

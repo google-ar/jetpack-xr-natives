@@ -14,6 +14,7 @@
 
 #include "core/editor/widgets/transform_widget_aspect_translate.h"
 
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -31,7 +32,8 @@ namespace imp::editor {
 
 void TransformWidgetAspectTranslate::UpdateWidgetTransform() {
   // If using world space or translating multiple nodes, use the world axis.
-  if (!use_local_space_ || !HasOneNodeSelected()) {
+  if (!editor_->GetSettings().transform_widget_local_space.Get() ||
+      !HasOneNodeSelected()) {
     GetNode()->GetParent()->SetWorldRotation(kIdentityQuatf);
     return;
   }
@@ -43,7 +45,8 @@ void TransformWidgetAspectTranslate::UpdateWidgetTransform() {
 
 float3 TransformWidgetAspectTranslate::GetAxis() const {
   // If using world space or rotating multiple nodes, use the world axis.
-  if (!use_local_space_ || !HasOneNodeSelected()) {
+  if (!editor_->GetSettings().transform_widget_local_space.Get() ||
+      !HasOneNodeSelected()) {
     return GetAxisFromState();
   }
 
@@ -96,7 +99,8 @@ void TransformWidgetAspectTranslate::UpdateAspect(
   for (const NodeTransformData& data : initial_node_transform_data_) {
     if (!data.node.IsValid()) continue;
 
-    const float3 new_pos = data.position_start + delta;
+    const float3 new_pos =
+        GetTranslatedPosition(data.position_start, delta, axis);
     data.node->SetWorldPosition(new_pos);
 
     // If commit is false, we only update the node visually but don't create
@@ -127,7 +131,8 @@ float3 TransformWidgetAspectTranslate::GetDualAxisDelta(
     const float3& world_delta, const float3& axis) const {
   float3 plane_normal = kOne3 - axis;
 
-  if (use_local_space_ && HasOneNodeSelected()) {
+  if (editor_->GetSettings().transform_widget_local_space.Get() &&
+      HasOneNodeSelected()) {
     quatf rotation;
 
     // If dragging, use the initial rotation of the node to compute the delta.
@@ -142,6 +147,27 @@ float3 TransformWidgetAspectTranslate::GetDualAxisDelta(
   }
 
   return world_delta - dot(world_delta, plane_normal) * plane_normal;
+}
+
+float3 TransformWidgetAspectTranslate::GetTranslatedPosition(
+    const float3& position_start, const float3& delta,
+    const float3& axis) const {
+  float3 pos = position_start + delta;
+
+  if (!editor_->GetSettings().snap_enabled.Get()) return pos;  // Snapping off.
+
+  // If using local space, no snapping is applied.
+  if (editor_->GetSettings().transform_widget_local_space.Get()) return pos;
+
+  const float spacing = editor_->GetSettings().grid_spacing.Get();
+
+  if (spacing == 0.0f) return pos;  // Avoids division by zero.
+
+  if (axis.x != 0.0f) pos.x = std::round(pos.x / spacing) * spacing;
+  if (axis.y != 0.0f) pos.y = std::round(pos.y / spacing) * spacing;
+  if (axis.z != 0.0f) pos.z = std::round(pos.z / spacing) * spacing;
+
+  return pos;
 }
 
 }  // namespace imp::editor

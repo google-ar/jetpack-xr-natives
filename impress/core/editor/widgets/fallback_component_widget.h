@@ -17,8 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_FALLBACK_COMPONENT_WIDGET_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_FALLBACK_COMPONENT_WIDGET_H_
 
+#include <memory>
 #include <string>
+#include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "core/editor/command_manager.h"
 #include "core/editor/widget.h"
@@ -38,7 +41,8 @@ namespace imp::editor {
 // still useful to represent them in the editor for debugging purposes.
 class FallbackComponentWidget : public Widget {
  public:
-  FallbackComponentWidget(NodeHandle node, BaseComponentPool* pool);
+  FallbackComponentWidget(absl::flat_hash_set<NodeHandle> nodes,
+                          BaseComponentPool* pool);
 
   absl::string_view GetName() const override;
 
@@ -57,13 +61,23 @@ class FallbackComponentWidget : public Widget {
 
   virtual const SceneMetadata::ComponentSource* GetBaseComponentSource() const;
 
+  const absl::flat_hash_set<NodeHandle>& GetNodes() const { return nodes_; }
+
  private:
-  NodeHandle node_;
+  absl::flat_hash_set<NodeHandle> nodes_;
+  NodeHandle reference_node_;
   ComponentHandle<SceneMetadata> metadata_;
   BaseComponentPool* pool_;
-  ComponentHandle<Component> component_;
+  absl::flat_hash_set<ComponentHandle<Component>> components_;
   CommandManager& command_manager_;
   std::string name_;
+
+  void DrawActiveLabel(
+      const absl::flat_hash_set<ComponentHandle<Component>>& active_components);
+
+  void CreateUndoCommand(
+      const absl::flat_hash_set<ComponentHandle<Component>>& components,
+      bool enabled);
 };
 
 }  // namespace imp::editor

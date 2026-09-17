@@ -39,6 +39,7 @@
 #include "core/config.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/loader/loader_creator.h"
+#include "core/material_library/material_package.h"
 #include "core/media/media_asset.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture_asset.h"
@@ -293,6 +294,11 @@ class AssetManager {
   Future<resources::Resource> LoadResource(
       const AssetDefinition& asset_definition);
   Future<resources::Resource> LoadResource(absl::string_view asset_url);
+
+  // Gets the MaterialPackage used for loading the GenericMaterial set for the
+  // given glTF LoadOptions.
+  MaterialPackage& GetGltfGenericMaterialPackage(
+      absl::optional<GltfAsset::LoadOptions> options = std::nullopt);
 
   // Returns the loading progress of pending downloads as a fraction, with
   // download_baseline establishing 0%.

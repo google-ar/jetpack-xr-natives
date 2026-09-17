@@ -17,31 +17,56 @@
 #include <string>
 #include <utility>
 
-#include "absl/strings/string_view.h"
-#include "core/common/small_source_location.h"
+#include "absl/status/status.h"
+#include "core/assets/asset_ptr.h"
+#include "core/assets/proto_asset.h"
+#include "core/async/future.h"
+#include "core/common/registry.h"
 #include "core/materials/material.h"
+#include "core/render/material_registry.h"
+#include "core/view/base_view.h"
+#include "core/view/framework/assets/asset_manager.h"
+#include "core/view/framework/assets/material_factory.h"
+#include "core/view/framework/render/material_definition.proto.imp.h"
 
 namespace imp {
 
-MaterialHandle::MaterialHandle(absl::string_view url) : url_(url) {}
-
-Material* MaterialHandle::operator->() const { return material_.operator->(); }
-
-MaterialHandle::operator bool() const { return material_ != nullptr; }
-
-absl::string_view MaterialHandle::GetUrl() const { return url_; }
-
-BorrowedMaterialPtr MaterialHandle::GetMaterial(SmallSourceLocation loc) const {
-  if (!material_) {
-    return BorrowedMaterialPtr();
+Future<absl::Status> MaterialHandle::AsyncPreload(BaseView& view) {
+  if (GetUrl().empty()) {
+    return Future<absl::Status>(absl::OkStatus());
   }
-  return material_.WithNewLocation(loc);
-}
 
-void MaterialHandle::AssignMaterial(absl::string_view url,
-                                    BorrowedMaterialPtr material) {
-  url_ = url;
-  material_ = std::move(material);
+  MaterialRegistry& material_registry =
+      view.GetRegistry().GetOrCreate<MaterialRegistry>();
+  BorrowedMaterialPtr material = material_registry.GetMaterial(GetUrl());
+  if (material) {
+    AssignMaterial(GetUrl(), material);
+    return Future<absl::Status>(absl::OkStatus());
+  }
+
+  std::string url = std::string(GetUrl());
+  return view.GetAssetManager().LoadProto<MaterialDefinition>(url).Then(
+      [&view, url, this](AssetPtr<ProtoAsset<MaterialDefinition>> proto_asset) {
+        if (!proto_asset) {
+          return Future<absl::Status>(absl::InternalError(
+              "Failed to load MaterialDefinition proto. Please ensure "
+              "that the proto asset is included in the build. Loading "
+              "directly from disk is only supported in DEV builds."));
+        }
+        const MaterialDefinition& material_definition = proto_asset->GetProto();
+        return view.GetMaterialFactory()
+            .LoadMaterial(material_definition)
+            .Then([&view, url, this,
+                   proto_asset = std::move(proto_asset)](MaterialPtr material) {
+              MaterialRegistry& material_registry =
+                  view.GetRegistry().GetOrCreate<MaterialRegistry>();
+              if (!material_registry.HasMaterial(url)) {
+                material_registry.RegisterMaterial(url, std::move(material),
+                                                   proto_asset->GetProto());
+              }
+              AssignMaterial(url, material_registry.GetMaterial(url));
+            });
+      });
 }
 
 }  // namespace imp

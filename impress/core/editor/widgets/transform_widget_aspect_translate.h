@@ -42,6 +42,8 @@ class TransformWidgetAspectTranslate : public TransformWidgetAspect {
  private:
   float3 GetSingleAxisDelta(const float3& world_delta) const;
   float3 GetDualAxisDelta(const float3& world_delta, const float3& axis) const;
+  float3 GetTranslatedPosition(const float3& position_start,
+                               const float3& delta, const float3& axis) const;
 
   TransformWidgetAspectTranslateState state_;
 

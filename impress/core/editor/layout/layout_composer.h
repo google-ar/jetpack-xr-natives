@@ -118,6 +118,10 @@ class LayoutComposer {
                       imp::Invocable<void()> draw_function,
                       bool force_focus = false, bool is_closeable = true);
 
+  void DrawInRightDock(absl::string_view tab_label,
+                       imp::Invocable<void()> draw_function,
+                       bool force_focus = false, bool is_closeable = true);
+
   // Queues the given Invocable to be drawn as its own tab in a dockable tabbed
   // window.
   // If `draw_before_previous_tabs` is true, the tab will be drawn as the
@@ -138,6 +142,9 @@ class LayoutComposer {
   // The toolbar is a panel in the top-middle of the screen that only exists in
   // the MULTIPLE_WINDOWS layout mode.
   void DrawInToolbar(imp::Invocable<void()> draw_function);
+
+  // Queues the given Invocable to be drawn in the settings bar section.
+  void DrawInSettingsBar(imp::Invocable<void()> draw_function);
 
   // Queues the given Invocable to be drawn at the end after the layout.
   void DrawAfterLayout(absl::string_view label,
@@ -167,11 +174,16 @@ class LayoutComposer {
   void DrawTabbedWindow();
   // Draws a tabbed window that can be docked to the bottom of the screen.
   void DrawDockableTabbedWindow();
+  void DrawDockedWindows(std::vector<WidgetInfo>& widget_infos,
+                         DockingHelper::DockingType docking_type,
+                         ImGuiWindowFlags flags);
 
   // Draws the main menu.
   void DrawMainMenuBar();
   // Draws the toolbar
   void DrawToolbar();
+  // Draws the settings bar.
+  void DrawSettingsBar();
   // Draws a circular cursor at ImGuiIO::MousePos.
   void DrawCursor();
   //
@@ -198,9 +210,11 @@ class LayoutComposer {
   std::vector<imp::Invocable<void()>> scene_draw_functions_;
   std::vector<imp::Invocable<void()>> viewport_draw_functions_;
   std::vector<WidgetInfo> left_dock_draw_functions_;
+  std::vector<WidgetInfo> right_dock_draw_functions_;
   std::vector<WidgetInfo> tab_item_info_;
   std::vector<imp::Invocable<void()>> menu_draw_functions_;
   std::vector<imp::Invocable<void()>> toolbar_draw_functions_;
+  std::vector<imp::Invocable<void()>> settings_bar_draw_functions_;
   std::vector<WidgetInfo> draw_after_functions_;
   // Separate out Node Info to draw before all components
   imp::Invocable<void()> node_info_draw_function_;
@@ -212,10 +226,12 @@ class LayoutComposer {
   std::optional<WindowConfiguration*> window_configuration_;
   std::string saved_layout_filename_;
   bool should_reset_docking_layout_ = false;
+  int dockspace_last_frame_rendered_ = -1;
 
   // Layout state
   LayoutConfig::TabbedWindowState tabbed_window_state_;
   float window_y_offset_ = 0;
+  float settings_bar_height_ = 30.0f;
   ImGuiID selected_tab_id_ = 0;
   ImGuiTextFilter details_filter_;
   StringMap<SubWindowInfo> sub_window_info_map_;

@@ -37,6 +37,7 @@
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
+#include "core/editor/assets/outline_assets.h"
 #include "core/editor/camera_defaults.h"
 #include "core/editor/command_manager.h"
 #include "core/editor/common/notifying_property.h"
@@ -62,6 +63,7 @@
 #include "core/editor/layout/layout_config.proto.imp.h"
 #include "core/editor/selection_controller.h"
 #include "core/editor/selection_controller_impl.h"
+#include "core/editor/selection_group_manager.h"
 #include "core/editor/visualizers/camera_visualizer.h"
 #include "core/editor/visualizers/light_visualizer.h"
 #include "core/editor/visualizers/visualizer_manager.h"
@@ -84,6 +86,7 @@
 #include "core/editor/widgets/materials_widget.h"
 #include "core/editor/widgets/node_details.h"
 #include "core/editor/widgets/performance/performance_window.h"
+#include "core/editor/widgets/settings_toolbar.h"
 #include "core/editor/widgets/settings_widget.h"
 #include "core/editor/widgets/toggle_camera.h"
 #include "core/editor/widgets/transform.h"
@@ -109,6 +112,8 @@
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/scene_metadata.h"
 #include "core/ncsb/system.h"
+#include "core/render/primitive_shape_renderer.h"
+#include "core/render_passes/texture_pipeline_renderer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
@@ -192,6 +197,7 @@ class EditorImpl : public Editor {
 
   // Handles simulation state.
   EditorInfo::RunMode GetRunMode() const override;
+  bool IsSandbox() const override;
   EditorInfo::DisplayMode GetDisplayMode() const override;
   void SetDisplayMode(EditorInfo::DisplayMode display_mode) override;
   void SetInEditMode(bool in_edit_mode) override;
@@ -428,6 +434,11 @@ void EditorImpl::Initialize() {
   GetView()
       .GetSceneSystem()
       .RegisterComponentIsfInfo<TemporaryEditorMetadata>();
+  GetView()
+      .GetSceneSystem()
+      .RegisterComponentIsfInfo<TexturePipelineRenderer>();
+  GetView().GetSceneSystem().RegisterComponentIsfInfo<PrimitiveShapeRenderer>();
+  GetView().GetSceneSystem().RegisterComponentIsfInfo<SelectionGroupManager>();
 
   // Set the default light and camera components as authored so that the full
   // component widgets are available in edit mode.
@@ -485,6 +496,27 @@ void EditorImpl::Initialize() {
     AddNode(grid_);
   }
 
+  // Add selection outline renderer and manager.
+  editor_root_node_->AddComponent<SelectionGroupManager>();
+  outline_assets::RegisterCoreEditorAssetsOutlineAssets();
+  GetView()
+      .GetSceneSystem()
+      .LoadScene(outline_assets::kSelectionOutlineIsf,
+                 {.parent = editor_root_node_})
+      .Then([this](absl::StatusOr<NodeHandle> root) {
+        if (!root.ok()) {
+          IMP_LOG(imp::ERROR) << "Failed to load selection outline ISF: "
+                     << root.status();
+          return;
+        }
+
+        auto renderer = (*root)->GetComponent<TexturePipelineRenderer>();
+        if (!renderer) return;
+        // Use the editor camera for the texture pipeline renderer.
+        renderer->GetFilamentView(0)->setCamera(camera_->GetCamera());
+      })
+      .KeptBy(editor_root_node_);
+
   Dispatcher& app_dispatcher = GetView().GetDispatcher();
 
   // Allow editor toggling from both App camera mode (app Dispatcher) and Editor
@@ -520,10 +552,7 @@ void EditorImpl::Initialize() {
       platform_mode_ == EditorInfo::PlatformMode::kSplitEngineApp) {
     split_engine::SplitEngineSerializer* serializer =
         GetView().GetSplitEngineSerializer();
-    // TODO: Remove this check once custom material is supported
-    // for non-experimental builds.
-    if (serializer && serializer->GetApiLevel() ==
-                          split_engine::kSplitEngineExperimentalApiLevel) {
+    if (serializer && serializer->GetApiLevel() >= 4) {
       SpawnWorldSpaceEditor();
     } else {
       IMP_LOG(imp::ERROR)
@@ -685,10 +714,16 @@ void EditorImpl::InitializeWidgetUiSystem() {
 
   widget_ui_system_.AddWidget<Hierarchy>(
       WidgetLayoutInfo(PanelId::kSceneWindow), view);
+  widget_ui_system_.AddWidget<SettingsToolbar>(
+      WidgetLayoutInfo(PanelId::kSettingsBar), view);
   if (GetCameraConfiguration() ==
       EditorPlugin::CameraConfiguration::kEditorAndAppCameraDefault) {
-    widget_ui_system_.AddWidget<ToggleCamera>(
-        WidgetLayoutInfo(PanelId::kToolBar), view);
+    // If doesn't have split engine, then add the toggle camera widget.
+    if (platform_mode_ != EditorInfo::PlatformMode::kXrSplitEngineApp &&
+        platform_mode_ != EditorInfo::PlatformMode::kSplitEngineApp) {
+      widget_ui_system_.AddWidget<ToggleCamera>(
+          WidgetLayoutInfo(PanelId::kToolBar), view);
+    }
   }
 
   widget_ui_system_.AddWidget<NodeDetails>(
@@ -708,7 +743,7 @@ void EditorImpl::InitializeWidgetUiSystem() {
     widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(PanelId::kTabBar),
                                          view);
     widget_ui_system_.AddWidget<MaterialEditorWidget>(
-        WidgetLayoutInfo(PanelId::kFreeform,
+        WidgetLayoutInfo(PanelId::kRightPanel,
                          WidgetPresence::kOnlyIn2DLargeScreen,
                          WidgetVisibility::kHidden),
         view);
@@ -718,7 +753,8 @@ void EditorImpl::InitializeWidgetUiSystem() {
       WidgetLayoutInfo(PanelId::kTabBar, WidgetPresence::kOnlyIn2DLargeScreen),
       view);
   widget_ui_system_.AddWidget<GltfAssetDetailsWidget>(
-      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kOnlyIn2DLargeScreen,
+      WidgetLayoutInfo(PanelId::kRightPanel,
+                       WidgetPresence::kOnlyIn2DLargeScreen,
                        WidgetVisibility::kHidden),
       view, asset_library_);
   widget_ui_system_.AddWidget<SettingsWidget>(
@@ -745,15 +781,15 @@ void EditorImpl::InitializeWidgetUiSystem() {
                        WidgetVisibility::kHidden),
       view);
   widget_ui_system_.AddWidget<EnvironmentLightEditor>(
-      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kAlways,
+      WidgetLayoutInfo(PanelId::kRightPanel, WidgetPresence::kAlways,
                        WidgetVisibility::kHidden),
       view);
   widget_ui_system_.AddWidget<FilamentViewSettingsWidget>(
-      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kAlways,
+      WidgetLayoutInfo(PanelId::kTabBar, WidgetPresence::kAlways,
                        WidgetVisibility::kHidden),
       view);
   event_injector_ = widget_ui_system_.AddWidget<EventInjector>(
-      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kAlways,
+      WidgetLayoutInfo(PanelId::kTabBar, WidgetPresence::kAlways,
                        WidgetVisibility::kHidden),
       view);
 
@@ -1006,6 +1042,8 @@ void EditorImpl::SpawnWorldSpaceEditor() {
 
 EditorInfo::RunMode EditorImpl::GetRunMode() const { return run_mode_; }
 
+bool EditorImpl::IsSandbox() const { return is_sandbox_; }
+
 EditorInfo::DisplayMode EditorImpl::GetDisplayMode() const {
   return display_mode_;
 }
@@ -1252,8 +1290,14 @@ void EditorImpl::SetInEditMode(bool in_edit_mode) {
 
   // If plugin camera mode is linked, playing the editor automatically switches
   // to the app camera.
-  if (GetCameraConfiguration() ==
-      EditorPlugin::CameraConfiguration::kEditorCameraOnly) {
+  if (settings_.auto_switch_to_app_camera_on_play.Get()) {
+    if (in_edit_mode) {
+      SwitchToEditorMode();
+    } else {
+      SwitchToAppMode();
+    }
+  } else if (GetCameraConfiguration() ==
+             EditorPlugin::CameraConfiguration::kEditorCameraOnly) {
     if (in_edit_mode) {
       SetInputMode(InputMode::kEditor);
     } else {
@@ -1289,6 +1333,10 @@ void EditorImpl::PrintCameraInstructions() const {
 }
 
 void EditorImpl::SetViewportRect(std::optional<Rect> rect) {
+  if (GetView().GetHost()) {
+    GetView().GetHost()->SetViewportWidgetPresent({}, rect.has_value());
+  }
+
   const float2 pixel_ratio = editor::GetPhysicalPixelRatio(GetView());
 
   // Return early if the pixel ratio and viewport rect has not changed.

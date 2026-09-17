@@ -82,7 +82,7 @@ namespace android_xr {
 // This is the API level that is currently in production.
 // This value is used by the split engine renderer as the default value for its
 // api level validation.
-inline constexpr int32_t kSplitEngineProductionApiLevel = 1;
+inline constexpr int32_t kSplitEngineProductionApiLevel = 4;
 
 // The split engine preview API level.
 // This value is used by the split engine renderer to allow the preview

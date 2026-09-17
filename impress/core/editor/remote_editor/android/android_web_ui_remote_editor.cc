@@ -16,6 +16,8 @@
 
 #include "core/editor/remote_editor/android/android_web_ui_remote_editor.h"
 
+#include <android/native_window.h>
+
 #include <memory>
 #include <variant>
 
@@ -25,10 +27,12 @@
 #include "absl/strings/str_cat.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
+#include "core/config.h"
 #include "core/editor/editor.h"
 #include "core/editor/remote_editor/android/android_remote_editor_wrapper.h"
 #include "core/editor/remote_editor/remote_editor_info.h"
 #include "core/editor/remote_editor/remote_editor_renderer.h"
+#include "core/editor/remote_editor/remote_editor_xr_renderer.h"
 #include "core/editor/remote_editor/web_ui_remote_editor.h"
 #include "core/view/base_view.h"
 
@@ -42,6 +46,11 @@ struct LambdaVisitor : Ts... {
 };
 template <class... Ts>
 LambdaVisitor(Ts...) -> LambdaVisitor<Ts...>;
+
+// Web UI streaming mode strictly expects exactly two active WebSockets:
+// 1. Script API control bridge socket.
+// 2. Video streamer socket.
+constexpr int kRequiredStreamingConnectionCount = 2;
 }  // namespace
 
 AndroidWebUiRemoteEditor::AndroidWebUiRemoteEditor(BaseView& view)
@@ -53,12 +62,17 @@ AndroidWebUiRemoteEditor::AndroidWebUiRemoteEditor(BaseView& view)
 
 AndroidWebUiRemoteEditor::~AndroidWebUiRemoteEditor() {
   ClearRemembered();
-  if (executor_ != Executor::CurrentExecutor()) {
+  // Suppress false alarms during graceful application shutdown, where the
+  // foreground executor may have already been destroyed by the executor system.
+  if (Executor::CurrentExecutor() && executor_ != Executor::CurrentExecutor()) {
     IMP_LOG(imp::ERROR) << "AndroidWebUiRemoteEditor must be destroyed on the "
                   "foreground thread.";
   }
   Stop();
   ReleaseNativeWindow();
+  if (active_window_info_) {
+    active_window_info_->RevokeWindowAndWait();
+  }
 }
 
 void AndroidWebUiRemoteEditor::OnWebUiStart() {
@@ -107,7 +121,26 @@ void AndroidWebUiRemoteEditor::OnWebUiStop() {
 }
 
 bool AndroidWebUiRemoteEditor::IsReadyToSendDataToRemote() const {
-  return HasActiveConnections();
+  // During stop/restart, running_ clears before JNI connection_count_ reaches
+  // 0.
+  if (!IsRunning() || !HasActiveConnections()) {
+    return false;
+  }
+  if (std::holds_alternative<
+          imp::editor::RemoteEditorInfo::RemoteEditorStreamingConfig>(
+          config_)) {
+    // Inspect active_window_ptr_ under mutex lock to avoid data races against
+    // concurrent disconnect/teardown assignments on background JNI threads.
+    bool has_window = false;
+    {
+      absl::MutexLock lock(active_window_info_->lock);
+      has_window = (active_window_info_->active_window_ptr_ != nullptr);
+    }
+    // Require surface and renderer readiness before streaming or layout switch.
+    return remote_editor_renderer_ != nullptr &&
+           remote_editor_renderer_->IsReady() && has_window;
+  }
+  return true;
 }
 
 void AndroidWebUiRemoteEditor::NotifyClientConnected() {
@@ -167,8 +200,28 @@ absl::Status AndroidWebUiRemoteEditor::SetRenderTargetWindow(
         "SetRenderTargetWindow can only be called in kUiStreaming mode.");
   }
 
+  filament::Engine* engine = view_.GetHost()->GetEngine();
+  if (engine) {
+    engine->flushAndWait();
+  }
+  if (remote_editor_renderer_) {
+    active_window_info_->RevokeWindowAndWait();
+    remote_editor_renderer_.reset();
+    if (engine) {
+      engine->flushAndWait();
+    }
+  }
   ReleaseNativeWindow();
   native_window_ = native_window;
+  if (native_window_) {
+    ANativeWindow_setBuffersGeometry(
+        static_cast<ANativeWindow*>(native_window_), width, height,
+        WINDOW_FORMAT_RGBA_8888);
+  }
+  {
+    absl::MutexLock lock(active_window_info_->lock);
+    active_window_info_->active_window_ptr_ = native_window_;
+  }
   width_ = width;
   height_ = height;
   UpdateRemoteRenderingState();
@@ -193,6 +246,19 @@ void AndroidWebUiRemoteEditor::ClearRenderTargetWindow() {
     return;
   }
 
+  // Protect against dangling pointers during asynchronous application teardown,
+  // where FilamentHost or Engine may already be destroyed.
+  filament::Engine* engine = view_.GetHost()->GetEngine();
+  if (engine) {
+    engine->flushAndWait();
+  }
+  if (remote_editor_renderer_) {
+    active_window_info_->RevokeWindowAndWait();
+    remote_editor_renderer_.reset();
+    if (engine) {
+      engine->flushAndWait();
+    }
+  }
   ReleaseNativeWindow();
   width_ = 0;
   height_ = 0;
@@ -200,6 +266,7 @@ void AndroidWebUiRemoteEditor::ClearRenderTargetWindow() {
 }
 
 void AndroidWebUiRemoteEditor::ReleaseNativeWindow() {
+  active_window_info_->RevokeWindowAndWait();
   if (android_remote_editor_wrapper_) {
     android_remote_editor_wrapper_->ReleaseNativeWindow(native_window_);
   }
@@ -207,32 +274,53 @@ void AndroidWebUiRemoteEditor::ReleaseNativeWindow() {
 }
 
 void AndroidWebUiRemoteEditor::UpdateRemoteRenderingState() {
+  filament::Engine* engine = view_.GetHost()->GetEngine();
+  if (engine) {
+    engine->flushAndWait();
+  }
+  // Web UI streaming mode strictly requires both the Script API bridge and
+  // Video Streamer WebSockets to be fully established before initiating the
+  // rendering pipeline.
   bool should_stream =
-      running_ && HasActiveConnections() &&
+      running_ && ConnectionCount() == kRequiredStreamingConnectionCount &&
       std::holds_alternative<
           imp::editor::RemoteEditorInfo::RemoteEditorStreamingConfig>(
           config_) &&
       native_window_;
 
   if (should_stream) {
-    if (auto editor_or = view_.GetRegistry().Get<editor::Editor>();
+    if (absl::StatusOr<std::reference_wrapper<editor::Editor>> editor_or =
+            view_.GetRegistry().Get<editor::Editor>();
         editor_or.ok()) {
       if (!remote_editor_renderer_) {
-        remote_editor_renderer_ =
-            std::make_unique<editor::RemoteEditorRenderer>(view_);
+        if (view_.GetHost()->IsInXr()) {
+          remote_editor_renderer_ =
+              std::make_unique<editor::RemoteEditorXrRenderer>(
+                  view_, *active_window_info_);
+        } else {
+          remote_editor_renderer_ =
+              std::make_unique<editor::RemoteEditorRenderer>(view_);
+        }
       }
+      SetDisplayMode(editor::EditorInfo::DisplayMode::kRemoteScreen);
       remote_editor_renderer_->SetRenderTargetWindow(native_window_, width_,
                                                      height_);
     }
   } else {
-    // If streaming should stop, always destroy the renderer.
-    // Note: We deliberately do this outside the
-    // `view_.GetRegistry().Get<Editor>()` check. If the application is shutting
-    // down, the Editor might have already been removed from the registry. We
-    // still need to destroy the renderer here to avoid a memory leak.
     if (remote_editor_renderer_) {
+      active_window_info_->RevokeWindowAndWait();
       remote_editor_renderer_.reset();
+      if (engine) {
+        engine->flushAndWait();
+      }
     }
+  }
+}
+
+void AndroidWebUiRemoteEditor::BlitFromRenderTarget(
+    filament::Renderer* renderer, filament::RenderTarget* render_target) {
+  if (remote_editor_renderer_) {
+    remote_editor_renderer_->ReadPixelsIfNeeded(renderer, render_target);
   }
 }
 

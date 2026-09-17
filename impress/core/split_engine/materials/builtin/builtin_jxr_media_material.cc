@@ -100,6 +100,9 @@ static constexpr absl::string_view kFeatherRadiusParameter = "featherRadius";
 // Parameter used to pass the (UV) corner radius information to the material.
 static constexpr absl::string_view kCornerRadiusParameter = "cornerRadius";
 
+// Parameter used to pass the color tint information to the material.
+static constexpr absl::string_view kTintColorParameter = "tintColor";
+
 // Parameter used to report which eye to render to.
 static constexpr absl::string_view kMaterialConstantRenderEyeTarget =
     "renderEyeTarget";
@@ -325,6 +328,7 @@ BuiltInJxrMediaMaterial::BuiltInJxrMediaMaterial(BaseView& view,
         kAuxiliaryAlphaMaskTextureParameter,
         view.GetTextureFactory().BorrowPlaceholderTexture());
   }
+  GetMaterial()->SetParameter(kTintColorParameter, imp::kOne4);
 }
 
 split_engine::BuiltInMaterialPtr BuiltInJxrMediaMaterial::Duplicate() const {
@@ -446,6 +450,15 @@ absl::Status BuiltInJxrMediaMaterial::SetParameters(
         kCornerRadiusParameter,
         imp::float2(xr_media_parameters->corner_radius()->x(),
                     xr_media_parameters->corner_radius()->y()));
+  }
+
+  if (xr_media_parameters->tint_color()) {
+    GetMaterial()->SetParameter(
+        kTintColorParameter,
+        imp::float4(xr_media_parameters->tint_color()->x(),
+                    xr_media_parameters->tint_color()->y(),
+                    xr_media_parameters->tint_color()->z(),
+                    xr_media_parameters->tint_color()->w()));
   }
 
   if (xr_media_parameters->sub_view_left()) {

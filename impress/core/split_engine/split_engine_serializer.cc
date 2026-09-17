@@ -18,10 +18,9 @@
 
 #include <cstdint>
 
-#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
-#include "absl/synchronization/mutex.h"
+#include "core/async/executor.h"
 
 namespace imp::split_engine {
 
@@ -33,7 +32,7 @@ class SplitEngineResourceIdManager {
   }
 
   std::uint64_t GetId(const void* ptr) {
-    absl::MutexLock lock(mutex_);
+    
     const auto it = ptr_to_id_.find(ptr);
     if (it != ptr_to_id_.end()) {
       return it->second;
@@ -45,7 +44,7 @@ class SplitEngineResourceIdManager {
   }
 
   void RemoveId(uint64_t id) {
-    absl::MutexLock lock(mutex_);
+    
     const auto it = id_to_ptr_.find(id);
     
     RemovePtr(it->second);
@@ -61,19 +60,18 @@ class SplitEngineResourceIdManager {
   SplitEngineResourceIdManager& operator=(SplitEngineResourceIdManager&&) =
       delete;
 
-  void RemovePtr(const void* ptr) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+  void RemovePtr(const void* ptr) {
     const auto it = ptr_to_id_.find(ptr);
     
     ptr_to_id_.erase(it);
   }
 
-  absl::Mutex mutex_;
   // Unique ID generator
-  uint64_t next_id_ ABSL_GUARDED_BY(mutex_) = 0;
+  uint64_t next_id_ = 0;
   // Maps a pointer to its ID
-  absl::flat_hash_map<const void*, uint64_t> ptr_to_id_ ABSL_GUARDED_BY(mutex_);
+  absl::flat_hash_map<const void*, uint64_t> ptr_to_id_;
   // Maps an ID to its pointer
-  absl::flat_hash_map<uint64_t, const void*> id_to_ptr_ ABSL_GUARDED_BY(mutex_);
+  absl::flat_hash_map<uint64_t, const void*> id_to_ptr_;
 };
 
 uint64_t SplitEngineSerializer::GetId(const void* ptr) {

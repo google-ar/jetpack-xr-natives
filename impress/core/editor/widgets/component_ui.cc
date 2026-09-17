@@ -14,6 +14,7 @@
 
 #include "core/editor/widgets/component_ui.h"
 
+#include <functional>
 #include <utility>
 
 #if IMP_RUNTIME(DEV)
@@ -24,6 +25,7 @@
 #include "core/config.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
+#include "core/editor/layout/helpers.h"
 #include "core/editor/widget_layout_info.h"
 #include "core/editor/widget_ui_system.h"
 #include "core/ncsb/node_handle.h"
@@ -47,11 +49,10 @@ ComponentUi::ComponentUi(BaseView& view,
       component_widgets_layout_info_(component_widgets_layout_info) {
   editor_.GetDispatcher().Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        // We only support single selection for the component UI.
-        selected_node_ = editor_.GetSingleSelectedNode();
+        selected_nodes_ = editor_.GetSelectedNodes();
 
         DestroyComponentWidgets();
-        UpdateComponentWidgets(selected_node_);
+        UpdateComponentWidgets(selected_nodes_);
       },
       this);
 }
@@ -65,25 +66,43 @@ void ComponentUi::DestroyComponentWidgets() {
   component_widgets_.clear();
 }
 
-void ComponentUi::UpdateComponentWidgets(NodeHandle selected_node) {
-  if (!selected_node) {
+void ComponentUi::UpdateComponentWidgets(
+    const absl::flat_hash_set<NodeHandle>& selected_nodes) {
+  if (selected_nodes.empty()) {
     return;
   }
 #if IMP_RUNTIME(DEV)
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   WidgetUiSystem& widget_ui_system = editor.GetWidgetUiSystem();
 
-  auto scene_metadata = selected_node->GetComponent<SceneMetadata>();
+  NodeHandle first_node = *selected_nodes.begin();
+  ComponentHandle<SceneMetadata> scene_metadata =
+      first_node->GetComponent<SceneMetadata>();
   bool is_in_edit_mode = editor::IsInEditMode(view_.GetRegistry());
 
-  // Gather the set of all components that should be visualized on this node.
+  // Gather the set of all components that should be visualized on all selected
+  // nodes.
   absl::flat_hash_set<BaseComponentPool*> component_pools;
-  view_.GetComponentManager().ForEachPool(
-      [&component_pools, node = selected_node](BaseComponentPool* pool) {
-        if (pool->Has(node->GetEntity()) && !pool->IsExcludedFromEditor()) {
-          component_pools.insert(pool);
-        }
+  bool first = true;
+  for (const NodeHandle& node : selected_nodes) {
+    absl::flat_hash_set<BaseComponentPool*> node_pools;
+    // TODO : Don't iterate over all the component pools.
+    view_.GetComponentManager().ForEachPool(
+        [&node_pools, node](BaseComponentPool* pool) {
+          if (pool->Has(node->GetEntity()) && !pool->IsExcludedFromEditor()) {
+            node_pools.insert(pool);
+          }
+        });
+    if (first) {
+      component_pools = std::move(node_pools);
+      first = false;
+    } else {
+      // Only keep components that are present on every selected node.
+      absl::erase_if(component_pools, [&node_pools](BaseComponentPool* pool) {
+        return !node_pools.contains(pool);
       });
+    }
+  }
   // Remove all components that we have visualizers for but no longer exist.
   for (auto it = component_widgets_.begin(); it != component_widgets_.end();) {
     if (!component_pools.contains(it->first)) {
@@ -123,10 +142,10 @@ void ComponentUi::UpdateComponentWidgets(NodeHandle selected_node) {
 
         if (use_fallback_in_edit_mode) {
           component_widget =
-              std::make_unique<FallbackComponentWidget>(selected_node, pool);
+              std::make_unique<FallbackComponentWidget>(selected_nodes, pool);
         } else {
           component_widget = view_.GetSceneSystem().CreateComponentWidget(
-              state_type_url_hash.value(), selected_node,
+              state_type_url_hash.value(), selected_nodes,
               editor_.GetDispatcher());
         }
 
@@ -139,7 +158,7 @@ void ComponentUi::UpdateComponentWidgets(NodeHandle selected_node) {
         }
       } else {
         component_widget =
-            std::make_unique<FallbackComponentWidget>(selected_node, pool);
+            std::make_unique<FallbackComponentWidget>(selected_nodes, pool);
       }
 
       component_widgets_[pool] = component_widget.get();
@@ -158,14 +177,20 @@ void ComponentUi::UpdateComponentWidgets(NodeHandle selected_node) {
 #endif  // IMP_RUNTIME(DEV)
 }
 
-bool ComponentUi::HasContent() const { return selected_node_.IsValid(); }
+bool ComponentUi::HasContent() const {
+  for (const NodeHandle& node : selected_nodes_) {
+    if (node) return true;
+  }
+  return false;
+}
 
 void ComponentUi::DrawImGui() {
-  UpdateComponentWidgets(selected_node_);
+  PruneInvalidHandles(selected_nodes_);
+  UpdateComponentWidgets(selected_nodes_);
 
 #if IMP_RUNTIME(DEV)
-  if (selected_node_) {
-    view_.GetSceneSystem().ShowAddComponentUi(selected_node_);
+  if (!selected_nodes_.empty()) {
+    view_.GetSceneSystem().ShowAddComponentUi(selected_nodes_);
   }
 #endif  // IMP_RUNTIME(DEV)
 }

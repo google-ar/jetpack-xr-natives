@@ -49,7 +49,7 @@ TEST_P(SplitEngineBuiltinMaterialRemoteTest, CreateFlatBufferBuilder) {
       [](BaseView& serializer_view, const imp::FrameTime& frame_time) {
         auto builder = SplitEngineBuiltinMaterial::CreateFlatBufferBuilder(
             serializer_view, 100);
-        EXPECT_OK(builder);
+        MP_EXPECT_OK(builder);
         EXPECT_NE(*builder, nullptr);
       });
 }

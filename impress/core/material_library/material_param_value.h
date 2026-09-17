@@ -17,20 +17,12 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_MATERIAL_PARAM_VALUE_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_MATERIAL_PARAM_VALUE_H_
 
-#include <memory>
-#include <variant>
-#include <vector>
-
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/TextureSampler.h"
 #include "core/math/almost_equal.h"
 #include "core/math/mat.h"
-#include "core/math/vec.h"
 
 namespace imp {
-
-class GenericMaterial;
-using GenericMaterialPtr = std::unique_ptr<GenericMaterial>;
 
 // Holds a filament texture and the associated texture sampler.
 struct TextureAndSampler {
@@ -61,20 +53,6 @@ struct TextureAndSampler {
            RoughlyEqual(uv_transform, other.uv_transform);
   }
 };
-
-// TODO: (broken link) - Replace variant to reduce memory usage.
-using MaterialParamValue =
-    std::variant<float, float2, float3, float4,  //^
-                 int, int2, int3, int4,          //^
-                 uint, uint2, uint3, uint4,      //^
-                 bool, bool2, bool3, bool4,      //^
-                 mat3f, mat4f,                   //^
-                 std::vector<float>, std::vector<float2>, std::vector<float3>,
-                 std::vector<float4>, std::vector<int>, std::vector<int2>,
-                 std::vector<int3>, std::vector<int4>, std::vector<uint>,
-                 std::vector<uint2>, std::vector<uint3>, std::vector<uint4>,
-                 std::vector<bool>, std::vector<bool2>, std::vector<bool3>,
-                 std::vector<bool4>, std::vector<mat3f>, std::vector<mat4f>>;
 
 }  // namespace imp
 

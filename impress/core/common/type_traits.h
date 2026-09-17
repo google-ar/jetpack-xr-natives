@@ -128,6 +128,25 @@ inline constexpr std::string_view RemoveFunctionArgs(std::string_view pretty) {
 
 // Note: This function consumes std::string_view rather than absl::string_view,
 // because the former has constexpr versions of e.g. find_first_of.
+constexpr size_t FindLastScopeOutsideTemplates(std::string_view s) {
+  int template_depth = 0;
+  for (size_t i = s.size(); i > 0; --i) {
+    char c = s[i - 1];
+    if (c == '>') {
+      ++template_depth;
+    } else if (c == '<') {
+      --template_depth;
+    } else if (c == ':' && template_depth == 0) {
+      if (i > 1 && s[i - 2] == ':') {
+        return i - 1;
+      }
+    }
+  }
+  return std::string_view::npos;
+}
+
+// Note: This function consumes std::string_view rather than absl::string_view,
+// because the former has constexpr versions of e.g. find_first_of.
 inline constexpr absl::string_view GetFunctionName(std::string_view pretty) {
   auto first_dash_or_plus = pretty.find_first_of("+-");
   if (first_dash_or_plus == 0) {
@@ -138,7 +157,7 @@ inline constexpr absl::string_view GetFunctionName(std::string_view pretty) {
   auto last_scope = no_args.find_last_of(':');
   if (last_scope != std::string_view::npos) {
     auto next_to_last_scope =
-        no_args.substr(0, last_scope - 1).find_last_of(':');
+        FindLastScopeOutsideTemplates(no_args.substr(0, last_scope - 1));
     if (next_to_last_scope != std::string_view::npos) {
       auto name_subsection = no_args.substr(
           next_to_last_scope + 1, no_args.size() - next_to_last_scope - 1);

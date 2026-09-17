@@ -367,7 +367,7 @@ table TestExperimentalRequest {}
 // SendRequest API.
 union RequestTypes (requires_api: 1) {
   BuiltInMaterialRequest = 1 (requires_api: 1),
-  AddCustomMaterialRequest = 2,
+  AddCustomMaterialRequest = 2 (requires_api: 4, unstable_api),
 
   // TestRequest is a request that is not part of the public API.
   // It is only used for testing purposes.
@@ -385,7 +385,7 @@ table Request (requires_api: 1) {
 root_type Request;
 
 // The set of error codes for the API.
-enum ErrorCode:short {
+enum ErrorCode:short (requires_api: 1) {
   UNKNOWN_ERROR = 0 (requires_api: 1),
   INVALID_ARGUMENT_ERROR = 1 (requires_api: 1),
   FAILED_PRECONDITION_ERROR = 2 (requires_api: 1),

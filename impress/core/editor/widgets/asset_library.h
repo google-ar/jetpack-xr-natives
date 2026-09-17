@@ -20,16 +20,21 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
+#include "absl/status/status.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/async/future.h"
 #include "core/common/invocable.h"
 #include "core/common/rememberer.h"
 #include "core/editor/ui/directory_ui.h"
 #include "core/editor/ui/drag_and_drop.h"
 #include "core/editor/widget.h"
+#include "core/render/material_registry.h"
 #include "core/render/texture.h"
+#include "core/scene_handles/material_handle.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/string_map.h"
 #include "core/view/utils/string_set.h"
@@ -114,6 +119,8 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
 
   void PrepareMaterialHandleDragAndDrop(const std::string& resource);
 
+  void LoadDraggedMaterial();
+
   void SetAsDefaultDragAndDropSource(std::string resource_path);
 
   // Handles drag-and-drop from other parts of the editor into the library.
@@ -151,11 +158,14 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
   std::unique_ptr<DirectoryUi> directory_ui_;
   bool saving_to_disk_enabled_ = false;
 
-  // Tracks materials that are currently being loaded to avoid duplicate
-  // requests.
-  StringSet loading_materials_;
+  // Used to store the material handle that is being dragged out to be dropped
+  // onto a material slot. So that the material can be preloaded and not
+  // released until the drop is complete.
+  std::string dragged_material_url_;
+  Future<absl::Status> preload_dragged_material_future_;
 
   Rememberer rememberer_;
+  MaterialRegistry& material_registry_;
 
   std::optional<std::string> selected_asset_;
 };

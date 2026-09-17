@@ -1,0 +1,57 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2023";
+
+package imp;
+
+import "core/gsplat/gsplat.proto";
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+
+// Next ID: 3
+message MagicWindowQuadState {
+  // The center position of the Quad in the local space of the renderer node.
+  imp.Float3 center = 1;
+
+  // The rotation of the Quad in the local space of the renderer node.
+  imp.Quatf rotation = 2;
+}
+
+// Next ID: 8
+message MagicWindowRendererState {
+  // Deprecated: MagicWindowRenderer no longer loads Gsplat scene itself.
+  string asset_url = 1
+      [deprecated = true, (imp.editor_control) = { disabled: {} }];
+
+  // The width of the magic window in the local space of the renderer node.
+  float magic_window_width = 2;
+
+  // The height of the magic window in the local space of the renderer node.
+  float magic_window_height = 3;
+
+  // Deprecated: MagicWindowRenderer no longer loads Gsplat scene itself.
+  GSplatPointCloudData gsplat_point_cloud_data = 4
+      [deprecated = true, (imp.is_imported_standard_proto) = true];
+
+  // The name of the rendering group of the Magic Window.
+  string render_group = 5;
+
+  // The size of the offscreen texture to render the Magic Window to.
+  imp.UInt2 offscreen_texture_resolution = 6;
+
+  // The state of the Quad holding the Offscreen Texture.
+  MagicWindowQuadState magic_window_quad_state = 7
+      [(imp.optional_type) = ABSL_OPTIONAL];
+}

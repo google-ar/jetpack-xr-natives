@@ -76,8 +76,8 @@ cc_library(
 filegroup(
     name = "dev_fonts",
     srcs = [
+        "//core/fonts:GoogleSans-Medium.ttf",
         "//core/fonts:MaterialSymbolsOutlined-Regular.ttf",
-        "//core/fonts:googlesans_medium.ttf",
     ],
 )
 
@@ -145,8 +145,6 @@ cc_library(
         "//core/view:base_view",
         "//core/view:view_events",
         "//core/window/clipboard:clipboard_handler",
-        "@com_google_absl//absl/log:log_sink",
-        "@com_google_absl//absl/log:log_sink_registry",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -164,8 +162,6 @@ cc_library(
     ]),
     alwayslink = 1,
 )
-
-# (removed target ios_web_ui_remote_editor, moved to core/editor/remote_editor)
 
 cc_library(
     name = "filagui_imgui_renderer",

@@ -152,7 +152,7 @@ cc_library(
         "//core/materials",
         "//core/proto:proto_reader",
         "//core/render:material_registry",
-        "//core/scene_handles:material_handle",
+        "//core/scene_handles:base_material_handle",
         "//core/view:base_view",
         "@com_google_absl//absl/strings",
     ],
@@ -189,6 +189,7 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
+        "//core/editor:editor_field_control",
         "//core/editor/layout:editor_control_flags",
         "//core/editor/layout:helpers",
         "//core/math",

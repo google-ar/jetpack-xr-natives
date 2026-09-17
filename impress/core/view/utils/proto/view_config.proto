@@ -195,6 +195,14 @@ message ExperimentalFeatureFlags {
   // ACTION: Clean up by 2026-07-07
   bool enable_wasm_canvas_gl_texture = 18 [default = false];
 
+  // OWNERS: egmuhm
+  // BUG: b/537393984
+  // PLATFORMS: WASM
+  // ACTION: Clean up by 2026-09-30
+  // DESCRIPTION:
+  // Enables performance.mark timing ticks for label placement milestones.
+  bool enable_labeler_timing_ticks = 19 [default = false];
+
   reserved 14;
 }
 

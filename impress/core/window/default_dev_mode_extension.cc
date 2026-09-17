@@ -38,7 +38,6 @@
 #include "filament/filament/include/filament/Viewport.h"
 #include "filament/libs/filagui/include/filagui/ImGuiHelper.h"
 #include "core/common/debug_draw.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/resource_helpers.h"
 #include "core/common/trace.h"
 #include "core/common/typed_vector.h"
@@ -47,7 +46,6 @@
 #include "core/editor/editor_info.h"
 #include "core/editor/events.h"
 #include "core/fonts/icon_font.h"
-#include "core/input/key_codes.h"
 #include "core/math/vec.h"
 #include "core/render/blitter.h"
 #include "core/view/base_view.h"
@@ -155,7 +153,7 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
 
   // Load default font
   BufferAccess font_data;
-  MP_RETURN_IF_ERROR(LoadPackagedFile("googlesans_medium.ttf", &font_data));
+  MP_RETURN_IF_ERROR(LoadPackagedFile("GoogleSans-Medium.ttf", &font_data));
 
   if (fonts_.Append<FontId>(LoadFont(font_data, kGoogleSansMediumName.data(),
                                      kDefaultFontSize)) != kDefaultFont) {
@@ -310,7 +308,14 @@ void DefaultDevModeExtension::ApplyTextureRenderTarget(
     filament::Texture* texture) {
   render_target_texture_ = texture;
   // Update the size to that of the texture.
-  UpdateCameraAndViewport(cached_screen_size_, cached_subpixel_ratio_);
+  // Note: Only call UpdateCameraAndViewport when setting a valid texture.
+  // When restoring to native mode (texture == nullptr), the correct sizes
+  // will be picked up from native_screen_size_ natively on the next frame.
+  if (texture) {
+    UpdateCameraAndViewport(cached_screen_size_, cached_subpixel_ratio_);
+  } else {
+    UpdateCameraAndViewport(native_screen_size_, native_subpixel_ratio_);
+  }
   if (!texture) {
     ui_view_.Get()->setRenderTarget(nullptr);
     if (render_target_) {
@@ -332,7 +337,7 @@ void DefaultDevModeExtension::ApplyTextureRenderTarget(
 }
 
 void DefaultDevModeExtension::OffscreenRender() {
-  if (ShouldRenderOnRemoteScreen() || !IsEnabled()) {
+  if (!IsEnabled()) {
     return;
   }
   // Rendering happens in Render() if no render target is being used.
@@ -351,6 +356,14 @@ void DefaultDevModeExtension::Render() {
   }
   // Rendering happens in OffscreenRender() if a render target is being used.
   if (render_target_texture_) {
+    return;
+  }
+  // In OpenXR standalone mode (when remote editor is not streaming),
+  // ImGui is rendered into a dedicated quad layer swapchain by
+  // XrQuadLayerRenderer, NOT into the main OpenXR projection swapchain.
+  // Rendering a 2D mono ImGui view into the 3D multiview projection swapchain
+  // throws GL_INVALID_OPERATION.
+  if (host_ && host_->IsInXr()) {
     return;
   }
   if (imgui_renderer_) {
@@ -376,10 +389,6 @@ void DefaultDevModeExtension::UpdateCameraAndViewport(uint2 screen_size,
   // Caching window size allows the screen-space Editor to be restored.
   cached_subpixel_ratio_ = subpixel_ratio;
   cached_screen_size_ = screen_size;
-  if (render_target_texture_) {
-    screen_size = {render_target_texture_->getWidth(),
-                   render_target_texture_->getHeight()};
-  }
 
   if (screen_size.x == 0 || screen_size.y == 0 || subpixel_ratio.x == 0.0f ||
       subpixel_ratio.y == 0.0f) {

@@ -51,12 +51,11 @@ class XrSwapChain : public filament::backend::Platform::SwapChain {
 
   static absl::StatusOr<std::unique_ptr<XrSwapChain>> Create(
       ImageHandlerType::XrPlatformType& platform, XrSessionHost& host,
-      XrSwapchainCreateFlags flags = 0, bool should_end_frame = true);
+      XrSwapchainCreateFlags flags = 0);
 
   static absl::StatusOr<std::unique_ptr<XrSwapChain>> CreateForQuadLayer(
       ImageHandlerType::XrPlatformType& platform, XrSessionHost& host,
-      int2 size, int sample_count, XrSwapchainCreateFlags flags = 0,
-      bool should_end_frame = false);
+      int2 size, int sample_count, XrSwapchainCreateFlags flags = 0);
 
   ~XrSwapChain();
 
@@ -75,8 +74,7 @@ class XrSwapChain : public filament::backend::Platform::SwapChain {
  private:
   XrSwapChain(ImageHandlerType::XrPlatformType* platform, XrSessionHost* host,
               ImageHandlerType::SwapchainLayers layers,
-              ContentSecurityLevel content_security_level,
-              bool should_end_frame);
+              ContentSecurityLevel content_security_level);
 
   PFN_xrUpdateSwapchainFB xr_update_swapchain_fn_;
   PFN_xrCreateFoveationProfileFB xr_create_foveation_profile_fn_;

@@ -66,7 +66,7 @@ ViewState::ViewState(std::unique_ptr<imp::BaseView> view)
 ViewState::~ViewState() = default;
 
 OptionalError ViewState::Setup(FilamentHost* filament_host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   ViewHost* host = static_cast<ViewHost*>(filament_host);
   filament::View* view = filament_host->GetView();
 
@@ -111,7 +111,7 @@ OptionalError ViewState::Setup(FilamentHost* filament_host) {
 }
 
 void ViewState::OnHostCreated(FilamentHost* filament_host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   view_hooks_.OnHostCreated(filament_host);
 }
 
@@ -125,7 +125,7 @@ absl::Status ViewState::PreUpdate(
     FilamentHost* host, absl::Duration last_vsync, absl::Duration next_vsync,
     UpdateStageFlags* out_flags,
     absl::optional<absl::Duration>* out_time_until_retry) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   MP_RETURN_IF_ERROR(window::FilamentHost::State::PreUpdate(
       host, last_vsync, next_vsync, out_flags, out_time_until_retry));
   view_hooks_.OnHostPreUpdate(host, last_vsync, next_vsync, out_flags,
@@ -136,7 +136,7 @@ absl::Status ViewState::PreUpdate(
 absl::Status ViewState::Update(FilamentHost* host, absl::Duration last_vsync,
                                absl::Duration next_vsync,
                                const UpdateStageFlags& update_flags) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   MP_RETURN_IF_ERROR(window::FilamentHost::State::Update(
       host, last_vsync, next_vsync, update_flags));
   view_hooks_.OnHostUpdate(host, last_vsync, next_vsync, update_flags);
@@ -144,14 +144,14 @@ absl::Status ViewState::Update(FilamentHost* host, absl::Duration last_vsync,
 }
 
 absl::Status ViewState::PostUpdate(FilamentHost* host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   MP_RETURN_IF_ERROR(window::FilamentHost::State::PostUpdate(host));
   view_hooks_.OnHostPostUpdate();
   return absl::OkStatus();
 }
 
 absl::Status ViewState::PreRender(window::FilamentHost* filament_host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   MP_RETURN_IF_ERROR(window::FilamentHost::State::PreRender(filament_host));
   view_hooks_.OnHostPreRender(filament_host);
   return absl::OkStatus();
@@ -159,7 +159,7 @@ absl::Status ViewState::PreRender(window::FilamentHost* filament_host) {
 
 OptionalError ViewState::OffscreenRender(
     window::FilamentHost*, filament::Renderer* filament_renderer) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   view_hooks_.OnHostOffscreenRender(filament_renderer);
   return NoError();
 }
@@ -170,7 +170,7 @@ OptionalError ViewState::MultiPassRender() {
 }
 
 OptionalError ViewState::PostRender(window::FilamentHost* filament_host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   MP_RETURN_IF_ERROR(window::FilamentHost::State::PostRender(filament_host));
   view_hooks_.OnHostPostRender();
   return NoError();
@@ -178,7 +178,7 @@ OptionalError ViewState::PostRender(window::FilamentHost* filament_host) {
 
 OptionalError ViewState::SecondaryViewRender(
     window::FilamentHost* filament_host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   MP_RETURN_IF_ERROR(
       window::FilamentHost::State::SecondaryViewRender(filament_host));
   view_hooks_.OnHostSecondaryViewRender();
@@ -186,21 +186,21 @@ OptionalError ViewState::SecondaryViewRender(
 }
 
 OptionalError ViewState::PostFrame(window::FilamentHost* filament_host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   MP_RETURN_IF_ERROR(window::FilamentHost::State::PostFrame(filament_host));
   view_hooks_.OnHostPostFrame();
   return NoError();
 }
 
 OptionalError ViewState::UiRender(FilamentHost* filament_host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   // Generate immediate commands.
   view_->RenderDev();
   return NoError();
 }
 
 OptionalError ViewState::Cleanup(FilamentHost* filament_host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   view_hooks_.OnHostCleanup();
 
   // Call PreCleanup to release resources that require a valid view before
@@ -229,7 +229,7 @@ OptionalError ViewState::SetDisplayRotation(
 
 void ViewState::OnResize(FilamentHost* filament_host, uint2 dimensions,
                          uint4 margins, float2 subpixel_ratio) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   ViewHost* host = static_cast<ViewHost*>(filament_host);
   // Subpixel ratios are >1 on desktop platforms with retina-style displays, or
   // modern android/iOS devices, and are fractional in some cases (zoomed page
@@ -257,23 +257,23 @@ void ViewState::OnResize(FilamentHost* filament_host, uint2 dimensions,
 
 OptionalError ViewState::OnFileDrop(window::FilamentHost* filament_host,
                                     absl::string_view path) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   view_->GetDispatcher().Send(DropFileEvent(path));
   return NoError();
 }
 
 void ViewState::NotifyLast(FilamentHost* host) {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   BaseView::SetSharedEngine(nullptr);
 }
 OptionalError ViewState::Pause() {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   view_hooks_.Pause();
   return NoError();
 }
 
 OptionalError ViewState::Resume() {
-  IMP_TRACE();
+  IMP_TRACE_CATEGORY(view_detail);
   view_hooks_.Resume();
   return NoError();
 }

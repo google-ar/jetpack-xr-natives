@@ -31,7 +31,8 @@ std::unique_ptr<AsyncCanvasSource> Create(
     bool force_auto_method_rendering = false,
     bool force_individual_glyph_source_instances = false,
     bool enable_label_prep_profile_logging = false,
-    bool use_bitmap_surface_provider = false);
+    bool use_bitmap_surface_provider = false,
+    bool enable_labeler_timing_ticks = false);
 
 }  // namespace AsyncCanvasSourceFactory
 

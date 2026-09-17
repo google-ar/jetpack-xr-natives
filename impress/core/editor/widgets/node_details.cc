@@ -16,28 +16,37 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "dear_imgui/imgui_internal.h"
 #include "dear_imgui/misc/cpp/imgui_stdlib.h"
 #include "core/common/buffer_access.h"
 #include "core/common/file_helpers.h"
 #include "core/common/registry.h"
 #include "core/common/string_helpers.h"
 #include "core/config.h"
+#include "core/editor/command.h"
 #include "core/editor/command_manager.h"
+#include "core/editor/composite_command.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_field_control.h"
 #include "core/editor/editor_style.h"
 #include "core/editor/events.h"
 #include "core/editor/events.proto.imp.h"
 #include "core/editor/layout/editor_control_flags.h"
+#include "core/editor/layout/helpers.h"
 #include "core/editor/node_value_command.h"
 #include "core/editor/widgets/asset_library.h"
 #include "core/ncsb/component_handle.h"
@@ -63,95 +72,195 @@ NodeDetails::NodeDetails(BaseView& view)
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   editor.GetDispatcher().Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        // We only support single selection for the node details widget.
-        active_node_ =
-            view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
+        active_nodes_ =
+            view_.GetRegistry().Get<Editor>()->get().GetSelectedNodes();
       },
       this);
 }
 
-bool NodeDetails::HasContent() const { return active_node_.IsValid(); }
+bool NodeDetails::HasContent() const {
+  for (const NodeHandle& node : active_nodes_) {
+    if (node) return true;
+  }
+  return false;
+}
 
 void NodeDetails::DrawImGui() {
-  if (!active_node_.IsValid()) return;
+  PruneInvalidHandles(active_nodes_);
+  if (active_nodes_.empty()) return;
 
-  auto scene_metadata = active_node_->GetComponent<SceneMetadata>();
+  const NodeHandle first_node = *active_nodes_.begin();
+  const auto scene_metadata = first_node->GetComponent<SceneMetadata>();
+
+  DrawNameField(first_node);
+  DrawBaseUrlLabel(scene_metadata);
+  DrawEnabledCheckbox(first_node, scene_metadata);
+  DrawSaveButton(first_node, scene_metadata);
+}
+
+void NodeDetails::DrawBaseUrlLabel(
+    const ComponentHandle<SceneMetadata> scene_metadata) {
+  if (active_nodes_.size() != 1) return;
+
+  if (!scene_metadata || scene_metadata->GetBaseUrl().empty()) return;
+
+  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
+
+  const std::string base =
+      editor.GetAssetLibrary()->RemoveHomeDirectoryFromPath(
+          scene_metadata->GetBaseUrl());
+
+  ImGui::LabelText("base", "%s", base.c_str());
+}
+
+void NodeDetails::DrawNameField(NodeHandle first_node) {
+  bool all_same_name = true;
+  const std::string name = std::string(first_node->GetName());
+
+  for (const NodeHandle& node : active_nodes_) {
+    if (node->GetName() == name) continue;
+    all_same_name = false;
+    break;
+  }
 
   // Only allow changing the name of a node if it is not a child of a base.
-  // If it's a child of a base, then the name is inherited and cannot be changed
-  // since that would make it impossible to save correctly.
-  //
-  // Nodes with a direct base are intentionally allowed to be renamed, since
-  // they can be saved correctly.
-  bool can_change_name = !scene_metadata || !scene_metadata->IsChildOfBase();
-  std::string name = std::string(active_node_->GetName());
-  if (can_change_name) {
-    // Allow changing the name of the node.
-    std::string old_name = name;
-    if (ImGui::InputText("name", &name)) {
-      command_manager_.PerformCommand<NodeValueCommand<std::string>>(
-          active_node_, old_name, name,
-          [](NodeHandle target, absl::string_view value) {
-            target->SetName(value);
-          });
-    }
-  } else {
-    // Just display the name.
-    ImGui::LabelText("name", "%s", name.c_str());
+  bool can_change_name = true;
+  for (const NodeHandle& node : active_nodes_) {
+    const auto meta = node->GetComponent<SceneMetadata>();
+
+    if (!meta || !meta->IsChildOfBase()) continue;
+
+    can_change_name = false;
+    break;
   }
 
-  if (scene_metadata && !scene_metadata->GetBaseUrl().empty()) {
-    Editor& editor = view_.GetRegistry().Get<Editor>()->get();
-    std::string base = editor.GetAssetLibrary()->RemoveHomeDirectoryFromPath(
-        scene_metadata->GetBaseUrl());
-    ImGui::LabelText("base", "%s", base.c_str());
+  const std::string actual_display_name =
+      all_same_name ? name : EditorFieldControl::kMixedValueString;
+
+  if (!can_change_name) {
+    ImGui::LabelText("name", "%s", actual_display_name.c_str());
+    return;
   }
 
+  const ImGuiID input_id = ImGui::GetID("name");
+  if (ImGui::GetActiveID() != input_id) {
+    display_name_ = actual_display_name;
+  }
+
+  if (!ImGui::InputText("name", &display_name_,
+                        ImGuiInputTextFlags_AutoSelectAll)) {
+    return;
+  }
+
+  std::vector<std::unique_ptr<Command>> commands;
+  commands.reserve(active_nodes_.size());
+
+  const auto command = [](NodeHandle target, absl::string_view value) {
+    target->SetName(value);
+  };
+
+  for (const NodeHandle& node : active_nodes_) {
+    const std::string old_name = std::string(node->GetName());
+
+    commands.push_back(std::make_unique<NodeValueCommand<std::string>>(
+        node, old_name, display_name_, command));
+  }
+
+  command_manager_.PerformCommand<CompositeCommand>(std::move(commands));
+}
+
+void NodeDetails::DrawEnabledCheckbox(
+    NodeHandle first_node, ComponentHandle<SceneMetadata> scene_metadata) {
   ImGui::PushItemWidth(kDetailsUiWidth);
 
-  bool enabled = active_node_->IsEnabled();
-  bool is_base_enabled =
-      !(scene_metadata && scene_metadata->IsBaseDisabled().value_or(false));
+  bool all_same_enabled = true;
+  bool enabled = first_node->IsEnabled();
+  for (const NodeHandle& node : active_nodes_) {
+    if (node->IsEnabled() == enabled) continue;
+    all_same_enabled = false;
+    break;
+  }
+
+  if (!all_same_enabled) ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+
+  // Handle base overrides simply for multiple nodes.
+  bool is_from_base = false;
+  bool is_base_enabled = false;
+  if (active_nodes_.size() == 1) {
+    is_from_base = scene_metadata && scene_metadata->IsFromBase();
+    is_base_enabled =
+        !(scene_metadata && scene_metadata->IsBaseDisabled().value_or(false));
+  }
+
   if (EditorFieldControl::ShowDefaultControl(
-          "enabled", &enabled,
-          scene_metadata && scene_metadata->IsFromBase() ? &is_base_enabled
-                                                         : nullptr,
+          "enabled", &enabled, is_from_base ? &is_base_enabled : nullptr,
           EditorControlFlags::kDefaultWithoutResetUnsetValToBase)) {
-    command_manager_.PerformCommand<NodeValueCommand<bool>>(
-        active_node_, !enabled, enabled, [this](NodeHandle target, bool value) {
-          target->SetEnabled(value);
+    std::vector<std::unique_ptr<Command>> commands;
+    commands.reserve(active_nodes_.size());
 
-          Editor& editor = view_.GetRegistry().Get<Editor>()->get();
-          NodeUpdatedEvent event;
-          event.target = target;
-          event.enabled = value;
-          editor.GetDispatcher().Send(event);
-        });
-  }
-  ImGui::SameLine();
-  ImGui::PushStyleColor(ImGuiCol_Text,
-                        active_node_->IsActive() ? kDarkGreen : kDarkRed);
-  ImGui::LabelText(active_node_->IsActive() ? "active" : "inactive", "");
-  ImGui::PopStyleColor();
-  ImGui::PopItemWidth();
+    const auto command = [&view = view_](NodeHandle target, bool value) {
+      target->SetEnabled(value);
+      Editor& editor = view.GetRegistry().Get<Editor>()->get();
+      NodeUpdatedEvent event;
+      event.target = target;
+      event.enabled = value;
+      editor.GetDispatcher().Send(event);
+    };
 
-#if IMP_PLATFORM(DESKTOP)
-  auto scene_reference = active_node_->GetComponent<SceneReference>();
-  if (scene_reference && !scene_reference->GetAssetUrl().empty() &&
-      scene_reference->GetAssetUrl() != SceneSystem::kRuntimeNodeDataPath &&
-      scene_metadata) {
-    absl::string_view filename =
-        GetLocalFilenameFromFilename(scene_reference->GetAssetUrl());
-    std::string save_button_label =
-        absl::StrFormat("Save (%s)##save-button", filename);
-
-    if (ImGui::Button(save_button_label.c_str())) {
-      absl::Status save_status = Save(active_node_);
-      if (!save_status.ok()) {
-        IMP_LOG(imp::ERROR) << "Failed to save scene: " << save_status;
-      }
+    for (const NodeHandle& node : active_nodes_) {
+      commands.push_back(std::make_unique<NodeValueCommand<bool>>(
+          node, node->IsEnabled(), enabled, command));
     }
+
+    command_manager_.PerformCommand<CompositeCommand>(std::move(commands));
   }
+
+  if (!all_same_enabled) ImGui::PopItemFlag();  // ImGuiItemFlags_MixedValue
+
+  ImGui::SameLine();
+
+  bool all_active = true;
+  bool all_inactive = true;
+  for (const NodeHandle& node : active_nodes_) {
+    if (node->IsActive())
+      all_inactive = false;
+    else
+      all_active = false;
+  }
+
+  DrawActiveLabelUi(all_active, all_inactive);
+  ImGui::PopItemWidth();
+}
+
+void NodeDetails::DrawSaveButton(
+    const NodeHandle first_node,
+    const ComponentHandle<SceneMetadata> scene_metadata) {
+#if IMP_PLATFORM(DESKTOP)
+  if (!scene_metadata) return;
+  if (active_nodes_.size() != 1) return;
+
+  const auto scene_reference = first_node->GetComponent<SceneReference>();
+
+  if (!scene_reference) return;
+
+  const absl::string_view asset_url = scene_reference->GetAssetUrl();
+
+  if (asset_url.empty()) return;
+  if (asset_url == SceneSystem::kRuntimeNodeDataPath) return;
+
+  const absl::string_view filename =
+      GetLocalFilenameFromFilename(scene_reference->GetAssetUrl());
+
+  const std::string save_button_label =
+      absl::StrFormat("Save (%s)##save-button", filename);
+
+  if (!ImGui::Button(save_button_label.c_str())) return;
+
+  const absl::Status save_status = Save(first_node);
+
+  if (save_status.ok()) return;
+
+  IMP_LOG(imp::ERROR) << "Failed to save scene: " << save_status;
 #endif
 }
 

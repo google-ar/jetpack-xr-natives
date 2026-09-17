@@ -44,9 +44,12 @@ class EditorSettingsStorage {
   }
 
   bool Load(absl::string_view key, bool default_value);
+  float Load(absl::string_view key, float default_value);
 
   [[nodiscard]] PropertyBinding<bool> Bind(NotifyingProperty<bool>& property,
                                            absl::string_view key);
+  [[nodiscard]] PropertyBinding<float> Bind(NotifyingProperty<float>& property,
+                                            absl::string_view key);
 
   PlatformStorage& storage_;
 
@@ -62,6 +65,10 @@ class EditorSettingsStorage {
   PropertyBinding<bool> bvh_mesh_collision_acceleration_binding_;
   PropertyBinding<bool> invert_camera_y_binding_;
   PropertyBinding<bool> invert_mouse_scroll_binding_;
+  PropertyBinding<bool> auto_switch_to_app_camera_on_play_binding_;
+  PropertyBinding<bool> transform_widget_local_space_binding_;
+  PropertyBinding<bool> snap_enabled_binding_;
+  PropertyBinding<float> grid_spacing_binding_;
 };
 
 }  // namespace imp::editor

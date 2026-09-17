@@ -517,7 +517,7 @@ absl::Status CreateGenericMaterialSchemas(
             generic_material_parameters.volume.emplace();
             // volume Texture.
             MP_ASSIGN_OR_RETURN(
-                generic_material_parameters.volume->texture,
+                generic_material_parameters.volume->thickness_texture,
                 CreateGenericMaterialTextureParameter(
                     builder, model, m.extensions.volume->volume_texture));
 

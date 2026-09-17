@@ -61,6 +61,9 @@ OptionalError ResolveDracoIndices(imp::gltf::imp_proto::Gltf* gltf,
                                   const draco::Mesh& mesh,
                                   const imp::gltf::imp_proto::Primitive& prim,
                                   std::vector<BufferAccess>& decoded_buffers) {
+  if (!prim.indices.has_value()) {
+    return Error("primitive indices missing");
+  }
   auto& accessor = gltf->accessors[*prim.indices];
   int component_size = GetComponentSize(accessor.component_type);
   if (!component_size) {
@@ -179,8 +182,8 @@ OptionalError ResolveDracoAttribute(
   auto& view = gltf->buffer_views.back();
   view.buffer = gltf->buffers.size() - 1;
   view.byte_length = decoded_size;
-  view.byte_offset = draco_attr->byte_offset();
-  view.byte_stride = draco_attr->byte_stride();
+  view.byte_offset = 0;
+  view.byte_stride = 0;
   view.target =
       prim.indices
           ? imp::gltf::imp_proto::BufferView::ELEMENT_ARRAY_BUFFER_TARGET

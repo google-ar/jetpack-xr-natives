@@ -15,6 +15,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_SPLIT_ENGINE_MATERIAL_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_SPLIT_ENGINE_MATERIAL_H_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -153,6 +154,8 @@ class SplitEngineMaterial : public Material {
   imp::StringMap<const filament::Texture*> GetUnownedFilamentTextures()
       const override;
 
+  bool HoldsOwnedTextures() const override;
+
   void ForEachTexture(absl::FunctionRef<void(BorrowedTexturePtr)> fn,
                       SmallSourceLocation loc) override;
 
@@ -192,6 +195,10 @@ class SplitEngineMaterial : public Material {
   template <int&... ExplicitArgumentBarrier, typename T>
   void SetParameterInternal(absl::string_view parameter_name,
                             absl::Span<const T> values);
+
+ private:
+  // The id used by Split Engine to identify the material.
+  const uint64_t material_id_ = 0;
 };
 
 template <int&... ExplicitArgumentBarrier, typename T>
@@ -199,8 +206,7 @@ void SplitEngineMaterial::SetParameterInternal(absl::string_view parameter_name,
                                                const T& value) {
   SplitEngineSerializer* serializer = view_.GetSplitEngineSerializer();
   if (serializer) {
-    serializer->SetMaterialParameter(GetFilamentMaterialInstance(),
-                                     parameter_name, value);
+    serializer->SetMaterialParameter(material_id_, parameter_name, value);
   } else {
     material_->SetParameter(parameter_name, value);
   }
@@ -210,9 +216,7 @@ template <int&... ExplicitArgumentBarrier, typename T>
 void SplitEngineMaterial::SetParameterInternal(absl::string_view parameter_name,
                                                absl::Span<const T> values) {
   if (SplitEngineSerializer* serializer = view_.GetSplitEngineSerializer()) {
-    serializer->SetMaterialParameter(
-        GetFilamentMaterialInstance(), parameter_name,
-        std::vector<T>(values.begin(), values.end()));
+    serializer->SetMaterialParameter(material_id_, parameter_name, values);
   } else {
     material_->SetParameter(parameter_name, values);
   }

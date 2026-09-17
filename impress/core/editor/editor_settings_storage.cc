@@ -16,6 +16,8 @@
 
 #include <string>
 
+#include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "core/common/platform_storage.h"
 #include "core/editor/common/notifying_property.h"
@@ -57,6 +59,13 @@ EditorSettingsStorage::EditorSettingsStorage(PlatformStorage& storage,
       Load<bool>(kInvertCameraYKey, kInvertCameraYDefault);
   settings.invert_mouse_scroll_enabled =
       Load<bool>(kInvertMouseScrollKey, kInvertMouseScrollDefault);
+  settings.auto_switch_to_app_camera_on_play =
+      Load<bool>(kAutoSwitchToAppCameraOnPlayEnabledKey,
+                 kAutoSwitchToAppCameraOnPlayEnabledDefault);
+  settings.transform_widget_local_space = Load<bool>(
+      kTransformWidgetLocalSpaceKey, kTransformWidgetLocalSpaceDefault);
+  settings.snap_enabled = Load<bool>(kSnapEnabledKey, kSnapEnabledDefault);
+  settings.grid_spacing = Load<float>(kGridSpacingKey, kGridSpacingDefault);
 
   // Bind notify properties to automatically update storage when they change.
   show_grid_binding_ = Bind<bool>(settings.show_grid, kGridEnabledKey);
@@ -94,11 +103,33 @@ EditorSettingsStorage::EditorSettingsStorage(PlatformStorage& storage,
 
   invert_mouse_scroll_binding_ =
       Bind<bool>(settings.invert_mouse_scroll_enabled, kInvertMouseScrollKey);
+
+  auto_switch_to_app_camera_on_play_binding_ =
+      Bind<bool>(settings.auto_switch_to_app_camera_on_play,
+                 kAutoSwitchToAppCameraOnPlayEnabledKey);
+
+  transform_widget_local_space_binding_ = Bind<bool>(
+      settings.transform_widget_local_space, kTransformWidgetLocalSpaceKey);
+  snap_enabled_binding_ = Bind<bool>(settings.snap_enabled, kSnapEnabledKey);
+  grid_spacing_binding_ = Bind<float>(settings.grid_spacing, kGridSpacingKey);
 }
 
 bool EditorSettingsStorage::Load(const absl::string_view key,
                                  const bool default_value) {
   return storage_.GetBool(key, default_value);
+}
+
+float EditorSettingsStorage::Load(const absl::string_view key,
+                                  const float default_value) {
+  const std::string val = storage_.GetString(key);
+
+  if (val.empty()) return default_value;
+
+  float result = default_value;
+
+  if (!absl::SimpleAtof(val, &result)) return default_value;
+
+  return result;
 }
 
 PropertyBinding<bool> EditorSettingsStorage::Bind(
@@ -107,6 +138,14 @@ PropertyBinding<bool> EditorSettingsStorage::Bind(
     storage_.SetBool(std::string(key), value);
   };
   return PropertyBinding<bool>(property, callback);
+}
+
+PropertyBinding<float> EditorSettingsStorage::Bind(
+    NotifyingProperty<float>& property, const absl::string_view key) {
+  const auto callback = [this, key](const float value, float) {
+    storage_.SetString(std::string(key), absl::StrCat(value));
+  };
+  return PropertyBinding<float>(property, callback);
 }
 
 }  // namespace imp::editor

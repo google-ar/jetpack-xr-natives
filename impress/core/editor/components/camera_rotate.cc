@@ -14,6 +14,7 @@
 
 #include "core/editor/components/camera_rotate.h"
 
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -56,6 +57,12 @@ constexpr float kFreeCamSpeed = 10.0f;
 
 // Speed of the free-cam movement when shift is pressed.
 constexpr float kFreeCamShiftSpeed = 30.0f;
+
+// Minimum difference in dot product to snap immediately.
+constexpr float kSnapEpsilon = 1e-4f;
+
+// Damping coefficient for snap interpolation.
+constexpr float kSnapInterpolationDamping = 10.0f;
 
 }  // namespace
 
@@ -114,6 +121,12 @@ class FreecamInterceptor : public InputInterceptor {
   ComponentHandle<CameraRotate> camera_rotate_;
 };
 
+void CameraRotate::InterpolateToPitchAndYaw(float pitch, float yaw) {
+  target_pitch_ = pitch;
+  target_yaw_ = yaw;
+  is_snap_animating_ = true;
+}
+
 void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
   if (!pivot) {
     IMP_LOG(imp::FATAL) << "CameraRotateComponent needs a pivot to work properly";
@@ -122,6 +135,9 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
   pivot_ = pivot;
   pitch_ = pitch;
   yaw_ = yaw;
+  target_pitch_ = pitch;
+  target_yaw_ = yaw;
+  is_snap_animating_ = false;
   pivot_->SetLocalRotation(QuatFromEuler({pitch_, yaw_, 0}));
 
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
@@ -139,6 +155,7 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
 
         if (event.pointer != kMousePointerIdLeft) return;
 
+        is_snap_animating_ = false;
         float2 current_rotation_delta = event.delta * kDragSensitivity * -1.0f;
         if (InvertCameraY()) {
           current_rotation_delta.y *= -1.0f;
@@ -171,6 +188,7 @@ void CameraRotate::FilterPointerEvents(
       switch (event_type) {
         case PointerEventType::kDown:
           camera_rotate_enabled_ = true;
+          is_snap_animating_ = false;
           break;
         case PointerEventType::kUp:
         case PointerEventType::kCancel:
@@ -241,6 +259,8 @@ void CameraRotate::FilterKeyboardEvents(
 }
 
 void CameraRotate::Update(const FrameTime& frame_time) {
+  HandleSnapToOrientation(frame_time);  // Orientation widget sets snap target.
+
   if (!camera_rotate_enabled_) {
     rotation_delta_ = kZero2;
     return;
@@ -248,6 +268,37 @@ void CameraRotate::Update(const FrameTime& frame_time) {
 
   HandleRotation();
   HandleMovement(frame_time);
+}
+
+void CameraRotate::HandleSnapToOrientation(const FrameTime& frame_time) {
+  if (!is_snap_animating_) return;
+
+  const quatf current = pivot_->GetLocalRotation();
+  const quatf target = QuatFromEuler(float3(target_pitch_, target_yaw_, 0.0f));
+
+  const float dot_product = dot(current, target);
+  // If the camera is already close enough to the target, snap to it instantly.
+  // We determine this by checking if the dot product is close to 1.
+  if (1.0f - std::abs(dot_product) < kSnapEpsilon) {
+    is_snap_animating_ = false;
+    pivot_->SetLocalRotation(target);
+    pitch_ = target_pitch_;
+    yaw_ = target_yaw_;
+    return;
+  }
+
+  // Otherwise, interpolate the camera's orientation towards the target.
+  // Use an ease-out interpolator for smooth deceleration.
+  const float ease_out =
+      std::exp(-kSnapInterpolationDamping * frame_time.GetDeltaSeconds());
+  const quatf q_new = slerp(current, target, 1.0f - ease_out);
+  pivot_->SetLocalRotation(q_new);
+
+  // From quaternions to Euler back to quaternions in HandleRotation.
+  // Seems wasteful but it's necessary for mixing snap and manual rotation.
+  const float3 eulers = imp::EulerFromQuatYXZ(q_new);
+  pitch_ = eulers.x;
+  yaw_ = eulers.y;
 }
 
 void CameraRotate::HandleRotation() {
